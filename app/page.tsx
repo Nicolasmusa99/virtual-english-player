@@ -213,16 +213,17 @@ export default function Player() {
   }
 
   function handleFiles(files: File[]) {
-    let vf: File | null = null, sf: File | null = null
+    let vf: File | null = null, sf: File | null = null  // eslint-disable-line
     files.forEach(f => {
       if (f.name.match(/\.(srt|vtt)$/i)) sf = f
       else if (f.type.startsWith('video/') || f.name.match(/\.(avi|mp4|mkv|mov|webm|m4v)$/i)) vf = f
     })
     if (!vf) { setErrorMsg('Arrastrá un archivo de video (MP4, AVI, MKV...)'); return }
     setErrorMsg('')
-    setVideoFileName(vf.name)
-    setVideoUrl(URL.createObjectURL(vf))
-    if (sf) {
+    setVideoFileName((vf as File).name)
+    setVideoUrl(URL.createObjectURL(vf as File))
+    const srtFile = sf as File | null
+    if (srtFile) {
       const r = new FileReader()
       r.onload = e => {
         const parsed = parseSRT(e.target!.result as string)
@@ -230,9 +231,9 @@ export default function Player() {
         setPhrases(parsed); setSrtSource(`SRT · ${parsed.length} frases`)
         setScreen('player')
       }
-      r.readAsText(sf, 'UTF-8')
+      r.readAsText(srtFile, 'UTF-8')
     } else {
-      transcribe(vf)
+      transcribe(vf as File)
     }
   }
 
