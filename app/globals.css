@@ -1,0 +1,15 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --p1:#111; --p2:#171717; --p3:#1E1E1E; --p4:#252525; --p5:#2D2D2D;
+  --ln:rgba(255,255,255,0.06); --ln2:rgba(255,255,255,0.11);
+  --tx:#ECEAE3; --tx2:#6B6966; --tx3:#363432;
+  --ac:#E8C547; --ac2:rgba(232,197,71,0.09); --ac3:rgba(232,197,71,0.25);
+  --gr:#2DB87A; --gr2:rgba(45,184,122,0.1); --gr3:rgba(45,184,122,0.3);
+  --bl:#4B8FD8; --bl2:rgba(75,143,216,0.1); --bl3:rgba(75,143,216,0.28);
+  --pu:#9B7FD4;
+  --rd:#CC4444;
+}
+html, body { height: 100%; overflow: hidden; background: #000; color: var(--tx); font-family: var(--font-sans, 'DM Sans', sans-serif); font-size: 13px; -webkit-font-smoothing: antialiased; }
+::-webkit-scrollbar { width: 2px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
