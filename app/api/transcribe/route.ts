@@ -32,7 +32,7 @@ async function uploadToGemini(buffer: Buffer, mimeType: string, apiKey: string):
       'X-Goog-Upload-Offset': '0',
       'X-Goog-Upload-Command': 'upload, finalize',
     },
-    body: buffer,
+    body: new Uint8Array(buffer),
   })
   if (!uploadRes.ok) {
     const err = await uploadRes.text()
