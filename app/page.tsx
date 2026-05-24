@@ -1,5 +1,5 @@
 'use client'
-import { useRef, useState, useEffect } from 'react'
+import { useRef, useState, useEffect, useMemo } from 'react'
 import styles from './page.module.css'
 import { Phrase, parseSRT, fmtTime } from '@/lib/srt'
 import { hl } from '@/lib/hl'
@@ -30,6 +30,7 @@ export default function Player() {
   const [speedIdx, setSpeedIdx] = useState(2)
   const [filter, setFilter] = useState<'all' | 'sel'>('all')
   const [subText, setSubText] = useState('')
+  const subTextNodes = useMemo(() => hl(subText), [subText])
   const [subVisible, setSubVisible] = useState(false)
   const [editingIdx, setEditingIdx] = useState<number | null>(null)
   const [editingText, setEditingText] = useState('')
@@ -52,7 +53,7 @@ export default function Player() {
     if (v && v.currentTime > 0 && phrases.length > 0) {
       const t = v.currentTime - delayRef.current
       const ph = phrases.find(p => t >= p.start && t <= p.end)
-      if (ph && ccRef.current) { setSubText(hl(ph.text)); setSubVisible(true) }
+      if (ph && ccRef.current) { setSubText(ph.text); setSubVisible(true) }
     }
   }, [phrases])
   useEffect(() => { curIdxRef.current = curIdx }, [curIdx])
@@ -75,7 +76,7 @@ export default function Player() {
       const ps = phrasesRef.current
       if (ps.length === 0) return
       const ph = ps.find(p => t >= p.start && t <= p.end)
-      if (ph && ccRef.current) { setSubText(hl(ph.text)); setSubVisible(true) }
+      if (ph && ccRef.current) { setSubText(ph.text); setSubVisible(true) }
       else { setSubVisible(false); setSubText('') }
       const idx = ps.findIndex(p => t >= p.start && t <= p.end)
       if (idx !== -1 && idx !== curIdxRef.current) setCurIdx(idx)
@@ -103,7 +104,7 @@ export default function Player() {
         const t = v.currentTime - delayRef.current
         const ph = phrasesRef.current.find(p => t >= p.start && t <= p.end)
         if (ph && ccRef.current) {
-          setSubText(hl(ph.text))
+          setSubText(ph.text)
           setSubVisible(true)
         } else {
           setSubVisible(false)
@@ -433,7 +434,7 @@ export default function Player() {
                 <video ref={vidRef} src={videoUrl || undefined} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
                 {ccOn && subText && (
                   <div className={styles.subOverlay}>
-                    <div className={styles.subBox} dangerouslySetInnerHTML={{ __html: subText }} />
+                    <div className={styles.subBox}>{subTextNodes}</div>
                   </div>
                 )}
               </div>
