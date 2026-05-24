@@ -1,48 +1,10 @@
 'use client'
 import { useRef, useState, useEffect } from 'react'
 import styles from './page.module.css'
+import { Phrase, parseSRT, fmtTime } from '@/lib/srt'
+import { hl } from '@/lib/hl'
 
-interface Phrase { start: number; end: number; text: string; sel: boolean }
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
-
-function timeToSec(s: string): number {
-  const c = s.replace(',', '.').trim().split(':')
-  if (c.length === 3) return +c[0] * 3600 + +c[1] * 60 + +c[2]
-  if (c.length === 2) return +c[0] * 60 + +c[1]
-  return +c[0]
-}
-
-function parseSRT(text: string): Phrase[] {
-  const result: Phrase[] = []
-  const clean = text.replace(/```[a-z]*\n?/gi, '').trim()
-  const blocks = clean.replace(/\r\n/g, '\n').replace(/\r/g, '\n').split(/\n\n+/)
-  blocks.forEach(block => {
-    const lines = block.trim().split('\n')
-    const tl = lines.find(l => l.includes('-->'))
-    if (!tl) return
-    const [a, b] = tl.split('-->').map(s => s.trim())
-    const start = timeToSec(a), end = timeToSec(b)
-    const idx = lines.indexOf(tl)
-    const txt = lines.slice(idx + 1).join(' ').replace(/<[^>]+>/g, '').trim()
-    if (txt && !isNaN(start) && start >= 0) result.push({ start, end, text: txt, sel: true })
-  })
-  return result
-}
-
-function fmtTime(s: number): string {
-  if (isNaN(s) || s < 0) return '0:00'
-  const m = Math.floor(s / 60), sc = Math.floor(s % 60)
-  return `${m}:${sc < 10 ? '0' : ''}${sc}`
-}
-
-const SKIP = new Set(['the','and','a','an','in','on','of','to','i','you','my','for','that','this','they','how','with','out','now','not','did','know','your','at','is','was','are','were','be','been','it','he','she','we','as','by','from','but','so','if','or','el','la','los','las','de','en','que','un','una','y','se','no','es','por','con','su','para','lo','le','al','me','te','nos'])
-
-function hl(text: string): string {
-  return text.split(' ').map(w => {
-    const c = w.replace(/[.,!?;'"—\-¿¡:]/g, '').toLowerCase()
-    return (!SKIP.has(c) && c.length > 3) ? `<span style="color:#E8C547">${w}</span>` : w
-  }).join(' ')
-}
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5]
 
