@@ -5,10 +5,11 @@ export const maxDuration = 300
 
 async function uploadToGemini(file: File, mimeType: string, apiKey: string): Promise<string> {
   const startRes = await fetch(
-    `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
+    `https://generativelanguage.googleapis.com/upload/v1beta/files`,
     {
       method: 'POST',
       headers: {
+        'x-goog-api-key': apiKey,
         'X-Goog-Upload-Protocol': 'resumable',
         'X-Goog-Upload-Command': 'start',
         'X-Goog-Upload-Header-Content-Length': String(file.size),
@@ -47,7 +48,9 @@ async function uploadToGemini(file: File, mimeType: string, apiKey: string): Pro
 async function waitForFile(name: string, apiKey: string): Promise<void> {
   for (let i = 0; i < 30; i++) {
     await new Promise(r => setTimeout(r, 3000))
-    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${name}?key=${apiKey}`)
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${name}`, {
+      headers: { 'x-goog-api-key': apiKey },
+    })
     const d = await res.json()
     if (d.state === 'ACTIVE') return
     if (d.state === 'FAILED') throw new Error('Gemini failed to process the file')
@@ -78,10 +81,10 @@ export async function POST(req: NextRequest) {
     console.log(`[transcribe] File ACTIVE, generating transcription...`)
 
     const genRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{
             parts: [
@@ -125,7 +128,7 @@ STRICT RULES:
     console.log(`[transcribe] Done — ${srt.split('\n\n').length} phrases`)
 
     // Clean up
-    fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`, { method: 'DELETE' }).catch(() => {})
+    fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}`, { method: 'DELETE', headers: { 'x-goog-api-key': apiKey } }).catch(() => {})
 
     return NextResponse.json({ srt })
 

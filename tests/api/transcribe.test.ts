@@ -118,27 +118,39 @@ describe('POST /api/transcribe', () => {
     expect(data.error).toContain('Timeout')
   }, 15_000)
 
-  it('(h) documenta bug 3: API key en query string en lugar de header', async () => {
+  it('(h) API key se manda por header x-goog-api-key, no en query string', async () => {
     process.env.GEMINI_API_KEY = 'test-key-secret'
-    let capturedUrl: string | null = null
+    const captured: Array<{ url: string; apiKeyHeader: string | null }> = []
 
     server.use(
       http.post('https://generativelanguage.googleapis.com/upload/v1beta/files', ({ request }) => {
-        capturedUrl = request.url
+        captured.push({ url: request.url, apiKeyHeader: request.headers.get('x-goog-api-key') })
         return new HttpResponse(null, {
           status: 200,
           headers: { 'x-goog-upload-url': FAKE_UPLOAD_URL },
         })
-      })
+      }),
+      http.get('https://generativelanguage.googleapis.com/v1beta/files/test-file-id', ({ request }) => {
+        captured.push({ url: request.url, apiKeyHeader: request.headers.get('x-goog-api-key') })
+        return HttpResponse.json({ state: 'ACTIVE', name: 'files/test-file-id' })
+      }),
+      http.post(
+        /generativelanguage\.googleapis\.com\/v1beta\/models\/.*generateContent/,
+        ({ request }) => {
+          captured.push({ url: request.url, apiKeyHeader: request.headers.get('x-goog-api-key') })
+          return HttpResponse.json({ candidates: [{ content: { parts: [{ text: FAKE_SRT }] } }] })
+        }
+      ),
     )
 
     await POST(makeRequest())
 
-    expect(capturedUrl).not.toBeNull()
-    expect(capturedUrl).toContain('?key=test-key-secret')
-    // Cuando se fixee bug 3, esto cambia a:
-    // expect(capturedUrl).not.toContain('?key=')
-    // expect(capturedRequest.headers.get('x-goog-api-key')).toBe('test-key-secret')
+    // DELETE (línea 128 de route.ts) es fire-and-forget no-awaited — no capturable de forma confiable
+    expect(captured).toHaveLength(3)
+    for (const { url, apiKeyHeader } of captured) {
+      expect(url).not.toContain('?key=')
+      expect(apiKeyHeader).toBe('test-key-secret')
+    }
   })
 
   it('(i) POST handler no llama file.arrayBuffer() — usa Blob passthrough para evitar OOM', async () => {
