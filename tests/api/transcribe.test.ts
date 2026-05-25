@@ -140,4 +140,19 @@ describe('POST /api/transcribe', () => {
     // expect(capturedUrl).not.toContain('?key=')
     // expect(capturedRequest.headers.get('x-goog-api-key')).toBe('test-key-secret')
   })
+
+  it('(i) POST handler no llama file.arrayBuffer() — usa Blob passthrough para evitar OOM', async () => {
+    const req = makeRequest()  // crear antes del spy para no capturar serialización del NextRequest
+    const spy = vi.spyOn(Blob.prototype, 'arrayBuffer')
+    try {
+      await POST(req)
+      // Bug 2: línea 71-72 de route.ts llama file.arrayBuffer() → copia extra de ~videoSize en RAM
+      // Después del fix (Blob passthrough), arrayBuffer() no se llama y este expect pasa
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
+  })
+
+  it.todo('(j) browser-direct upload to Gemini bypasses Next.js multipart buffering — see CLAUDE.md "Memory budget"')
 })

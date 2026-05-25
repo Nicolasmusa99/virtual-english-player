@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 // Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
 
-async function uploadToGemini(buffer: Buffer, mimeType: string, apiKey: string): Promise<string> {
+async function uploadToGemini(file: File, mimeType: string, apiKey: string): Promise<string> {
   const startRes = await fetch(
     `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${apiKey}`,
     {
@@ -11,7 +11,7 @@ async function uploadToGemini(buffer: Buffer, mimeType: string, apiKey: string):
       headers: {
         'X-Goog-Upload-Protocol': 'resumable',
         'X-Goog-Upload-Command': 'start',
-        'X-Goog-Upload-Header-Content-Length': String(buffer.length),
+        'X-Goog-Upload-Header-Content-Length': String(file.size),
         'X-Goog-Upload-Header-Content-Type': mimeType,
         'Content-Type': 'application/json',
       },
@@ -28,11 +28,11 @@ async function uploadToGemini(buffer: Buffer, mimeType: string, apiKey: string):
   const uploadRes = await fetch(uploadUrl, {
     method: 'PUT',
     headers: {
-      'Content-Length': String(buffer.length),
+      'Content-Length': String(file.size),
       'X-Goog-Upload-Offset': '0',
       'X-Goog-Upload-Command': 'upload, finalize',
     },
-    body: new Uint8Array(buffer),
+    body: file,
   })
   if (!uploadRes.ok) {
     const err = await uploadRes.text()
@@ -68,11 +68,9 @@ export async function POST(req: NextRequest) {
     const sizeMB = (file.size / 1024 / 1024).toFixed(1)
     console.log(`[transcribe] File: ${file.name} — ${sizeMB} MB — ${mimeType}`)
 
-    const arrayBuffer = await file.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
-    console.log(`[transcribe] Buffer ready, uploading to Gemini...`)
+    console.log(`[transcribe] Uploading to Gemini...`)
 
-    const fileUri = await uploadToGemini(buffer, mimeType, apiKey)
+    const fileUri = await uploadToGemini(file, mimeType, apiKey)
     const fileName = 'files/' + fileUri.split('/files/')[1]
     console.log(`[transcribe] Uploaded: ${fileUri}`)
 

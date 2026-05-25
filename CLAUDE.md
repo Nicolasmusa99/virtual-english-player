@@ -16,7 +16,7 @@ Vitest v4 with `@vitejs/plugin-react`, jsdom environment (default), and `// @vit
 
 - `tests/lib/srt.test.ts` — 18 unit tests for `parseSRT`, `timeToSec`, `fmtTime`
 - `tests/lib/hl.test.tsx` — 11 tests for `hl()`: RTL-based behavior checks + XSS/DOM security checks
-- `tests/api/transcribe.test.ts` — 8 MSW-based tests for `POST /api/transcribe` (node environment)
+- `tests/api/transcribe.test.ts` — 9 MSW-based tests + 1 todo for `POST /api/transcribe` (node environment)
 - `tests/mocks/gemini-handlers.ts` — reusable MSW handlers for Gemini API endpoints
 - `tests/setup.ts` — global setup (`@testing-library/jest-dom`)
 
@@ -57,6 +57,16 @@ Key flow details that aren't obvious from the file list:
 - `parseSRT` is tolerant: strips ```` ``` ```` code fences (Gemini occasionally adds them despite the prompt), normalizes CRLF, accepts `HH:MM:SS,mmm` or `MM:SS` timestamps.
 - Drag-and-drop on the load screen accepts video + SRT together. If only a video is dropped, it goes through `/api/transcribe`; if an SRT is also present, transcription is skipped and the SRT is parsed directly in the browser. After successful transcription the generated SRT is auto-downloaded.
 - Keyboard shortcuts in player mode: Space (play/pause), ←/A and →/D (prev/next phrase), W (micro-repeat: jump back 2s, clamped to phrase start), R (repeat current phrase), ↑/↓ (volume). All are no-ops when an `<input>` is focused.
+
+### Memory budget per request (Node.js runtime, Vercel Pro)
+
+| Stage | Memory | Owner |
+|-------|--------|-------|
+| `req.formData()` buffers full multipart body | ~videoSize | Next.js (not fixable here) |
+| Blob passthrough to Gemini PUT | ~0 extra | our code (post Bug 2 fix) |
+| **Peak total** | **~videoSize** | — |
+
+Practical limit: ~1.5 GB on Pro (3 008 MB function memory). For larger videos the fix is browser-direct upload to the Gemini Files API — the browser uploads straight to Gemini, the server only proxies the small `{ fileUri }` JSON. Tracked as a future bug.
 
 ## Deployment
 
