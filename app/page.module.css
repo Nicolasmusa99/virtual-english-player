@@ -180,3 +180,14 @@
 .restoreBtn:hover { background: var(--ac); color: #111; }
 .discardBtn { padding: 4px 10px; border-radius: 5px; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: all 0.12s; }
 .discardBtn:hover { background: var(--p3); color: var(--tx2); }
+
+/* EXIT DIALOG (US-025) */
+.exitOverlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 100; display: flex; align-items: center; justify-content: center; }
+.exitDialog { background: var(--p2); border: 1px solid var(--ln2); border-radius: 10px; padding: 20px 24px; max-width: 360px; width: 90%; display: flex; flex-direction: column; gap: 8px; }
+.exitTitle { font-size: 13px; color: var(--tx); font-weight: 500; margin-bottom: 6px; line-height: 1.4; }
+.exitBtnPrimary { padding: 9px 14px; border-radius: 7px; border: 1px solid var(--ac3); background: var(--ac2); color: var(--ac); font-size: 12px; cursor: pointer; font-family: var(--font-sans); text-align: left; transition: all 0.12s; }
+.exitBtnPrimary:hover { background: var(--ac); color: #111; }
+.exitBtn { padding: 9px 14px; border-radius: 7px; border: 1px solid var(--ln2); background: var(--p3); color: var(--tx2); font-size: 12px; cursor: pointer; font-family: var(--font-sans); text-align: left; transition: all 0.12s; }
+.exitBtn:hover { background: var(--p4); color: var(--tx); }
+.exitBtnCancel { padding: 7px 14px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: all 0.12s; align-self: center; }
+.exitBtnCancel:hover { background: var(--p3); color: var(--tx2); }

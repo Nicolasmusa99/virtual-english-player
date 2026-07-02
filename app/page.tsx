@@ -57,8 +57,10 @@ export default function Player() {
   const [isPlaying, setIsPlaying]         = useState(false)
   const [vol, setVol]                     = useState(100)
   const [stageOpen, setStageOpen]         = useState(false)
-  // US-023/024 persistence state
+  // US-023/024/025 persistence state
+  const [isDirty, setIsDirty]             = useState(false)
   const [restorePrompt, setRestorePrompt] = useState<SessionData | null>(null)
+  const [exitDialog, setExitDialog]       = useState(false)
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -257,10 +259,12 @@ export default function Player() {
   }
 
   function toggleSel(idx: number) {
+    setIsDirty(true)
     setPhrases(prev => prev.map((p, i) => i === idx ? { ...p, sel: !p.sel } : p))
   }
 
   function setSpd(idx: number) {
+    setIsDirty(true)
     setSpeedIdx(idx)
     if (stageOpenRef.current) { channelRef.current?.send({ type: 'speed', rate: SPEEDS[idx] }); return }
     if (vidRef.current) vidRef.current.playbackRate = SPEEDS[idx]
@@ -272,6 +276,7 @@ export default function Player() {
       delayRef.current = n
       return n
     })
+    setIsDirty(true)
   }
 
   // ─── US-024: restaurar / descartar sesión ────────────────────────────────
@@ -283,6 +288,7 @@ export default function Player() {
     setCcOn(saved.ccOn); ccRef.current = saved.ccOn
     setFilter(saved.filter)
     setRestorePrompt(null)
+    setIsDirty(false)
     // Propagate speed to stage if open.
     // Subtitle propagation is handled by the subtitle useEffect (fires on ccOn change).
     if (stageOpenRef.current) channelRef.current?.send({ type: 'speed', rate: SPEEDS[saved.speedIdx] })
@@ -291,7 +297,18 @@ export default function Player() {
 
   function handleDiscard() {
     setRestorePrompt(null)
+    setIsDirty(false)
     capture('session_restore_resolved', { action: 'discard', video_file_name: videoFileName })
+  }
+
+  // ─── US-025: guardar o confirmar salida ──────────────────────────────────
+  function handleExitAttempt() {
+    if (isDirty) {
+      setExitDialog(true)
+      capture('exit_confirmation_shown', { has_edits: true, selected_count: selPhrases.length })
+      return
+    }
+    backToLoad()
   }
 
   // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
@@ -400,6 +417,7 @@ export default function Player() {
           setRestorePrompt(savedSess)
           capture('session_restore_prompted', { video_file_name: (vf as File).name, saved_phrase_count: savedSess.phrases.length })
         }
+        setIsDirty(false)
         setPhrases(parsed); setSrtSource(`SRT · ${parsed.length} frases`)
         setScreen('player')
       }
@@ -524,6 +542,7 @@ export default function Player() {
         setRestorePrompt(savedSess)
         capture('session_restore_prompted', { video_file_name: videoFile.name, saved_phrase_count: savedSess.phrases.length })
       }
+      setIsDirty(false)
       setPhrases(parsed)
       setSrtSource(`Gemini AI · ${parsed.length} frases`)
       setProgress(100); setStep('done')
@@ -552,7 +571,7 @@ export default function Player() {
     setVideoUrl(''); setErrorMsg(''); setSrtSource('')
     setStageOpen(false); stageOpenRef.current = false
     videoFileRef.current = null
-    setRestorePrompt(null)
+    setIsDirty(false); setRestorePrompt(null); setExitDialog(false)
   }
 
   function downloadSRT() {
@@ -578,6 +597,7 @@ export default function Player() {
   }
 
   function saveEdit(idx: number) {
+    setIsDirty(true)
     setPhrases(prev => prev.map((p, i) => i === idx ? { ...p, text: editingText } : p))
     setEditingIdx(null)
     setEditingText('')
@@ -679,7 +699,7 @@ export default function Player() {
               <button className={styles.tbBtn} onClick={stageOpen ? () => closeStage(true) : openStage}>
                 {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
               </button>
-              <button className={styles.tbBtn} onClick={backToLoad}>← Cargar otro</button>
+              <button className={styles.tbBtn} onClick={handleExitAttempt}>← Cargar otro</button>
             </div>
           </div>
 
@@ -751,7 +771,7 @@ export default function Player() {
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6" /><path d="M20.5 15A9 9 0 1 1 20 8.5" /></svg>
                     </button>
                   </div>
-                  <button className={styles.ccRow} onClick={() => setCcOn(p => !p)}>
+                  <button className={styles.ccRow} onClick={() => { setCcOn(p => !p); setIsDirty(true) }}>
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="13" rx="2" /><path d="M8 12h4M14 12h2M8 16h2M12 16h4" /></svg>
                     <span className={styles.ccLbl}>Subtítulos</span>
                     <span className={`${styles.ccBadge} ${ccOn ? styles.ccOn : styles.ccOff}`}>{ccOn ? 'ON' : 'OFF'}</span>
@@ -799,7 +819,7 @@ export default function Player() {
                       {delay > 0 ? '+' : ''}{delay.toFixed(1)} s
                     </div>
                     <button className={styles.delayBtn} onClick={() => adjDelay(0.5)}>+</button>
-                    <span className={styles.delayReset} onClick={() => { setDelay(0); delayRef.current = 0 }}>reset</span>
+                    <span className={styles.delayReset} onClick={() => { setDelay(0); delayRef.current = 0; setIsDirty(true) }}>reset</span>
                   </div>
                 </div>
 
@@ -880,6 +900,18 @@ export default function Player() {
             </div>
           </div>
 
+          {exitDialog && (
+            <div className={styles.exitOverlay}>
+              <div className={styles.exitDialog}>
+                <div className={styles.exitTitle}>¿Salir con cambios sin guardar?</div>
+                <button className={styles.exitBtnPrimary} onClick={() => { downloadSRT(); backToLoad() }}>
+                  Descargar SRT y salir
+                </button>
+                <button className={styles.exitBtn} onClick={backToLoad}>Salir sin guardar</button>
+                <button className={styles.exitBtnCancel} onClick={() => setExitDialog(false)}>Cancelar</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

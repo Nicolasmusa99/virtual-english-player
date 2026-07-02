@@ -139,4 +139,83 @@ describe('Player — Bloque C persistencia', () => {
     expect(container.textContent).not.toMatch(/^restaurar$/i)
     expect(container.textContent).toContain('Hello world')
   })
+
+  // ── US-025 ──────────────────────────────────────────────────────────────
+
+  // TC-059: con cambios sin guardar, "← Cargar otro" muestra diálogo de confirmación
+  it('TC-059: dirty + "← Cargar otro" muestra diálogo con opción "Salir sin guardar"', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayerScreen(container)
+
+    // Hacer un cambio que setea dirty: click en delay "+"
+    const plusBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent?.trim() === '+')
+    expect(plusBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(plusBtn!); await tick(30) })
+
+    // Click "← Cargar otro"
+    const backBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+    expect(backBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(backBtn!); await tick(30) })
+
+    // El diálogo de salida debe estar visible
+    expect(container.textContent).toMatch(/salir sin guardar/i)
+  })
+
+  // TC-060: sin cambios, "← Cargar otro" vuelve directamente a la load screen
+  it('TC-060a: sin dirty, "← Cargar otro" vuelve directo a la load screen', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayerScreen(container)
+
+    const backBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+    await act(async () => { fireEvent.click(backBtn!); await tick(50) })
+
+    expect(container.textContent).toMatch(/arrastrá el video/i)
+  })
+
+  // TC-060b: "Salir sin guardar" cierra el diálogo y vuelve a load screen
+  it('TC-060b: "Salir sin guardar" vuelve a la load screen', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayerScreen(container)
+
+    const plusBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent?.trim() === '+')
+    await act(async () => { fireEvent.click(plusBtn!); await tick(30) })
+
+    const backBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+    await act(async () => { fireEvent.click(backBtn!); await tick(30) })
+
+    const exitBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => /salir sin guardar/i.test(b.textContent ?? ''))
+    expect(exitBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(exitBtn!); await tick(50) })
+
+    expect(container.textContent).toMatch(/arrastrá el video/i)
+  })
+
+  // TC-060c: "Cancelar" en el diálogo mantiene la pantalla de player
+  it('TC-060c: "Cancelar" en el diálogo mantiene al usuario en el player', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayerScreen(container)
+
+    const plusBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent?.trim() === '+')
+    await act(async () => { fireEvent.click(plusBtn!); await tick(30) })
+
+    const backBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+    await act(async () => { fireEvent.click(backBtn!); await tick(30) })
+
+    const cancelBtn = Array.from(container.querySelectorAll('button'))
+      .find(b => /^cancelar$/i.test(b.textContent?.trim() ?? ''))
+    expect(cancelBtn).not.toBeNull()
+    await act(async () => { fireEvent.click(cancelBtn!); await tick(50) })
+
+    // Sigue en player: el diálogo cierra y las frases siguen visibles
+    expect(container.textContent).toMatch(/hello world/i)
+    expect(container.textContent).not.toMatch(/arrastrá el video/i)
+  })
 })
