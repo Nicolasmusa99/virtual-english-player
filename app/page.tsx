@@ -3,52 +3,68 @@ import { useRef, useState, useEffect, useMemo } from 'react'
 import styles from './page.module.css'
 import { Phrase, parseSRT, fmtTime } from '@/lib/srt'
 import { hl } from '@/lib/hl'
+import { capture } from '@/lib/capture'
+import { StageChannel } from '@/lib/stageChannel'
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5]
 
 export default function Player() {
-  const vidRef = useRef<HTMLVideoElement>(null)
+  // ─── DOM refs ────────────────────────────────────────────────────────────
+  const vidRef  = useRef<HTMLVideoElement>(null)
   const progRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const xhrRef = useRef<XMLHttpRequest | null>(null)
+  const xhrRef  = useRef<XMLHttpRequest | null>(null)
 
-  const [screen, setScreen] = useState<'load' | 'player'>('load')
-  const [step, setStep] = useState<Step>('idle')
-  const [stepMsg, setStepMsg] = useState('')
-  const [progress, setProgress] = useState(0)
-  const [errorMsg, setErrorMsg] = useState('')
+  // ─── Stage refs ──────────────────────────────────────────────────────────
+  const videoFileRef          = useRef<File | null>(null)
+  const panelVideoUrlRef      = useRef<string | null>(null)   // FIX 1: tracked for revocation
+  const channelRef            = useRef<StageChannel | null>(null)
+  const channelUnsubRef       = useRef<(() => void) | null>(null)
+  const stageOpenRef          = useRef(false)
+  const stageStartRef         = useRef(0)
+  const lastStageTimeRef      = useRef(0)                     // FIX 2: fresh currentTime from stage
+  const stageDurationRef      = useRef(0)
+  const pendingRestoreTimeRef = useRef<number | null>(null)
+
+  // ─── State ───────────────────────────────────────────────────────────────
+  const [screen, setScreen]               = useState<'load' | 'player'>('load')
+  const [step, setStep]                   = useState<Step>('idle')
+  const [stepMsg, setStepMsg]             = useState('')
+  const [progress, setProgress]           = useState(0)
+  const [errorMsg, setErrorMsg]           = useState('')
   const [videoFileName, setVideoFileName] = useState('')
-  const [videoUrl, setVideoUrl] = useState('')
-  const [srtSource, setSrtSource] = useState('')
-
-  const [phrases, setPhrases] = useState<Phrase[]>([])
-  const [curIdx, setCurIdx] = useState(-1)
-  const [ccOn, setCcOn] = useState(true)
-  const [delay, setDelay] = useState(0)
-  const [speedIdx, setSpeedIdx] = useState(2)
-  const [filter, setFilter] = useState<'all' | 'sel'>('all')
-  const [subText, setSubText] = useState('')
+  const [videoUrl, setVideoUrl]           = useState('')
+  const [srtSource, setSrtSource]         = useState('')
+  const [phrases, setPhrases]             = useState<Phrase[]>([])
+  const [curIdx, setCurIdx]               = useState(-1)
+  const [ccOn, setCcOn]                   = useState(true)
+  const [delay, setDelay]                 = useState(0)
+  const [speedIdx, setSpeedIdx]           = useState(2)
+  const [filter, setFilter]               = useState<'all' | 'sel'>('all')
+  const [subText, setSubText]             = useState('')
   const subTextNodes = useMemo(() => hl(subText), [subText])
-  const [subVisible, setSubVisible] = useState(false)
-  const [editingIdx, setEditingIdx] = useState<number | null>(null)
-  const [editingText, setEditingText] = useState('')
-  const [timeCur, setTimeCur] = useState('0:00')
-  const [timeTot, setTimeTot] = useState('0:00')
-  const [progPct, setProgPct] = useState(0)
-  const [bufPct, setBufPct] = useState(0)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [vol, setVol] = useState(100)
+  const [subVisible, setSubVisible]       = useState(false)
+  const [editingIdx, setEditingIdx]       = useState<number | null>(null)
+  const [editingText, setEditingText]     = useState('')
+  const [timeCur, setTimeCur]             = useState('0:00')
+  const [timeTot, setTimeTot]             = useState('0:00')
+  const [progPct, setProgPct]             = useState(0)
+  const [bufPct, setBufPct]               = useState(0)
+  const [isPlaying, setIsPlaying]         = useState(false)
+  const [vol, setVol]                     = useState(100)
+  const [stageOpen, setStageOpen]         = useState(false)
 
-  const phrasesRef = useRef<Phrase[]>([])
-  const curIdxRef = useRef(-1)
-  const ccRef = useRef(true)
-  const delayRef = useRef(0)
+  // ─── Hot refs ─────────────────────────────────────────────────────────────
+  const phrasesRef   = useRef<Phrase[]>([])
+  const curIdxRef    = useRef(-1)
+  const ccRef        = useRef(true)
+  const delayRef     = useRef(0)
+  const isPlayingRef = useRef(false)
 
-  useEffect(() => { 
+  useEffect(() => {
     phrasesRef.current = phrases
-    // Force subtitle check when phrases load
     const v = vidRef.current
     if (v && v.currentTime > 0 && phrases.length > 0) {
       const t = v.currentTime - delayRef.current
@@ -56,60 +72,61 @@ export default function Player() {
       if (ph && ccRef.current) { setSubText(ph.text); setSubVisible(true) }
     }
   }, [phrases])
-  useEffect(() => { curIdxRef.current = curIdx }, [curIdx])
-  useEffect(() => { ccRef.current = ccOn }, [ccOn])
-  useEffect(() => { delayRef.current = delay }, [delay])
-  // src set directly on video element via state
+  useEffect(() => { curIdxRef.current   = curIdx    }, [curIdx])
+  useEffect(() => { ccRef.current       = ccOn      }, [ccOn])
+  useEffect(() => { delayRef.current    = delay     }, [delay])
+  useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
 
+  // ─── Local video event listeners ─────────────────────────────────────────
   useEffect(() => {
     const v = vidRef.current; if (!v) return
-    const onMeta = () => setTimeTot(fmtTime(v.duration))
-    const onEnded = () => { setIsPlaying(false); setSubText("") }
-    const onProg = () => {
+    const onMeta = () => {
+      setTimeTot(fmtTime(v.duration))
+      if (pendingRestoreTimeRef.current !== null) {
+        v.currentTime = pendingRestoreTimeRef.current
+        pendingRestoreTimeRef.current = null
+      }
+    }
+    const onEnded = () => { setIsPlaying(false); setSubText('') }
+    const onProg  = () => {
       try { if (v.buffered.length > 0) setBufPct(v.buffered.end(v.buffered.length - 1) / v.duration * 100) } catch {}
     }
     const onTU = () => {
       if (!v.duration) return
       setProgPct(v.currentTime / v.duration * 100)
       setTimeCur(fmtTime(v.currentTime))
-      const t = v.currentTime - delayRef.current
+      const t  = v.currentTime - delayRef.current
       const ps = phrasesRef.current
       if (ps.length === 0) return
-      const ph = ps.find(p => t >= p.start && t <= p.end)
+      const ph  = ps.find(p => t >= p.start && t <= p.end)
       if (ph && ccRef.current) { setSubText(ph.text); setSubVisible(true) }
       else { setSubVisible(false); setSubText('') }
       const idx = ps.findIndex(p => t >= p.start && t <= p.end)
       if (idx !== -1 && idx !== curIdxRef.current) setCurIdx(idx)
     }
     v.addEventListener('loadedmetadata', onMeta)
-    v.addEventListener('timeupdate', onTU)
-    v.addEventListener('progress', onProg)
-    v.addEventListener('ended', onEnded)
+    v.addEventListener('timeupdate',     onTU)
+    v.addEventListener('progress',       onProg)
+    v.addEventListener('ended',          onEnded)
     return () => {
       v.removeEventListener('loadedmetadata', onMeta)
-      v.removeEventListener('timeupdate', onTU)
-      v.removeEventListener('progress', onProg)
-      v.removeEventListener('ended', onEnded)
+      v.removeEventListener('timeupdate',     onTU)
+      v.removeEventListener('progress',       onProg)
+      v.removeEventListener('ended',          onEnded)
     }
   }, [])
 
-
-  // RAF-based subtitle sync — more reliable than timeupdate alone
+  // ─── RAF subtitle sync (local video; noop while stage open) ──────────────
   useEffect(() => {
     if (screen !== 'player') return
     let rafId: number
     const sync = () => {
       const v = vidRef.current
       if (v && !v.paused && phrasesRef.current.length > 0) {
-        const t = v.currentTime - delayRef.current
+        const t  = v.currentTime - delayRef.current
         const ph = phrasesRef.current.find(p => t >= p.start && t <= p.end)
-        if (ph && ccRef.current) {
-          setSubText(ph.text)
-          setSubVisible(true)
-        } else {
-          setSubVisible(false)
-          setSubText('')
-        }
+        if (ph && ccRef.current) { setSubText(ph.text); setSubVisible(true) }
+        else { setSubVisible(false); setSubText('') }
       }
       rafId = requestAnimationFrame(sync)
     }
@@ -117,17 +134,28 @@ export default function Player() {
     return () => cancelAnimationFrame(rafId)
   }, [screen])
 
+  // ─── US-038: push subtitle to stage when phrase or CC toggle changes ──────
+  // TODO: if the active phrase text is edited while stage is open, the edit
+  // won't propagate until curIdx changes — handle this in the editing+stage session.
+  useEffect(() => {
+    if (!stageOpen) return
+    const ch = channelRef.current; if (!ch) return
+    const ph = phrasesRef.current[curIdx]
+    ch.send({ type: 'subtitle', text: ph ? ph.text : '', visible: ccOn && !!ph })
+  }, [curIdx, ccOn, stageOpen])
+
+  // ─── Keyboard shortcuts ───────────────────────────────────────────────────
   useEffect(() => {
     if (screen !== 'player') return
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT') return
       switch (e.key) {
-        case ' ': e.preventDefault(); togglePlay(); break
-        case 'ArrowLeft': case 'a': case 'A': e.preventDefault(); prevPhrase(); break
-        case 'ArrowRight': case 'd': case 'D': e.preventDefault(); nextPhrase(); break
+        case ' ':          e.preventDefault(); togglePlay();  break
+        case 'ArrowLeft':  case 'a': case 'A': e.preventDefault(); prevPhrase();  break
+        case 'ArrowRight': case 'd': case 'D': e.preventDefault(); nextPhrase();  break
         case 'w': case 'W': e.preventDefault(); microRepeat(); break
         case 'r': case 'R': e.preventDefault(); repeatPhrase(); break
-        case 'ArrowUp': e.preventDefault(); if (vidRef.current) vidRef.current.volume = Math.min(1, vidRef.current.volume + 0.1); break
+        case 'ArrowUp':   e.preventDefault(); if (vidRef.current) vidRef.current.volume = Math.min(1, vidRef.current.volume + 0.1); break
         case 'ArrowDown': e.preventDefault(); if (vidRef.current) vidRef.current.volume = Math.max(0, vidRef.current.volume - 0.1); break
       }
     }
@@ -135,6 +163,7 @@ export default function Player() {
     return () => window.removeEventListener('keydown', onKey)
   }, [screen])
 
+  // ─── Scroll active phrase into view ──────────────────────────────────────
   useEffect(() => {
     if (listRef.current) {
       const act = listRef.current.querySelector('[data-act="true"]')
@@ -142,39 +171,164 @@ export default function Player() {
     }
   }, [curIdx])
 
+  // ─── Playback ─────────────────────────────────────────────────────────────
   function togglePlay() {
+    if (stageOpenRef.current) {
+      const ch = channelRef.current; if (!ch) return
+      if (isPlayingRef.current) { ch.send({ type: 'pause' }); setIsPlaying(false) }
+      else                       { ch.send({ type: 'play'  }); setIsPlaying(true)  }
+      return
+    }
     const v = vidRef.current; if (!v) return
     if (v.paused) { v.play(); setIsPlaying(true) }
-    else { v.pause(); setIsPlaying(false) }
+    else          { v.pause(); setIsPlaying(false) }
   }
+
   function skip(s: number) {
+    if (stageOpenRef.current) {
+      channelRef.current?.send({ type: 'seek', time: Math.max(0, lastStageTimeRef.current + s) })
+      return
+    }
     const v = vidRef.current; if (!v) return
     v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + s))
   }
+
   function scrub(e: React.MouseEvent) {
+    const r   = progRef.current!.getBoundingClientRect()
+    const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
+    if (stageOpenRef.current) {
+      channelRef.current?.send({ type: 'seek', time: pct * stageDurationRef.current })
+      return
+    }
     const v = vidRef.current; if (!v?.duration) return
-    const r = progRef.current!.getBoundingClientRect()
-    v.currentTime = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)) * v.duration
+    v.currentTime = pct * v.duration
   }
+
   function jumpTo(idx: number) {
     if (idx < 0 || idx >= phrasesRef.current.length) return
     setCurIdx(idx)
-    if (vidRef.current) vidRef.current.currentTime = phrasesRef.current[idx].start + 0.05
+    const time = phrasesRef.current[idx].start + 0.05
+    if (stageOpenRef.current) { channelRef.current?.send({ type: 'seek', time }); return }
+    if (vidRef.current) vidRef.current.currentTime = time
   }
-  function prevPhrase() { jumpTo(Math.max(0, curIdxRef.current - 1)) }
-  function nextPhrase() { jumpTo(Math.min(phrasesRef.current.length - 1, curIdxRef.current + 1)) }
-  function repeatPhrase() { if (curIdxRef.current >= 0 && vidRef.current) vidRef.current.currentTime = phrasesRef.current[curIdxRef.current].start + 0.05 }
+
+  function prevPhrase()  { jumpTo(Math.max(0, curIdxRef.current - 1)) }
+  function nextPhrase()  { jumpTo(Math.min(phrasesRef.current.length - 1, curIdxRef.current + 1)) }
+
+  function repeatPhrase() {
+    if (curIdxRef.current < 0) return
+    const time = phrasesRef.current[curIdxRef.current].start + 0.05
+    if (stageOpenRef.current) { channelRef.current?.send({ type: 'seek', time }); return }
+    if (vidRef.current) vidRef.current.currentTime = time
+  }
+
   function microRepeat() {
-    if (curIdxRef.current < 0 || !vidRef.current) return
-    vidRef.current.currentTime = Math.max(phrasesRef.current[curIdxRef.current].start, vidRef.current.currentTime - 2)
+    if (curIdxRef.current < 0) return
+    const phraseStart = phrasesRef.current[curIdxRef.current]?.start ?? 0
+    if (stageOpenRef.current) {
+      channelRef.current?.send({ type: 'seek', time: Math.max(phraseStart, lastStageTimeRef.current - 2) })
+      return
+    }
+    if (!vidRef.current) return
+    vidRef.current.currentTime = Math.max(phraseStart, vidRef.current.currentTime - 2)
     setSubVisible(false); setTimeout(() => setSubVisible(true), 80)
   }
-  function toggleSel(idx: number) { setPhrases(prev => prev.map((p, i) => i === idx ? { ...p, sel: !p.sel } : p)) }
-  function setSpd(idx: number) { setSpeedIdx(idx); if (vidRef.current) vidRef.current.playbackRate = SPEEDS[idx] }
+
+  function toggleSel(idx: number) {
+    setPhrases(prev => prev.map((p, i) => i === idx ? { ...p, sel: !p.sel } : p))
+  }
+
+  function setSpd(idx: number) {
+    setSpeedIdx(idx)
+    if (stageOpenRef.current) { channelRef.current?.send({ type: 'speed', rate: SPEEDS[idx] }); return }
+    if (vidRef.current) vidRef.current.playbackRate = SPEEDS[idx]
+  }
+
   function adjDelay(d: number) {
     setDelay(prev => { const n = Math.round((prev + d) * 10) / 10; delayRef.current = n; return n })
   }
 
+  // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
+  function openStage() {
+    if (!videoFileRef.current) return
+    const v           = vidRef.current
+    const currentTime  = v?.currentTime  ?? 0
+    const playbackRate = v?.playbackRate ?? SPEEDS[speedIdx]
+
+    if (v) { v.pause(); v.src = '' }
+    setIsPlaying(false)
+
+    const ch = new StageChannel()
+    channelRef.current = ch
+
+    const unsub = ch.onMessage(msg => {
+      switch (msg.type) {
+        case 'ready':
+          // FIX 3: send load_blob only after stage signals it's listening — no setTimeout race
+          ch.send({
+            type:        'load_blob',
+            blob:        videoFileRef.current!,
+            fileName:    videoFileName,
+            currentTime,
+            playbackRate,
+            ccOn:        ccRef.current,
+          })
+          break
+        case 'timeupdate': {
+          const { currentTime: ct, duration, isPlaying: playing } = msg
+          lastStageTimeRef.current = ct          // FIX 2: never stale
+          stageDurationRef.current = duration
+          if (duration) setProgPct(ct / duration * 100)
+          setTimeCur(fmtTime(ct))
+          setIsPlaying(playing)
+          const t   = ct - delayRef.current
+          const idx = phrasesRef.current.findIndex(p => t >= p.start && t <= p.end)
+          if (idx !== -1 && idx !== curIdxRef.current) setCurIdx(idx)
+          break
+        }
+        case 'closed':
+          closeStage(false)
+          break
+      }
+    })
+    channelUnsubRef.current = unsub
+
+    const win    = window.open('/stage', '_blank', 'width=1280,height=720,menubar=no,toolbar=no,location=no,status=no')
+    const method: 'window' | 'fullscreen' = win ? 'window' : 'fullscreen'
+    if (!win) document.getElementById('ve-stage-wrap')?.requestFullscreen?.().catch(() => {})
+
+    stageOpenRef.current = true
+    setStageOpen(true)
+    stageStartRef.current = Date.now()
+    capture('stage_window_opened', { method })
+  }
+
+  function closeStage(sendClose = true) {
+    const ch = channelRef.current
+    if (ch) {
+      if (sendClose) ch.send({ type: 'close' })
+      channelUnsubRef.current?.()
+      channelUnsubRef.current = null
+      ch.close()
+      channelRef.current = null
+    }
+    stageOpenRef.current = false
+    setStageOpen(false)
+
+    capture('stage_window_closed', { open_duration_s: Math.round((Date.now() - stageStartRef.current) / 1000) })
+
+    pendingRestoreTimeRef.current = lastStageTimeRef.current  // FIX 2: applied in onMeta
+
+    // FIX 1 (closeStage): revoke previous URL, create new one
+    if (videoFileRef.current) {
+      if (panelVideoUrlRef.current) URL.revokeObjectURL(panelVideoUrlRef.current)
+      const url = URL.createObjectURL(videoFileRef.current)
+      panelVideoUrlRef.current = url
+      setVideoUrl(url)
+    }
+  }
+
+  // ─── File handling ────────────────────────────────────────────────────────
   function handleFiles(files: File[]) {
     let vf: File | null = null, sf: File | null = null  // eslint-disable-line
     files.forEach(f => {
@@ -184,7 +338,12 @@ export default function Player() {
     if (!vf) { setErrorMsg('Arrastrá un archivo de video (MP4, AVI, MKV...)'); return }
     setErrorMsg('')
     setVideoFileName((vf as File).name)
-    setVideoUrl(URL.createObjectURL(vf as File))
+    videoFileRef.current = vf
+    // FIX 1 (handleFiles): revoke before creating new URL
+    if (panelVideoUrlRef.current) URL.revokeObjectURL(panelVideoUrlRef.current)
+    const url = URL.createObjectURL(vf as File)
+    panelVideoUrlRef.current = url
+    setVideoUrl(url)
     const srtFile = sf as File | null
     if (srtFile) {
       const r = new FileReader()
@@ -200,108 +359,144 @@ export default function Player() {
     }
   }
 
-  // Upload file to our server via XHR for upload progress
-  // Server handles Gemini upload + transcription
-  function transcribe(videoFile: File) {
-    setStep('uploading')
-    setStepMsg(`Subiendo video (${(videoFile.size / 1024 / 1024).toFixed(0)} MB)...`)
+  async function transcribe(videoFile: File) {
+    setStep('uploading'); setStepMsg('Iniciando subida...'); setProgress(3); setErrorMsg('')
+    const mimeType = videoFile.type || 'video/mp4'
+
+    let uploadUrl: string
+    try {
+      const initRes = await fetch('/api/upload-init', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mimeType, size: videoFile.size }),
+      })
+      if (!initRes.ok) {
+        const d = await initRes.json().catch(() => ({}))
+        setErrorMsg(d.error || `Error al iniciar la subida: ${initRes.status}`)
+        setStep('idle'); setProgress(0); return
+      }
+      const initData = await initRes.json()
+      uploadUrl = initData.uploadUrl
+    } catch {
+      setErrorMsg('Error de red al iniciar la subida.')
+      setStep('idle'); setProgress(0); return
+    }
+
+    setStepMsg(`Subiendo a Gemini (${(videoFile.size / 1024 / 1024).toFixed(0)} MB)...`)
     setProgress(5)
-    setErrorMsg('')
 
-    const fd = new FormData()
-    fd.append('file', videoFile, videoFile.name)
+    let fileUri: string
+    try {
+      fileUri = await new Promise<string>((resolve, reject) => {
+        const xhr = new XMLHttpRequest()
+        xhrRef.current = xhr
 
-    const xhr = new XMLHttpRequest()
-    xhrRef.current = xhr
+        xhr.upload.onprogress = (e) => {
+          if (e.lengthComputable) {
+            const pct = Math.round(e.loaded / e.total * 100)
+            setStepMsg(`Subiendo a Gemini — ${pct}%`)
+            setProgress(5 + pct * 0.6)
+          }
+        }
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round(e.loaded / e.total * 100)
-        setStepMsg(`Subiendo al servidor — ${pct}%`)
-        setProgress(5 + pct * 0.3) // 5% → 35%
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const data = JSON.parse(xhr.responseText)
+              const uri = data.file?.uri
+              if (!uri) { reject(new Error('Gemini no devolvió un file URI')); return }
+              resolve(uri)
+            } catch {
+              reject(new Error('Error al procesar respuesta de Gemini'))
+            }
+          } else {
+            reject(new Error(`Error al subir a Gemini: ${xhr.status}`))
+          }
+        }
+
+        xhr.onerror = () => reject(new Error('Error de red al subir a Gemini.'))
+        xhr.onabort = () => reject(new Error('cancelled'))
+
+        xhr.open('PUT', uploadUrl)
+        xhr.setRequestHeader('Content-Type', mimeType)
+        xhr.setRequestHeader('X-Goog-Upload-Offset', '0')
+        xhr.setRequestHeader('X-Goog-Upload-Command', 'upload, finalize')
+        xhr.send(videoFile)
+      })
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Error de red'
+      if (msg !== 'cancelled') {
+        setErrorMsg(msg); setStep('idle'); setProgress(0)
       }
+      return
     }
 
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText)
-          if (data.error) {
-            setErrorMsg(data.error); setStep('idle'); setProgress(0)
-            return
-          }
-          const parsed = parseSRT(data.srt)
-          if (parsed.length === 0) {
-            setErrorMsg('No se generaron subtítulos. El video puede no tener audio detectable.')
-            setStep('idle'); setProgress(0)
-            return
-          }
-          // Auto-download SRT
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(new Blob([data.srt], { type: 'text/plain;charset=utf-8' }))
-          a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
-          document.body.appendChild(a); a.click(); document.body.removeChild(a)
+    setStep('transcribing')
+    setStepMsg('Gemini transcribiendo el audio...')
+    setProgress(65)
 
-          setPhrases(parsed)
-          setSrtSource(`Gemini AI · ${parsed.length} frases`)
-          setProgress(100); setStep('done')
-          setTimeout(() => setScreen('player'), 300)
-        } catch {
-          setErrorMsg('Error al procesar la respuesta del servidor')
-          setStep('idle'); setProgress(0)
-        }
-      } else {
-        try {
-          const data = JSON.parse(xhr.responseText)
-          setErrorMsg(data.error || `Error del servidor: ${xhr.status}`)
-        } catch {
-          setErrorMsg(`Error del servidor: ${xhr.status}`)
-        }
-        setStep('idle'); setProgress(0)
+    let p = 65
+    const interval = setInterval(() => {
+      p = Math.min(p + Math.random() * 2, 95)
+      setProgress(p)
+      if (p >= 95) clearInterval(interval)
+    }, 2000)
+
+    try {
+      const res = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileUri, mimeType }),
+      })
+      clearInterval(interval)
+
+      const data = await res.json()
+      if (!res.ok || data.error) {
+        setErrorMsg(data.error || `Error del servidor: ${res.status}`)
+        setStep('idle'); setProgress(0); return
       }
-    }
 
-    xhr.onerror = () => {
-      setErrorMsg('Error de red. Verificá tu conexión.')
+      const parsed = parseSRT(data.srt)
+      if (parsed.length === 0) {
+        setErrorMsg('No se generaron subtítulos. El video puede no tener audio detectable.')
+        setStep('idle'); setProgress(0); return
+      }
+
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([data.srt], { type: 'text/plain;charset=utf-8' }))
+      a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+
+      setPhrases(parsed)
+      setSrtSource(`Gemini AI · ${parsed.length} frases`)
+      setProgress(100); setStep('done')
+      setTimeout(() => setScreen('player'), 300)
+    } catch {
+      clearInterval(interval)
+      setErrorMsg('Error de red al transcribir.')
       setStep('idle'); setProgress(0)
     }
-
-    xhr.onreadystatechange = () => {
-      // Update step messages based on progress
-      if (xhr.readyState === 4) return // handled in onload
-    }
-
-    // Fake progress for server-side processing (after upload)
-    xhr.upload.onloadend = () => {
-      setStep('transcribing')
-      setStepMsg('Gemini transcribiendo el audio...')
-      setProgress(40)
-      // Animate progress while waiting for server response
-      let p = 40
-      const interval = setInterval(() => {
-        p = Math.min(p + Math.random() * 2, 88)
-        setProgress(p)
-        if (p >= 88) clearInterval(interval)
-      }, 2000)
-      // Store interval ID to clear later
-      xhr.addEventListener('loadend', () => clearInterval(interval))
-    }
-
-    xhr.open('POST', '/api/transcribe')
-    xhr.send(fd)
   }
 
   function cancelTranscription() {
     if (xhrRef.current) { xhrRef.current.abort(); xhrRef.current = null }
     setStep('idle'); setProgress(0); setErrorMsg('Cancelado.')
+    // FIX 1 (cancelTranscription): revoke URL created in handleFiles
+    if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setVideoUrl(''); setVideoFileName('')
+    videoFileRef.current = null
   }
 
   function backToLoad() {
+    if (stageOpenRef.current) closeStage(true)
     const v = vidRef.current; if (v) { v.pause(); v.src = '' }
+    // FIX 1 (backToLoad): revoke URL on exit
+    if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setScreen('load'); setStep('idle'); setProgress(0)
     setPhrases([]); setCurIdx(-1); setIsPlaying(false)
     setVideoUrl(''); setErrorMsg(''); setSrtSource('')
+    setStageOpen(false); stageOpenRef.current = false
+    videoFileRef.current = null
   }
 
   function downloadSRT() {
@@ -337,17 +532,19 @@ export default function Player() {
     setEditingText('')
   }
 
+  // ─── Derived ─────────────────────────────────────────────────────────────
   const isTranscribing = step !== 'idle' && step !== 'done'
-  const selPhrases = phrases.filter(p => p.sel)
-  const showPhrases = filter === 'sel' ? phrases.filter(p => p.sel) : phrases
+  const selPhrases     = phrases.filter(p => p.sel)
+  const showPhrases    = filter === 'sel' ? phrases.filter(p => p.sel) : phrases
 
   const STEP_ORDER: Step[] = ['uploading', 'transcribing', 'parsing', 'done']
   const STEP_LABELS: Record<string, string> = {
-    uploading: 'Subiendo video al servidor',
+    uploading:    'Subiendo video a Gemini',
     transcribing: 'Gemini transcribiendo el audio',
-    parsing: 'Generando archivo SRT',
+    parsing:      'Generando archivo SRT',
   }
 
+  // ─── JSX ─────────────────────────────────────────────────────────────────
   return (
     <div className={styles.root}>
 
@@ -388,9 +585,9 @@ export default function Player() {
             <div className={styles.progressBox}>
               <div className={styles.progTitle}>{stepMsg || 'Procesando...'}</div>
               <div className={styles.progSub}>
-                {step === 'uploading' && 'El video se sube al servidor para que Gemini lo procese.'}
+                {step === 'uploading'    && 'El video se sube directamente a Gemini desde tu navegador.'}
                 {step === 'transcribing' && 'Gemini está analizando el audio y generando timestamps precisos...'}
-                {step === 'parsing' && 'Generando archivo SRT...'}
+                {step === 'parsing'      && 'Generando archivo SRT...'}
               </div>
               <div className={styles.progBarWrap}>
                 <div className={styles.progBarFill} style={{ width: progress + '%' }} />
@@ -423,16 +620,23 @@ export default function Player() {
               <span className={`${styles.chip} ${styles.chipSrt}`}>{srtSource}</span>
               <span className={`${styles.chip} ${styles.chipZoom}`}><span className={styles.liveDot} />Zoom</span>
               <button className={styles.tbBtn} onClick={downloadSRT}>↓ SRT</button>
+              <button className={styles.tbBtn} onClick={stageOpen ? () => closeStage(true) : openStage}>
+                {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
+              </button>
               <button className={styles.tbBtn} onClick={backToLoad}>← Cargar otro</button>
             </div>
           </div>
 
           <div className={styles.layout}>
-            <div className={styles.stage}>
-              <div className={styles.shareHint}><span className={styles.shareHintDot} />Compartir en Zoom — el alumno solo ve esto</div>
+            <div className={styles.stage} id="ve-stage-wrap">
+              {stageOpen
+                ? <div className={styles.shareHint}><span className={styles.shareHintDot} />Stage abierto en ventana separada — compartí esa ventana en Zoom</div>
+                : <div className={styles.shareHint}><span className={styles.shareHintDot} />Compartir en Zoom — el alumno solo ve esto</div>
+              }
               <div className={styles.videoWrap}>
-                <video ref={vidRef} src={videoUrl || undefined} style={{ width: "100%", height: "100%", objectFit: "contain", background: "#000" }} />
-                {ccOn && subText && (
+                <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || undefined)}
+                  style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+                {ccOn && subText && !stageOpen && (
                   <div className={styles.subOverlay}>
                     <div className={styles.subBox}>{subTextNodes}</div>
                   </div>
@@ -449,12 +653,14 @@ export default function Player() {
                   <div className={styles.prog}>
                     <div className={styles.progTimes}><span>{timeCur}</span><span>{timeTot}</span></div>
                     <div ref={progRef} className={styles.progTrack} onClick={scrub}>
-                      <div className={styles.pBuf} style={{ width: bufPct + '%' }} />
-                      <div className={styles.pFill} style={{ width: progPct + '%' }} />
+                      <div className={styles.pBuf}   style={{ width: bufPct + '%' }} />
+                      <div className={styles.pFill}  style={{ width: progPct + '%' }} />
                       <div className={styles.pThumb} style={{ left: progPct + '%' }} />
                       {phrases.map((p, i) => (
                         <div key={i} className={`${styles.ptick} ${p.sel ? styles.ptickSel : ''}`}
-                          style={{ left: vidRef.current?.duration ? (p.start / vidRef.current.duration * 100) + '%' : '0%' }} />
+                          style={{ left: stageOpen
+                            ? (stageDurationRef.current ? (p.start / stageDurationRef.current * 100) + '%' : '0%')
+                            : (vidRef.current?.duration ? (p.start / vidRef.current.duration * 100) + '%' : '0%') }} />
                       ))}
                     </div>
                   </div>
@@ -577,7 +783,7 @@ export default function Player() {
                                   autoFocus
                                 />
                                 <div className={styles.plEditBtns}>
-                                  <button className={styles.plEditSave} onClick={() => saveEdit(oi)}>✓</button>
+                                  <button className={styles.plEditSave}   onClick={() => saveEdit(oi)}>✓</button>
                                   <button className={styles.plEditCancel} onClick={cancelEdit}>✕</button>
                                 </div>
                               </div>
