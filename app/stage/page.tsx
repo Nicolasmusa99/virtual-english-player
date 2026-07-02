@@ -54,6 +54,7 @@ export default function Stage() {
       ch.send({ type: 'timeupdate', currentTime: vid.currentTime, duration: vid.duration, isPlaying: !vid.paused })
     }
     v?.addEventListener('timeupdate', onTU)
+    ch.send({ type: 'ready' })   // FIX 3: signal panel to send load_blob (no setTimeout race)
 
     return () => {
       unsub()
