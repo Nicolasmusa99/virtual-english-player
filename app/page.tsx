@@ -5,6 +5,8 @@ import { Phrase, parseSRT, fmtTime } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import { StageChannel } from '@/lib/stageChannel'
+import { sessionKey, saveSession, loadSession } from '@/lib/session'
+import type { SessionData } from '@/lib/session'
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
@@ -19,12 +21,12 @@ export default function Player() {
 
   // ─── Stage refs ──────────────────────────────────────────────────────────
   const videoFileRef          = useRef<File | null>(null)
-  const panelVideoUrlRef      = useRef<string | null>(null)   // FIX 1: tracked for revocation
+  const panelVideoUrlRef      = useRef<string | null>(null)
   const channelRef            = useRef<StageChannel | null>(null)
   const channelUnsubRef       = useRef<(() => void) | null>(null)
   const stageOpenRef          = useRef(false)
   const stageStartRef         = useRef(0)
-  const lastStageTimeRef      = useRef(0)                     // FIX 2: fresh currentTime from stage
+  const lastStageTimeRef      = useRef(0)
   const stageDurationRef      = useRef(0)
   const pendingRestoreTimeRef = useRef<number | null>(null)
 
@@ -55,6 +57,8 @@ export default function Player() {
   const [isPlaying, setIsPlaying]         = useState(false)
   const [vol, setVol]                     = useState(100)
   const [stageOpen, setStageOpen]         = useState(false)
+  // US-023/024 persistence state
+  const [restorePrompt, setRestorePrompt] = useState<SessionData | null>(null)
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -76,6 +80,24 @@ export default function Player() {
   useEffect(() => { ccRef.current       = ccOn      }, [ccOn])
   useEffect(() => { delayRef.current    = delay     }, [delay])
   useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
+
+  // ─── US-023: autosave con debounce 500 ms ────────────────────────────────
+  // Dirty policy: texto, sel, delay (incl. reset), velocidad, ccOn.
+  // `filter` es preferencia de vista: persiste en sesión pero no marca dirty.
+  useEffect(() => {
+    if (screen !== 'player' || !videoFileName || phrases.length === 0 || restorePrompt !== null) return
+    const size = videoFileRef.current?.size ?? 0
+    const key  = sessionKey(videoFileName, size)
+    const tid  = setTimeout(() => {
+      saveSession(key, { phrases, delay, speedIdx, ccOn, filter })
+      capture('session_autosaved', {
+        video_file_name: videoFileName,
+        phrase_count:    phrases.length,
+        selected_count:  phrases.filter(p => p.sel).length,
+      })
+    }, 500)
+    return () => clearTimeout(tid)
+  }, [phrases, delay, speedIdx, ccOn, filter, screen, videoFileName, restorePrompt])
 
   // ─── Local video event listeners ─────────────────────────────────────────
   useEffect(() => {
@@ -252,6 +274,26 @@ export default function Player() {
     })
   }
 
+  // ─── US-024: restaurar / descartar sesión ────────────────────────────────
+  function handleRestore(saved: SessionData) {
+    setPhrases(saved.phrases)
+    setDelay(saved.delay); delayRef.current = saved.delay
+    setSpeedIdx(saved.speedIdx)
+    if (vidRef.current) vidRef.current.playbackRate = SPEEDS[saved.speedIdx]
+    setCcOn(saved.ccOn); ccRef.current = saved.ccOn
+    setFilter(saved.filter)
+    setRestorePrompt(null)
+    // Propagate speed to stage if open.
+    // Subtitle propagation is handled by the subtitle useEffect (fires on ccOn change).
+    if (stageOpenRef.current) channelRef.current?.send({ type: 'speed', rate: SPEEDS[saved.speedIdx] })
+    capture('session_restore_resolved', { action: 'restore', video_file_name: videoFileName })
+  }
+
+  function handleDiscard() {
+    setRestorePrompt(null)
+    capture('session_restore_resolved', { action: 'discard', video_file_name: videoFileName })
+  }
+
   // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
   function openStage() {
     if (!videoFileRef.current) return
@@ -268,7 +310,6 @@ export default function Player() {
     const unsub = ch.onMessage(msg => {
       switch (msg.type) {
         case 'ready':
-          // FIX 3: send load_blob only after stage signals it's listening — no setTimeout race
           ch.send({
             type:        'load_blob',
             blob:        videoFileRef.current!,
@@ -280,7 +321,7 @@ export default function Player() {
           break
         case 'timeupdate': {
           const { currentTime: ct, duration, isPlaying: playing } = msg
-          lastStageTimeRef.current = ct          // FIX 2: never stale
+          lastStageTimeRef.current = ct
           stageDurationRef.current = duration
           if (duration) setProgPct(ct / duration * 100)
           setTimeCur(fmtTime(ct))
@@ -321,9 +362,8 @@ export default function Player() {
 
     capture('stage_window_closed', { open_duration_s: Math.round((Date.now() - stageStartRef.current) / 1000) })
 
-    pendingRestoreTimeRef.current = lastStageTimeRef.current  // FIX 2: applied in onMeta
+    pendingRestoreTimeRef.current = lastStageTimeRef.current
 
-    // FIX 1 (closeStage): revoke previous URL, create new one
     if (videoFileRef.current) {
       if (panelVideoUrlRef.current) URL.revokeObjectURL(panelVideoUrlRef.current)
       const url = URL.createObjectURL(videoFileRef.current)
@@ -343,7 +383,6 @@ export default function Player() {
     setErrorMsg('')
     setVideoFileName((vf as File).name)
     videoFileRef.current = vf
-    // FIX 1 (handleFiles): revoke before creating new URL
     if (panelVideoUrlRef.current) URL.revokeObjectURL(panelVideoUrlRef.current)
     const url = URL.createObjectURL(vf as File)
     panelVideoUrlRef.current = url
@@ -354,6 +393,13 @@ export default function Player() {
       r.onload = e => {
         const parsed = parseSRT(e.target!.result as string)
         if (parsed.length === 0) { setErrorMsg('El SRT no tiene subtítulos válidos.'); return }
+        // US-024: check for saved session before showing player
+        const sessKey = sessionKey((vf as File).name, (vf as File).size)
+        const savedSess = loadSession(sessKey)
+        if (savedSess && savedSess.phrases.length === parsed.length) {
+          setRestorePrompt(savedSess)
+          capture('session_restore_prompted', { video_file_name: (vf as File).name, saved_phrase_count: savedSess.phrases.length })
+        }
         setPhrases(parsed); setSrtSource(`SRT · ${parsed.length} frases`)
         setScreen('player')
       }
@@ -471,6 +517,13 @@ export default function Player() {
       a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
 
+      // US-024: check for saved session before showing player
+      const sessKey = sessionKey(videoFile.name, videoFile.size)
+      const savedSess = loadSession(sessKey)
+      if (savedSess && savedSess.phrases.length === parsed.length) {
+        setRestorePrompt(savedSess)
+        capture('session_restore_prompted', { video_file_name: videoFile.name, saved_phrase_count: savedSess.phrases.length })
+      }
       setPhrases(parsed)
       setSrtSource(`Gemini AI · ${parsed.length} frases`)
       setProgress(100); setStep('done')
@@ -485,7 +538,6 @@ export default function Player() {
   function cancelTranscription() {
     if (xhrRef.current) { xhrRef.current.abort(); xhrRef.current = null }
     setStep('idle'); setProgress(0); setErrorMsg('Cancelado.')
-    // FIX 1 (cancelTranscription): revoke URL created in handleFiles
     if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setVideoUrl(''); setVideoFileName('')
     videoFileRef.current = null
@@ -494,13 +546,13 @@ export default function Player() {
   function backToLoad() {
     if (stageOpenRef.current) closeStage(true)
     const v = vidRef.current; if (v) { v.pause(); v.src = '' }
-    // FIX 1 (backToLoad): revoke URL on exit
     if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setScreen('load'); setStep('idle'); setProgress(0)
     setPhrases([]); setCurIdx(-1); setIsPlaying(false)
     setVideoUrl(''); setErrorMsg(''); setSrtSource('')
     setStageOpen(false); stageOpenRef.current = false
     videoFileRef.current = null
+    setRestorePrompt(null)
   }
 
   function downloadSRT() {
@@ -630,6 +682,16 @@ export default function Player() {
               <button className={styles.tbBtn} onClick={backToLoad}>← Cargar otro</button>
             </div>
           </div>
+
+          {restorePrompt !== null && (
+            <div className={styles.restoreBanner}>
+              <span className={styles.restoreBannerText}>
+                ¿Restaurar sesión anterior? ({restorePrompt.phrases.length} frases guardadas)
+              </span>
+              <button className={styles.restoreBtn} onClick={() => handleRestore(restorePrompt)}>Restaurar</button>
+              <button className={styles.discardBtn} onClick={handleDiscard}>Descartar</button>
+            </div>
+          )}
 
           <div className={styles.layout}>
             <div className={styles.stage} id="ve-stage-wrap">
@@ -817,6 +879,7 @@ export default function Player() {
               </div>
             </div>
           </div>
+
         </div>
       )}
     </div>

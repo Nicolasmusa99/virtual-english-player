@@ -172,3 +172,11 @@
 .plEditSave:hover { background: #d4af30; }
 .plEditCancel { padding: 2px 8px; border-radius: 4px; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); font-size: 10px; cursor: pointer; }
 .plEditCancel:hover { background: var(--p3); color: var(--tx2); }
+
+/* RESTORE BANNER (US-024) */
+.restoreBanner { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--bl2); border-bottom: 1px solid var(--bl3); font-size: 12px; color: var(--tx2); flex-shrink: 0; }
+.restoreBannerText { flex: 1; }
+.restoreBtn { padding: 4px 12px; border-radius: 5px; border: 1px solid var(--ac3); background: var(--ac2); color: var(--ac); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: background 0.12s; }
+.restoreBtn:hover { background: var(--ac); color: #111; }
+.discardBtn { padding: 4px 10px; border-radius: 5px; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: all 0.12s; }
+.discardBtn:hover { background: var(--p3); color: var(--tx2); }
