@@ -245,7 +245,11 @@ export default function Player() {
   }
 
   function adjDelay(d: number) {
-    setDelay(prev => { const n = Math.round((prev + d) * 10) / 10; delayRef.current = n; return n })
+    setDelay(prev => {
+      const n = Math.max(-10, Math.min(10, Math.round((prev + d) * 10) / 10))
+      delayRef.current = n
+      return n
+    })
   }
 
   // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
