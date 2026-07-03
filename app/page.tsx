@@ -138,7 +138,7 @@ export default function Player() {
       v.removeEventListener('progress',       onProg)
       v.removeEventListener('ended',          onEnded)
     }
-  }, [])
+  }, [screen])
 
   // ─── RAF subtitle sync (local video; noop while stage open) ──────────────
   useEffect(() => {
