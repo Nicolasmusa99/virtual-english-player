@@ -442,6 +442,34 @@ describe('US-028 — loop de frase', () => {
     expect(seekTimes.some(t => t >= 1.0 && t < 2.0)).toBe(true)
   })
 
+  // TC-068b: loop + auto-pausa — loop tiene precedencia: hace seek, NO pausa
+  it('TC-068b: loop + auto-pausa — loop gana: hace seek al inicio, NO manda pause', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    // Activar ambos modos
+    const loopToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /loop/i.test(b.textContent ?? ''))
+    const autoPauseToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /auto.?pausa/i.test(b.textContent ?? ''))
+    await act(async () => {
+      fireEvent.click(loopToggle!); fireEvent.click(autoPauseToggle!)
+      await tick(30)
+    })
+
+    const { mockStage, panelCmds } = await openStageWithMock(container)
+    _mockStageRef = mockStage
+
+    // Entrar en frase 0 (ct=1.5) y pasar su fin (ct=3.5)
+    await sendTimeUpdate(mockStage, 1.5)
+    await sendTimeUpdate(mockStage, 3.5, true)
+
+    // Loop gana: seek al inicio de la frase (≈ start=1), sin pause
+    const seekTimes = panelCmds.filter(c => c.type === 'seek').map(c => c.time as number)
+    expect(seekTimes.some(t => t >= 1.0 && t < 2.0)).toBe(true)
+    expect(panelCmds.some(c => c.type === 'pause')).toBe(false)
+  })
+
 })
 
 // ══════════════════════════════════════════════════════════════════════════════

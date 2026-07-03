@@ -63,6 +63,7 @@ export default function Player() {
   const [exitDialog, setExitDialog]       = useState(false)
   const [autoPause, setAutoPause]         = useState(false)
   const [practiceMode, setPracticeMode]   = useState(false)
+  const [loopMode, setLoopMode]           = useState(false)
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -74,6 +75,8 @@ export default function Player() {
   const autoPausedAtRef = useRef(-1)
   const practiceModeRef = useRef(false)
   const practicedAtRef  = useRef(-1)
+  const loopModeRef     = useRef(false)
+  const loopedAtRef     = useRef(-1)
 
   useEffect(() => {
     phrasesRef.current = phrases
@@ -94,6 +97,7 @@ export default function Player() {
   useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
   useEffect(() => { autoPauseRef.current    = autoPause    }, [autoPause])
   useEffect(() => { practiceModeRef.current = practiceMode }, [practiceMode])
+  useEffect(() => { loopModeRef.current     = loopMode     }, [loopMode])
 
   // ─── US-023: autosave con debounce 500 ms ────────────────────────────────
   // Dirty policy: texto, sel, delay (incl. reset), velocidad, ccOn.
@@ -138,7 +142,10 @@ export default function Player() {
       if (ph && ccRef.current) { setSubText(ph.text); setSubVisible(true) }
       else { setSubVisible(false); setSubText('') }
       const idx = ps.findIndex(p => t >= p.start && t <= p.end)
-      if (idx !== -1 && idx !== curIdxRef.current) setCurIdx(idx)
+      if (idx !== -1) {
+        if (idx !== curIdxRef.current) setCurIdx(idx)
+        loopedAtRef.current = -1
+      }
       if (!stageOpenRef.current) handleEndOfPhrase(v.currentTime, !v.paused)
     }
     v.addEventListener('loadedmetadata', onMeta)
@@ -311,7 +318,7 @@ export default function Player() {
   }
 
   // Phrase-end dispatch: called from onTU (local) and stage timeupdate.
-  // Precedence: loop (US-028) > práctica > auto-pausa.
+  // Precedence: loop > práctica > auto-pausa.
   function handleEndOfPhrase(ct: number, playing: boolean) {
     if (!playing) return
     const curI = curIdxRef.current
@@ -319,7 +326,15 @@ export default function Player() {
     const ph = phrasesRef.current[curI]
     if (!ph || ct <= ph.end) return
 
-    // 1. Loop: wired in US-028 (placeholder — falls through to práctica/auto-pausa until then).
+    // 1. Loop: seek back to phrase start; práctica and auto-pausa do not fire.
+    if (loopModeRef.current) {
+      if (loopedAtRef.current === curI) return
+      loopedAtRef.current = curI
+      const seekTime = ph.start + 0.05
+      if (stageOpenRef.current) channelRef.current?.send({ type: 'seek', time: seekTime })
+      else if (vidRef.current) vidRef.current.currentTime = seekTime
+      return
+    }
 
     // 2. Práctica: advance to next selected phrase; pause at last selected.
     if (practiceModeRef.current && ph.sel) {
@@ -412,7 +427,10 @@ export default function Player() {
           setIsPlaying(playing)
           const t   = ct - delayRef.current
           const idx = phrasesRef.current.findIndex(p => t >= p.start && t <= p.end)
-          if (idx !== -1 && idx !== curIdxRef.current) setCurIdx(idx)
+          if (idx !== -1) {
+            if (idx !== curIdxRef.current) setCurIdx(idx)
+            loopedAtRef.current = -1
+          }
           handleEndOfPhrase(ct, playing)
           break
         }
@@ -878,6 +896,8 @@ export default function Player() {
                     <button className={`${styles.modeBtn} ${practiceMode ? styles.modeBtnAct : ''}`}
                             disabled={selPhrases.length === 0}
                             onClick={() => setPracticeMode(p => !p)}>Práctica</button>
+                    <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`}
+                            onClick={() => setLoopMode(p => !p)}>Loop</button>
                   </div>
                 </div>
 
