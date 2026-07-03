@@ -62,6 +62,7 @@ export default function Player() {
   const [restorePrompt, setRestorePrompt] = useState<SessionData | null>(null)
   const [exitDialog, setExitDialog]       = useState(false)
   const [autoPause, setAutoPause]         = useState(false)
+  const [practiceMode, setPracticeMode]   = useState(false)
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -71,6 +72,8 @@ export default function Player() {
   const isPlayingRef    = useRef(false)
   const autoPauseRef    = useRef(false)
   const autoPausedAtRef = useRef(-1)
+  const practiceModeRef = useRef(false)
+  const practicedAtRef  = useRef(-1)
 
   useEffect(() => {
     phrasesRef.current = phrases
@@ -84,11 +87,13 @@ export default function Player() {
   useEffect(() => {
     curIdxRef.current       = curIdx
     autoPausedAtRef.current = -1
+    practicedAtRef.current  = -1
   }, [curIdx])
   useEffect(() => { ccRef.current       = ccOn      }, [ccOn])
   useEffect(() => { delayRef.current    = delay     }, [delay])
   useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
-  useEffect(() => { autoPauseRef.current = autoPause }, [autoPause])
+  useEffect(() => { autoPauseRef.current    = autoPause    }, [autoPause])
+  useEffect(() => { practiceModeRef.current = practiceMode }, [practiceMode])
 
   // ─── US-023: autosave con debounce 500 ms ────────────────────────────────
   // Dirty policy: texto, sel, delay (incl. reset), velocidad, ccOn.
@@ -244,8 +249,26 @@ export default function Player() {
     if (vidRef.current) vidRef.current.currentTime = time
   }
 
-  function prevPhrase()  { jumpTo(Math.max(0, curIdxRef.current - 1)) }
-  function nextPhrase()  { jumpTo(Math.min(phrasesRef.current.length - 1, curIdxRef.current + 1)) }
+  function prevPhrase() {
+    const ps = phrasesRef.current
+    const cur = curIdxRef.current
+    if (practiceModeRef.current) {
+      const idx = [...ps].slice(0, cur).map((p, i) => ({ p, i })).filter(x => x.p.sel).pop()?.i ?? cur
+      jumpTo(idx)
+    } else {
+      jumpTo(Math.max(0, cur - 1))
+    }
+  }
+  function nextPhrase() {
+    const ps = phrasesRef.current
+    const cur = curIdxRef.current
+    if (practiceModeRef.current) {
+      const idx = ps.findIndex((p, i) => p.sel && i > cur)
+      jumpTo(idx !== -1 ? idx : cur)
+    } else {
+      jumpTo(Math.min(ps.length - 1, cur + 1))
+    }
+  }
 
   function repeatPhrase() {
     if (curIdxRef.current < 0) return
@@ -288,13 +311,34 @@ export default function Player() {
   }
 
   // Phrase-end dispatch: called from onTU (local) and stage timeupdate.
-  // Precedence (fully wired in US-028): loop > auto-pausa.
+  // Precedence: loop (US-028) > práctica > auto-pausa.
   function handleEndOfPhrase(ct: number, playing: boolean) {
     if (!playing) return
     const curI = curIdxRef.current
     if (curI < 0) return
     const ph = phrasesRef.current[curI]
     if (!ph || ct <= ph.end) return
+
+    // 1. Loop: wired in US-028 (placeholder — falls through to práctica/auto-pausa until then).
+
+    // 2. Práctica: advance to next selected phrase; pause at last selected.
+    if (practiceModeRef.current && ph.sel) {
+      if (practicedAtRef.current === curI) return
+      practicedAtRef.current = curI
+      const ps = phrasesRef.current
+      const nextSelIdx = ps.findIndex((p, i) => p.sel && i > curI)
+      if (nextSelIdx !== -1) {
+        const seekTime = ps[nextSelIdx].start + 0.05
+        if (stageOpenRef.current) channelRef.current?.send({ type: 'seek', time: seekTime })
+        else if (vidRef.current) vidRef.current.currentTime = seekTime
+      } else {
+        if (stageOpenRef.current) channelRef.current?.send({ type: 'pause' })
+        else { vidRef.current?.pause(); setIsPlaying(false) }
+      }
+      return
+    }
+
+    // 3. Auto-pausa: pause once per phrase entry.
     if (!autoPauseRef.current) return
     if (autoPausedAtRef.current === curI) return
     autoPausedAtRef.current = curI
@@ -831,6 +875,9 @@ export default function Player() {
                   <div className={styles.modeBtns}>
                     <button className={`${styles.modeBtn} ${autoPause ? styles.modeBtnAct : ''}`}
                             onClick={() => setAutoPause(p => !p)}>Auto-pausa</button>
+                    <button className={`${styles.modeBtn} ${practiceMode ? styles.modeBtnAct : ''}`}
+                            disabled={selPhrases.length === 0}
+                            onClick={() => setPracticeMode(p => !p)}>Práctica</button>
                   </div>
                 </div>
 

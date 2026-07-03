@@ -251,6 +251,156 @@ describe('US-027 — modo práctica', () => {
     expect(seekTimes.some(t => t >= 7 && t < 8)).toBe(true)
   })
 
+  // TC-064b: práctica deshabilitada cuando no hay selecciones
+  it('TC-064b: botón "Práctica" está disabled cuando no hay frases seleccionadas', async () => {
+    // Cargar una sesión con todas las frases sin selección (sel: false)
+    const videoFile = new File([FILE_CONTENT], 'test.mp4', { type: 'video/mp4' })
+    const sessData: SessionData = {
+      phrases: [
+        { start: 1,  end: 3,  text: 'Phrase one',   sel: false },
+        { start: 4,  end: 6,  text: 'Phrase two',   sel: false },
+        { start: 7,  end: 9,  text: 'Phrase three', sel: false },
+        { start: 10, end: 12, text: 'Phrase four',  sel: false },
+      ],
+      delay: 0, speedIdx: 2, ccOn: true, filter: 'all',
+    }
+    saveSession(sessionKey(videoFile.name, videoFile.size), sessData)
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+    // Aceptar el banner de restaurar
+    await act(async () => {
+      const restoreBtn = Array.from(container.querySelectorAll('button'))
+        .find(b => /^restaurar$/i.test(b.textContent?.trim() ?? ''))
+      if (restoreBtn) fireEvent.click(restoreBtn)
+      await tick(50)
+    })
+
+    const practiceToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /pr[aá]ctica/i.test(b.textContent ?? ''))
+    expect(practiceToggle).not.toBeUndefined()
+    expect((practiceToggle as HTMLButtonElement).disabled).toBe(true)
+  })
+
+  // TC-065b: [local] auto-avance al fin de frase seleccionada salta a la siguiente seleccionada
+  it('TC-065b: [local] práctica — al pasar el fin de p0(sel), avanza a p2(sel)', async () => {
+    const { container } = render(<Player />)
+    await loadPlayerWithSelection(container)
+
+    const practiceToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /pr[aá]ctica/i.test(b.textContent ?? ''))
+    await act(async () => { fireEvent.click(practiceToggle!); await tick(30) })
+
+    const video = container.querySelector('video')!
+    let mockTime = 1.5
+    Object.defineProperty(video, 'currentTime', { get: () => mockTime, set: (v: number) => { mockTime = v }, configurable: true })
+    Object.defineProperty(video, 'duration',    { get: () => 15,       configurable: true })
+    Object.defineProperty(video, 'paused',      { get: () => false,    configurable: true })
+
+    // Entrar en p0 (t=1.5, sel=true, end=3)
+    await act(async () => { fireEvent(video, new Event('timeupdate')); await tick(60) })
+    // Pasar el fin de p0 (t=3.5 > end=3) → debe saltar a p2.start=7
+    mockTime = 3.5
+    await act(async () => { fireEvent(video, new Event('timeupdate')); await tick(60) })
+
+    expect(mockTime).toBeGreaterThanOrEqual(7)
+    expect(mockTime).toBeLessThan(8)
+  })
+
+  // TC-065c: [local] al pasar el fin de la última frase seleccionada, pausa
+  it('TC-065c: [local] práctica — al pasar el fin de p2 (última sel), pausa el video', async () => {
+    const { container } = render(<Player />)
+    await loadPlayerWithSelection(container)
+
+    const practiceToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /pr[aá]ctica/i.test(b.textContent ?? ''))
+    await act(async () => { fireEvent.click(practiceToggle!); await tick(30) })
+
+    const video = container.querySelector('video')!
+    let mockTime = 7.5
+    Object.defineProperty(video, 'currentTime', { get: () => mockTime, set: (v: number) => { mockTime = v }, configurable: true })
+    Object.defineProperty(video, 'duration',    { get: () => 15,       configurable: true })
+    Object.defineProperty(video, 'paused',      { get: () => false,    configurable: true })
+    const pauseSpy = vi.spyOn(video, 'pause').mockImplementation(() => {})
+
+    // Entrar en p2 (t=7.5, sel=true, end=9)
+    await act(async () => { fireEvent(video, new Event('timeupdate')); await tick(60) })
+    // Pasar el fin de p2 (t=9.5 > end=9) — p2 es la última seleccionada → debe pausar
+    mockTime = 9.5
+    await act(async () => { fireEvent(video, new Event('timeupdate')); await tick(60) })
+
+    expect(pauseSpy).toHaveBeenCalled()
+  })
+
+  // TC-066b: [stage] auto-avance al fin de p0(sel) envía seek hacia p2 via canal
+  it('TC-066b: [stage] práctica — al pasar el fin de p0(sel), manda seek a p2 por canal', async () => {
+    const { container } = render(<Player />)
+    await loadPlayerWithSelection(container)
+
+    const practiceToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /pr[aá]ctica/i.test(b.textContent ?? ''))
+    await act(async () => { fireEvent.click(practiceToggle!); await tick(30) })
+
+    const { mockStage, panelCmds } = await openStageWithMock(container)
+    _mockStageRef = mockStage
+
+    // Entrar en p0 (ct=1.5)
+    await sendTimeUpdate(mockStage, 1.5)
+    // Pasar el fin de p0 (ct=3.5 > end=3) → seek a p2.start≈7
+    await sendTimeUpdate(mockStage, 3.5, true)
+
+    const seekTimes = panelCmds.filter(c => c.type === 'seek').map(c => c.time as number)
+    expect(seekTimes.some(t => t >= 7 && t < 8)).toBe(true)
+  })
+
+  // TC-066c: [stage] al pasar el fin de p2 (última sel), manda pause al canal
+  it('TC-066c: [stage] práctica — al pasar el fin de p2 (última sel), manda pause al canal', async () => {
+    const { container } = render(<Player />)
+    await loadPlayerWithSelection(container)
+
+    const practiceToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /pr[aá]ctica/i.test(b.textContent ?? ''))
+    await act(async () => { fireEvent.click(practiceToggle!); await tick(30) })
+
+    const { mockStage, panelCmds } = await openStageWithMock(container)
+    _mockStageRef = mockStage
+
+    // Entrar en p2 (ct=7.5, sel=true, end=9)
+    await sendTimeUpdate(mockStage, 7.5)
+    // Pasar el fin de p2 (ct=9.5 > end=9) — última seleccionada → pause
+    await sendTimeUpdate(mockStage, 9.5, true)
+
+    expect(panelCmds.some(c => c.type === 'pause')).toBe(true)
+  })
+
+  // TC-067b: práctica tiene precedencia sobre auto-pausa: avanza a p2 y NO pausa
+  it('TC-067b: práctica + auto-pausa — práctica gana: avanza a p2, NO pausa en p0', async () => {
+    const { container } = render(<Player />)
+    await loadPlayerWithSelection(container)
+
+    // Activar ambos modos
+    const autoPauseToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /auto.?pausa/i.test(b.textContent ?? ''))
+    const practiceToggle = Array.from(container.querySelectorAll('button'))
+      .find(b => /pr[aá]ctica/i.test(b.textContent ?? ''))
+    await act(async () => {
+      fireEvent.click(autoPauseToggle!); fireEvent.click(practiceToggle!)
+      await tick(30)
+    })
+
+    const { mockStage, panelCmds } = await openStageWithMock(container)
+    _mockStageRef = mockStage
+
+    // Entrar en p0 y pasar su fin
+    await sendTimeUpdate(mockStage, 1.5)
+    await sendTimeUpdate(mockStage, 3.5, true)
+
+    // Debe haber un seek a p2 (≥7 <8)
+    const seekTimes = panelCmds.filter(c => c.type === 'seek').map(c => c.time as number)
+    expect(seekTimes.some(t => t >= 7 && t < 8)).toBe(true)
+    // No debe haber un pause (práctica ganó, no auto-pausa)
+    expect(panelCmds.some(c => c.type === 'pause')).toBe(false)
+  })
+
 })
 
 // ══════════════════════════════════════════════════════════════════════════════
