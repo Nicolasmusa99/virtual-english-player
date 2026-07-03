@@ -64,6 +64,7 @@ export default function Player() {
   const [autoPause, setAutoPause]         = useState(false)
   const [practiceMode, setPracticeMode]   = useState(false)
   const [loopMode, setLoopMode]           = useState(false)
+  const [hideTexts, setHideTexts]         = useState(false)
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -808,7 +809,7 @@ export default function Player() {
               <div className={styles.videoWrap}>
                 <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || undefined)}
                   style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
-                {ccOn && subText && !stageOpen && (
+                {ccOn && subText && !stageOpen && !hideTexts && (
                   <div className={styles.subOverlay}>
                     <div className={styles.subBox}>{subTextNodes}</div>
                   </div>
@@ -898,6 +899,8 @@ export default function Player() {
                             onClick={() => setPracticeMode(p => !p)}>Práctica</button>
                     <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`}
                             onClick={() => setLoopMode(p => !p)}>Loop</button>
+                    <button className={`${styles.modeBtn} ${hideTexts ? styles.modeBtnAct : ''}`}
+                            onClick={() => setHideTexts(p => !p)}>Revelar</button>
                   </div>
                 </div>
 
@@ -974,7 +977,7 @@ export default function Player() {
                               </div>
                             ) : (
                               <div className={styles.plTxRow}>
-                                <div className={styles.plTx}>{p.text}</div>
+                                <div className={styles.plTx}>{hideTexts ? '' : p.text}</div>
                                 <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); startEdit(oi) }} title="Editar">
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
