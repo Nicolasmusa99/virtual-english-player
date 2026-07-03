@@ -61,13 +61,16 @@ export default function Player() {
   const [isDirty, setIsDirty]             = useState(false)
   const [restorePrompt, setRestorePrompt] = useState<SessionData | null>(null)
   const [exitDialog, setExitDialog]       = useState(false)
+  const [autoPause, setAutoPause]         = useState(false)
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
   const curIdxRef    = useRef(-1)
   const ccRef        = useRef(true)
   const delayRef     = useRef(0)
-  const isPlayingRef = useRef(false)
+  const isPlayingRef    = useRef(false)
+  const autoPauseRef    = useRef(false)
+  const autoPausedAtRef = useRef(-1)
 
   useEffect(() => {
     phrasesRef.current = phrases
@@ -78,10 +81,14 @@ export default function Player() {
       if (ph && ccRef.current) { setSubText(ph.text); setSubVisible(true) }
     }
   }, [phrases])
-  useEffect(() => { curIdxRef.current   = curIdx    }, [curIdx])
+  useEffect(() => {
+    curIdxRef.current       = curIdx
+    autoPausedAtRef.current = -1
+  }, [curIdx])
   useEffect(() => { ccRef.current       = ccOn      }, [ccOn])
   useEffect(() => { delayRef.current    = delay     }, [delay])
   useEffect(() => { isPlayingRef.current = isPlaying }, [isPlaying])
+  useEffect(() => { autoPauseRef.current = autoPause }, [autoPause])
 
   // ─── US-023: autosave con debounce 500 ms ────────────────────────────────
   // Dirty policy: texto, sel, delay (incl. reset), velocidad, ccOn.
@@ -127,6 +134,7 @@ export default function Player() {
       else { setSubVisible(false); setSubText('') }
       const idx = ps.findIndex(p => t >= p.start && t <= p.end)
       if (idx !== -1 && idx !== curIdxRef.current) setCurIdx(idx)
+      if (!stageOpenRef.current) handleEndOfPhrase(v.currentTime, !v.paused)
     }
     v.addEventListener('loadedmetadata', onMeta)
     v.addEventListener('timeupdate',     onTU)
@@ -279,6 +287,21 @@ export default function Player() {
     setIsDirty(true)
   }
 
+  // Phrase-end dispatch: called from onTU (local) and stage timeupdate.
+  // Precedence (fully wired in US-028): loop > auto-pausa.
+  function handleEndOfPhrase(ct: number, playing: boolean) {
+    if (!playing) return
+    const curI = curIdxRef.current
+    if (curI < 0) return
+    const ph = phrasesRef.current[curI]
+    if (!ph || ct <= ph.end) return
+    if (!autoPauseRef.current) return
+    if (autoPausedAtRef.current === curI) return
+    autoPausedAtRef.current = curI
+    if (stageOpenRef.current) channelRef.current?.send({ type: 'pause' })
+    else { vidRef.current?.pause(); setIsPlaying(false) }
+  }
+
   // ─── US-024: restaurar / descartar sesión ────────────────────────────────
   function handleRestore(saved: SessionData) {
     setPhrases(saved.phrases)
@@ -346,6 +369,7 @@ export default function Player() {
           const t   = ct - delayRef.current
           const idx = phrasesRef.current.findIndex(p => t >= p.start && t <= p.end)
           if (idx !== -1 && idx !== curIdxRef.current) setCurIdx(idx)
+          handleEndOfPhrase(ct, playing)
           break
         }
         case 'closed':
@@ -799,6 +823,14 @@ export default function Player() {
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
                       Repetir<span className={styles.kc}>R</span>
                     </button>
+                  </div>
+                </div>
+
+                <div className={styles.section}>
+                  <div className={styles.secLabel}>Modo</div>
+                  <div className={styles.modeBtns}>
+                    <button className={`${styles.modeBtn} ${autoPause ? styles.modeBtnAct : ''}`}
+                            onClick={() => setAutoPause(p => !p)}>Auto-pausa</button>
                   </div>
                 </div>
 

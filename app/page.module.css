@@ -191,3 +191,11 @@
 .exitBtn:hover { background: var(--p4); color: var(--tx); }
 .exitBtnCancel { padding: 7px 14px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: all 0.12s; align-self: center; }
 .exitBtnCancel:hover { background: var(--p3); color: var(--tx2); }
+
+/* MODE TOGGLES (US-026/027/028/029) */
+.modeBtns { display: flex; flex-wrap: wrap; gap: 5px; }
+.modeBtn { padding: 4px 10px; border-radius: 5px; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: all 0.12s; }
+.modeBtn:hover { background: var(--p3); color: var(--tx2); }
+.modeBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+.modeBtnAct { background: var(--ac2); border-color: var(--ac3); color: var(--ac); }
+.modeBtnAct:hover { background: var(--ac); color: #111; border-color: var(--ac); }
