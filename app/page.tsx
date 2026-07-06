@@ -688,6 +688,8 @@ export default function Player() {
     setPhrases(prev => prev.map((p, i) => i === idx ? { ...p, text: editingText } : p))
     setEditingIdx(null)
     setEditingText('')
+    if (stageOpenRef.current && idx === curIdxRef.current)
+      channelRef.current?.send({ type: 'subtitle', text: editingText, visible: ccRef.current })
   }
 
   function cancelEdit() {
