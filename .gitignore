@@ -6,3 +6,5 @@ out/
 .vercel/
 
 .vercel
+
+tsconfig.tsbuildinfo
