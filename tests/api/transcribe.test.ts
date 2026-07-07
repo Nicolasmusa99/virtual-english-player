@@ -4,7 +4,7 @@ import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/transcribe/route'
-import { geminiHandlers, FAKE_SRT, FAKE_FILE_URI } from '../mocks/gemini-handlers'
+import { geminiHandlers, FAKE_SRT, FAKE_UPLOAD_URL } from '../mocks/gemini-handlers'
 
 const server = setupServer(...geminiHandlers)
 
@@ -19,15 +19,14 @@ beforeEach(() => {
   process.env.GEMINI_API_KEY = 'test-key-default'
 })
 
-// Nueva interfaz: JSON { fileUri, mimeType } — sin multipart/FormData
-function makeRequest(withFileUri = true): NextRequest {
-  const body = withFileUri
-    ? { fileUri: FAKE_FILE_URI, mimeType: 'video/mp4' }
-    : {}
+function makeRequest(withFile = true): NextRequest {
+  const fd = new FormData()
+  if (withFile) {
+    fd.append('file', new Blob(['fake-video-bytes'], { type: 'video/mp4' }), 'test.mp4')
+  }
   return new NextRequest('http://localhost/api/transcribe', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body: fd,
   })
 }
 
@@ -40,18 +39,30 @@ describe('POST /api/transcribe', () => {
     expect(data.error).toBe('API key not configured')
   })
 
-  it('(b) sin fileUri en el JSON → 400', async () => {
+  it('(b) sin file en el FormData → 400', async () => {
     const res = await POST(makeRequest(false))
     expect(res.status).toBe(400)
     const data = await res.json()
-    expect(data.error).toMatch(/fileUri/)
+    expect(data.error).toBe('No file provided')
   })
 
-  it('(c) happy path — fileUri + poll + generateContent → 200 { srt }', async () => {
+  it('(c) happy path — upload + poll + generateContent → 200 { srt }', async () => {
     const res = await POST(makeRequest())
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.srt).toBe(FAKE_SRT)
+  })
+
+  it('(d) Gemini upload start devuelve 4xx → 500 con mensaje de error', async () => {
+    server.use(
+      http.post('https://generativelanguage.googleapis.com/upload/v1beta/files', () =>
+        new HttpResponse('Forbidden', { status: 403 })
+      )
+    )
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(500)
+    const data = await res.json()
+    expect(data.error).toContain('Upload start failed: 403')
   })
 
   it('(e) poll nunca devuelve ACTIVE (siempre PROCESSING) → 500 timeout', async () => {
@@ -103,8 +114,8 @@ describe('POST /api/transcribe', () => {
     const res = await POST(makeRequest())
     expect(res.status).toBe(200)
     const data = await res.json()
-    expect(data.srt).toBe(fencedSrt)
-    expect(data.srt).toContain('```srt')
+    expect(data.srt).toBe(fencedSrt)          // pasa crudo, con fences
+    expect(data.srt).toContain('```srt')       // confirma que NO hizo stripping
   })
 
   it('(h) API key se manda por header x-goog-api-key, no en query string', async () => {
@@ -112,6 +123,13 @@ describe('POST /api/transcribe', () => {
     const captured: Array<{ url: string; apiKeyHeader: string | null }> = []
 
     server.use(
+      http.post('https://generativelanguage.googleapis.com/upload/v1beta/files', ({ request }) => {
+        captured.push({ url: request.url, apiKeyHeader: request.headers.get('x-goog-api-key') })
+        return new HttpResponse(null, {
+          status: 200,
+          headers: { 'x-goog-upload-url': FAKE_UPLOAD_URL },
+        })
+      }),
       http.get('https://generativelanguage.googleapis.com/v1beta/files/test-file-id', ({ request }) => {
         captured.push({ url: request.url, apiKeyHeader: request.headers.get('x-goog-api-key') })
         return HttpResponse.json({ state: 'ACTIVE', name: 'files/test-file-id' })
@@ -127,46 +145,26 @@ describe('POST /api/transcribe', () => {
 
     await POST(makeRequest())
 
-    // DELETE (fire-and-forget) no capturable de forma confiable
-    expect(captured).toHaveLength(2)
+    // DELETE (fire-and-forget no-awaited) — no capturable de forma confiable
+    expect(captured).toHaveLength(3)
     for (const { url, apiKeyHeader } of captured) {
       expect(url).not.toContain('?key=')
       expect(apiKeyHeader).toBe('test-key-secret')
     }
   })
 
-  it('(j) browser-direct: route nunca llama POST /upload/v1beta/files', async () => {
-    let uploadCalled = false
-    server.use(
-      http.post('https://generativelanguage.googleapis.com/upload/v1beta/files', () => {
-        uploadCalled = true
-        return HttpResponse.json({ error: 'upload invocado — la route no debería subir archivos' }, { status: 500 })
-      })
-    )
-    const res = await POST(makeRequest())
-    expect(uploadCalled).toBe(false)  // si falla acá, la route todavía hace el upload
-    expect(res.status).toBe(200)
+  it('(i) POST handler no llama file.arrayBuffer() — usa Blob passthrough para evitar OOM', async () => {
+    const req = makeRequest()  // crear antes del spy para no capturar serialización del NextRequest
+    const spy = vi.spyOn(Blob.prototype, 'arrayBuffer')
+    try {
+      await POST(req)
+      // Bug 2: si la route llama file.arrayBuffer() crea una copia extra de ~videoSize en RAM.
+      // Con Blob passthrough (body: file directo al fetch), arrayBuffer() no se invoca.
+      expect(spy).not.toHaveBeenCalled()
+    } finally {
+      spy.mockRestore()
+    }
   })
 
-  describe('(k) fileUri inválido → 400', () => {
-    it('string vacío', async () => {
-      const req = new NextRequest('http://localhost/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileUri: '', mimeType: 'video/mp4' }),
-      })
-      const res = await POST(req)
-      expect(res.status).toBe(400)
-    })
-
-    it('URI sin segmento /files/', async () => {
-      const req = new NextRequest('http://localhost/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileUri: 'https://example.com/invalid-uri', mimeType: 'video/mp4' }),
-      })
-      const res = await POST(req)
-      expect(res.status).toBe(400)
-    })
-  })
+  it.todo('(j) browser-direct upload to Gemini bypasses Next.js multipart buffering — see CLAUDE.md "Memory budget"')
 })

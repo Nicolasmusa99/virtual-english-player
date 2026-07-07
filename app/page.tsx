@@ -550,131 +550,92 @@ export default function Player() {
     }
   }
 
-  async function transcribe(videoFile: File) {
-    setStep('uploading'); setStepMsg('Iniciando subida...'); setProgress(3); setErrorMsg('')
-    const mimeType = videoFile.type || 'video/mp4'
-
-    let uploadUrl: string
-    try {
-      const initRes = await fetch('/api/upload-init', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mimeType, size: videoFile.size }),
-      })
-      if (!initRes.ok) {
-        const d = await initRes.json().catch(() => ({}))
-        setErrorMsg(d.error || `Error al iniciar la subida: ${initRes.status}`)
-        setStep('idle'); setProgress(0); return
-      }
-      const initData = await initRes.json()
-      uploadUrl = initData.uploadUrl
-    } catch {
-      setErrorMsg('Error de red al iniciar la subida.')
-      setStep('idle'); setProgress(0); return
-    }
-
-    setStepMsg(`Subiendo a Gemini (${(videoFile.size / 1024 / 1024).toFixed(0)} MB)...`)
+  function transcribe(videoFile: File) {
+    setStep('uploading')
+    setStepMsg(`Subiendo video (${(videoFile.size / 1024 / 1024).toFixed(0)} MB)...`)
     setProgress(5)
+    setErrorMsg('')
 
-    let fileUri: string
-    try {
-      fileUri = await new Promise<string>((resolve, reject) => {
-        const xhr = new XMLHttpRequest()
-        xhrRef.current = xhr
+    const fd = new FormData()
+    fd.append('file', videoFile, videoFile.name)
 
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const pct = Math.round(e.loaded / e.total * 100)
-            setStepMsg(`Subiendo a Gemini — ${pct}%`)
-            setProgress(5 + pct * 0.6)
-          }
-        }
+    const xhr = new XMLHttpRequest()
+    xhrRef.current = xhr
 
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const data = JSON.parse(xhr.responseText)
-              const uri = data.file?.uri
-              if (!uri) { reject(new Error('Gemini no devolvió un file URI')); return }
-              resolve(uri)
-            } catch {
-              reject(new Error('Error al procesar respuesta de Gemini'))
-            }
-          } else {
-            reject(new Error(`Error al subir a Gemini: ${xhr.status}`))
-          }
-        }
-
-        xhr.onerror = () => reject(new Error('Error de red al subir a Gemini.'))
-        xhr.onabort = () => reject(new Error('cancelled'))
-
-        xhr.open('PUT', uploadUrl)
-        xhr.setRequestHeader('Content-Type', mimeType)
-        xhr.setRequestHeader('X-Goog-Upload-Offset', '0')
-        xhr.setRequestHeader('X-Goog-Upload-Command', 'upload, finalize')
-        xhr.send(videoFile)
-      })
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : 'Error de red'
-      if (msg !== 'cancelled') {
-        setErrorMsg(msg); setStep('idle'); setProgress(0)
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 100)
+        setStepMsg(`Subiendo al servidor — ${pct}%`)
+        setProgress(5 + pct * 0.3)
       }
-      return
     }
 
-    setStep('transcribing')
-    setStepMsg('Gemini transcribiendo el audio...')
-    setProgress(65)
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          if (data.error) {
+            setErrorMsg(data.error); setStep('idle'); setProgress(0)
+            return
+          }
+          const parsed = parseSRT(data.srt)
+          if (parsed.length === 0) {
+            setErrorMsg('No se generaron subtítulos. El video puede no tener audio detectable.')
+            setStep('idle'); setProgress(0)
+            return
+          }
+          const a = document.createElement('a')
+          a.href = URL.createObjectURL(new Blob([data.srt], { type: 'text/plain;charset=utf-8' }))
+          a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
+          document.body.appendChild(a); a.click(); document.body.removeChild(a)
 
-    let p = 65
-    const interval = setInterval(() => {
-      p = Math.min(p + Math.random() * 2, 95)
-      setProgress(p)
-      if (p >= 95) clearInterval(interval)
-    }, 2000)
-
-    try {
-      const res = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ fileUri, mimeType }),
-      })
-      clearInterval(interval)
-
-      const data = await res.json()
-      if (!res.ok || data.error) {
-        setErrorMsg(data.error || `Error del servidor: ${res.status}`)
-        setStep('idle'); setProgress(0); return
+          // US-024: check for saved session before showing player
+          const sessKey = sessionKey(videoFile.name, videoFile.size)
+          const savedSess = loadSession(sessKey)
+          if (savedSess && savedSess.phrases.length === parsed.length) {
+            setRestorePrompt(savedSess)
+            capture('session_restore_prompted', { video_file_name: videoFile.name, saved_phrase_count: savedSess.phrases.length })
+          }
+          setIsDirty(false)
+          setPhrases(parsed)
+          setSrtSource(`Gemini AI · ${parsed.length} frases`)
+          setProgress(100); setStep('done')
+          setTimeout(() => setScreen('player'), 300)
+        } catch {
+          setErrorMsg('Error al procesar la respuesta del servidor')
+          setStep('idle'); setProgress(0)
+        }
+      } else {
+        try {
+          const data = JSON.parse(xhr.responseText)
+          setErrorMsg(data.error || `Error del servidor: ${xhr.status}`)
+        } catch {
+          setErrorMsg(`Error del servidor: ${xhr.status}`)
+        }
+        setStep('idle'); setProgress(0)
       }
+    }
 
-      const parsed = parseSRT(data.srt)
-      if (parsed.length === 0) {
-        setErrorMsg('No se generaron subtítulos. El video puede no tener audio detectable.')
-        setStep('idle'); setProgress(0); return
-      }
-
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(new Blob([data.srt], { type: 'text/plain;charset=utf-8' }))
-      a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
-      document.body.appendChild(a); a.click(); document.body.removeChild(a)
-
-      // US-024: check for saved session before showing player
-      const sessKey = sessionKey(videoFile.name, videoFile.size)
-      const savedSess = loadSession(sessKey)
-      if (savedSess && savedSess.phrases.length === parsed.length) {
-        setRestorePrompt(savedSess)
-        capture('session_restore_prompted', { video_file_name: videoFile.name, saved_phrase_count: savedSess.phrases.length })
-      }
-      setIsDirty(false)
-      setPhrases(parsed)
-      setSrtSource(`Gemini AI · ${parsed.length} frases`)
-      setProgress(100); setStep('done')
-      setTimeout(() => setScreen('player'), 300)
-    } catch {
-      clearInterval(interval)
-      setErrorMsg('Error de red al transcribir.')
+    xhr.onerror = () => {
+      setErrorMsg('Error de red al subir el video al servidor. Verificá tu conexión.')
       setStep('idle'); setProgress(0)
     }
+
+    xhr.upload.onloadend = () => {
+      setStep('transcribing')
+      setStepMsg('Gemini transcribiendo el audio...')
+      setProgress(40)
+      let p = 40
+      const interval = setInterval(() => {
+        p = Math.min(p + Math.random() * 2, 88)
+        setProgress(p)
+        if (p >= 88) clearInterval(interval)
+      }, 2000)
+      xhr.addEventListener('loadend', () => clearInterval(interval))
+    }
+
+    xhr.open('POST', '/api/transcribe')
+    xhr.send(fd)
   }
 
   function cancelTranscription() {

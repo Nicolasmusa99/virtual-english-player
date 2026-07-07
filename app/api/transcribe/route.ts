@@ -1,7 +1,52 @@
 import { NextRequest, NextResponse } from 'next/server'
 
-// Node.js runtime — needed for long timeouts (poll + generateContent)
+// Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
+
+async function uploadToGemini(file: File, mimeType: string, apiKey: string): Promise<string> {
+  const startRes = await fetch(
+    `https://generativelanguage.googleapis.com/upload/v1beta/files`,
+    {
+      method: 'POST',
+      headers: {
+        'x-goog-api-key': apiKey,
+        'X-Goog-Upload-Protocol': 'resumable',
+        'X-Goog-Upload-Command': 'start',
+        'X-Goog-Upload-Header-Content-Length': String(file.size),
+        'X-Goog-Upload-Header-Content-Type': mimeType,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ file: { display_name: 'video' } }),
+    }
+  )
+  if (!startRes.ok) {
+    const err = await startRes.text()
+    throw new Error(`Upload start failed: ${startRes.status} — ${err.slice(0, 200)}`)
+  }
+  const uploadUrl = startRes.headers.get('x-goog-upload-url')
+  if (!uploadUrl) throw new Error('No upload URL from Gemini')
+
+  const uploadRes = await fetch(uploadUrl, {
+    method: 'PUT',
+    headers: {
+      'Content-Length': String(file.size),
+      'X-Goog-Upload-Offset': '0',
+      'X-Goog-Upload-Command': 'upload, finalize',
+    },
+    // req.formData() ya bufferizó el video completo en RAM; esto evita una segunda copia.
+    // Peak ≈ videoSize — aceptable hasta ~1.5 GB en Vercel Pro. /api/upload-init existe
+    // como escape hatch cuando CORS de Gemini en browsers se resuelva.
+    body: file,
+  })
+  if (!uploadRes.ok) {
+    const err = await uploadRes.text()
+    throw new Error(`Upload failed: ${uploadRes.status} — ${err.slice(0, 200)}`)
+  }
+  const data = await uploadRes.json()
+  const uri = data.file?.uri
+  if (!uri) throw new Error('No file URI from Gemini')
+  return uri
+}
 
 async function waitForFile(name: string, apiKey: string): Promise<void> {
   for (let i = 0; i < 30; i++) {
@@ -21,15 +66,18 @@ export async function POST(req: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
 
   try {
-    const body = await req.json()
-    const fileUri = body?.fileUri as string | undefined
-    const mimeType = (body?.mimeType as string | undefined) || 'video/mp4'
+    const formData = await req.formData()
+    const file = formData.get('file') as File | null
+    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
 
-    if (!fileUri || typeof fileUri !== 'string' || !fileUri.includes('/files/'))
-      return NextResponse.json({ error: 'No fileUri provided or invalid' }, { status: 400 })
+    const mimeType = file.type || 'video/mp4'
+    const sizeMB = (file.size / 1024 / 1024).toFixed(1)
+    console.log(`[transcribe] File: ${file.name} — ${sizeMB} MB — ${mimeType}`)
+    console.log(`[transcribe] Uploading to Gemini...`)
 
+    const fileUri = await uploadToGemini(file, mimeType, apiKey)
     const fileName = 'files/' + fileUri.split('/files/')[1]
-    console.log(`[transcribe] fileUri: ${fileUri}`)
+    console.log(`[transcribe] Uploaded: ${fileUri}`)
 
     await waitForFile(fileName, apiKey)
     console.log(`[transcribe] File ACTIVE, generating transcription...`)
@@ -81,8 +129,10 @@ STRICT RULES:
 
     console.log(`[transcribe] Done — ${srt.split('\n\n').length} phrases`)
 
-    // Clean up
-    fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}`, { method: 'DELETE', headers: { 'x-goog-api-key': apiKey } }).catch(() => {})
+    fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}`, {
+      method: 'DELETE',
+      headers: { 'x-goog-api-key': apiKey },
+    }).catch(() => {})
 
     return NextResponse.json({ srt })
 
