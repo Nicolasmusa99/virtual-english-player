@@ -902,7 +902,7 @@ export default function Player() {
                     <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`}
                             onClick={() => setLoopMode(p => !p)}>Loop</button>
                     <button className={`${styles.modeBtn} ${hideTexts ? styles.modeBtnAct : ''}`}
-                            onClick={() => setHideTexts(p => !p)}>Revelar</button>
+                            onClick={() => setHideTexts(p => !p)}>Ocultar</button>
                   </div>
                 </div>
 
