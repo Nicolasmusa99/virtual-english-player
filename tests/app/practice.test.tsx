@@ -478,11 +478,11 @@ describe('US-028 — loop de frase', () => {
 
 describe('US-029 — revelar', () => {
 
-  // TC-069: el toggle revelar existe en el player
-  it('TC-069: existe toggle "Revelar" en la pantalla de player', async () => {
+  // TC-069: el toggle ocultar existe en el player (renombrado de "Revelar" → "Ocultar" en P2)
+  it('TC-069: existe toggle "Ocultar" en la pantalla de player', async () => {
     const { container } = render(<Player />)
     await loadIntoPlayer(container)
-    expect(container.textContent).toMatch(/revelar/i)
+    expect(container.textContent).toMatch(/ocultar/i)
   })
 
   // TC-070: cuando el toggle de ocultar textos está activo, los textos de las frases no se muestran
@@ -490,9 +490,9 @@ describe('US-029 — revelar', () => {
     const { container } = render(<Player />)
     await loadIntoPlayer(container)
 
-    // Activar modo "ocultar textos" (se espera un botón/toggle que active esta función)
+    // Activar modo "ocultar textos"
     const revealToggle = Array.from(container.querySelectorAll('button'))
-      .find(b => /revelar/i.test(b.textContent ?? ''))
+      .find(b => /ocultar/i.test(b.textContent ?? ''))
     expect(revealToggle).not.toBeUndefined()
     await act(async () => { fireEvent.click(revealToggle!); await tick(30) })
 
