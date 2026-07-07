@@ -958,16 +958,24 @@ export default function Player() {
                   <div className={styles.npMeta}>{timeTot} · {selPhrases.length} frases sel.</div>
                   <div className={styles.prog}>
                     <div className={styles.progTimes}><span>{timeCur}</span><span>{timeTot}</span></div>
-                    <div ref={progRef} className={styles.progTrack} onClick={scrub}>
+                    <div ref={progRef} data-testid="prog-track" className={styles.progTrack} onClick={scrub}>
                       <div className={styles.pBuf}   style={{ width: bufPct + '%' }} />
                       <div className={styles.pFill}  style={{ width: progPct + '%' }} />
                       <div className={styles.pThumb} style={{ left: progPct + '%' }} />
-                      {phrases.map((p, i) => (
-                        <div key={i} className={`${styles.ptick} ${p.sel ? styles.ptickSel : ''}`}
-                          style={{ left: stageOpen
-                            ? (stageDurationRef.current ? (p.start / stageDurationRef.current * 100) + '%' : '0%')
-                            : (vidRef.current?.duration ? (p.start / vidRef.current.duration * 100) + '%' : '0%') }} />
-                      ))}
+                      {phrases.map((p, i) => {
+                        const left = stageOpen
+                          ? (stageDurationRef.current ? (p.start / stageDurationRef.current * 100) + '%' : '0%')
+                          : (vidRef.current?.duration ? (p.start / vidRef.current.duration * 100) + '%' : '0%')
+                        return (
+                          <div
+                            key={i}
+                            data-phrase-idx={i}
+                            className={`${styles.ptick} ${p.sel ? styles.ptickSel : ''}`}
+                            style={{ left, cursor: 'pointer', padding: '0 5px', margin: '0 -5px', backgroundClip: 'content-box' }}
+                            onClick={e => { e.stopPropagation(); jumpTo(i); capture('phrase_tick_clicked', { phrase_index: i }) }}
+                          />
+                        )
+                      })}
                     </div>
                   </div>
                   <div className={styles.pb}>
