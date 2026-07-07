@@ -1,7 +1,7 @@
 'use client'
 import { useRef, useState, useEffect, useMemo } from 'react'
 import styles from './page.module.css'
-import { Phrase, parseSRT, fmtTime } from '@/lib/srt'
+import { Phrase, parseSRT, fmtTime, timeToSec, secToTs } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import { StageChannel } from '@/lib/stageChannel'
@@ -50,6 +50,9 @@ export default function Player() {
   const [subVisible, setSubVisible]       = useState(false)
   const [editingIdx, setEditingIdx]       = useState<number | null>(null)
   const [editingText, setEditingText]     = useState('')
+  const [editingStartTs, setEditingStartTs] = useState('')
+  const [editingEndTs,   setEditingEndTs]   = useState('')
+  const [editingError,   setEditingError]   = useState('')
   const [timeCur, setTimeCur]             = useState('0:00')
   const [timeTot, setTimeTot]             = useState('0:00')
   const [progPct, setProgPct]             = useState(0)
@@ -681,13 +684,28 @@ export default function Player() {
   function startEdit(idx: number) {
     setEditingIdx(idx)
     setEditingText(phrases[idx].text)
+    setEditingStartTs(secToTs(phrases[idx].start))
+    setEditingEndTs(secToTs(phrases[idx].end))
+    setEditingError('')
   }
 
   function saveEdit(idx: number) {
+    const newStart = timeToSec(editingStartTs)
+    const newEnd   = timeToSec(editingEndTs)
+    if (isNaN(newStart) || isNaN(newEnd) || newStart < 0 || newEnd < 0) {
+      setEditingError('formato inválido'); return
+    }
+    if (newStart >= newEnd) {
+      setEditingError('inicio ≥ fin'); return
+    }
     setIsDirty(true)
-    setPhrases(prev => prev.map((p, i) => i === idx ? { ...p, text: editingText } : p))
+    setPhrases(prev => prev.map((p, i) =>
+      i === idx ? { ...p, text: editingText, start: newStart, end: newEnd } : p))
     setEditingIdx(null)
     setEditingText('')
+    setEditingStartTs('')
+    setEditingEndTs('')
+    setEditingError('')
     if (stageOpenRef.current && idx === curIdxRef.current)
       channelRef.current?.send({ type: 'subtitle', text: editingText, visible: ccRef.current })
   }
@@ -695,6 +713,9 @@ export default function Player() {
   function cancelEdit() {
     setEditingIdx(null)
     setEditingText('')
+    setEditingStartTs('')
+    setEditingEndTs('')
+    setEditingError('')
   }
 
   // ─── Derived ─────────────────────────────────────────────────────────────
@@ -972,6 +993,22 @@ export default function Player() {
                                   onKeyDown={e => { if (e.key === 'Enter') saveEdit(oi); if (e.key === 'Escape') cancelEdit() }}
                                   autoFocus
                                 />
+                                <div className={styles.plEditTs}>
+                                  <input
+                                    className={styles.plEditTsInput}
+                                    aria-label="inicio"
+                                    value={editingStartTs}
+                                    onChange={e => { setEditingStartTs(e.target.value); setEditingError('') }}
+                                  />
+                                  <span>→</span>
+                                  <input
+                                    className={styles.plEditTsInput}
+                                    aria-label="fin"
+                                    value={editingEndTs}
+                                    onChange={e => { setEditingEndTs(e.target.value); setEditingError('') }}
+                                  />
+                                </div>
+                                {editingError && <div className={styles.plEditError}>{editingError}</div>}
                                 <div className={styles.plEditBtns}>
                                   <button className={styles.plEditSave}   onClick={() => saveEdit(oi)}>✓</button>
                                   <button className={styles.plEditCancel} onClick={cancelEdit}>✕</button>

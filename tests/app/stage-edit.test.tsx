@@ -1,7 +1,6 @@
-// P1 — TC-089: propagación inmediata al stage al editar la frase activa
-// Rojo: saveEdit no envía al canal hoy → panelCmds no contiene el subtitle con texto nuevo.
-// Verde: saveEdit emite channelRef.current.send({ type:'subtitle', text: editingText, visible: ccRef.current })
-//        cuando stageOpenRef.current && idx === curIdxRef.current.
+// Bloque E — tests de edición avanzada de frases
+// P1  TC-089: propagación de edición de texto al stage
+// US-030 TC-071/072: editar timestamps inline
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, fireEvent } from '@testing-library/react'
@@ -143,5 +142,116 @@ describe('P1 — subtitle propagation on active-phrase edit', () => {
     // Ningún subtitle al canal debe llevar el texto de la frase no activa
     const subtitleCmds = panelCmds.filter(m => m.type === 'subtitle')
     expect(subtitleCmds.every(m => m.text !== 'No debería enviarse')).toBe(true)
+  })
+})
+
+// ── US-030: editar timestamps inline ────────────────────────────────────────
+// Los inputs usan aria-label="inicio" / aria-label="fin".
+// secToTs(s) → "M:SS,mmm". Errores: "inicio ≥ fin" | "formato inválido".
+
+describe('US-030 — timestamp editing', () => {
+  beforeEach(() => {
+    vi.spyOn(window, 'open').mockReturnValue({} as Window)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // TC-071: timestamps válidos → phrases[idx] actualizado, edición cierra
+  it('TC-071: guardar start/end válidos → frase muestra nuevo inicio, edición cierra', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    await act(async () => {
+      fireEvent.click(container.querySelectorAll('[title="Editar"]')[0])
+      await tick(50)
+    })
+
+    // ROJO: [aria-label="inicio"] no existe todavía
+    const startInput = container.querySelector('[aria-label="inicio"]') as HTMLInputElement
+    const endInput   = container.querySelector('[aria-label="fin"]')   as HTMLInputElement
+    expect(startInput).not.toBeNull()
+    expect(endInput).not.toBeNull()
+
+    await act(async () => {
+      fireEvent.change(startInput, { target: { value: '0:05,000' } })
+      fireEvent.change(endInput,   { target: { value: '0:08,000' } })
+    })
+
+    await act(async () => {
+      const saveBtn = Array.from(container.querySelectorAll('button'))
+        .find(b => b.textContent?.trim() === '✓')
+      fireEvent.click(saveBtn!)
+      await tick(50)
+    })
+
+    // Edición cerrada
+    expect(container.querySelector('[aria-label="inicio"]')).toBeNull()
+    // Nuevo inicio visible en la lista (fmtTime(5) = "0:05")
+    expect(container.textContent).toContain('0:05')
+  })
+
+  // TC-072a: start >= end → error "inicio ≥ fin", edición abierta, phrases[0].start sin cambios
+  it('TC-072a: start >= end → error "inicio ≥ fin", timestamp original conservado', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    await act(async () => {
+      fireEvent.click(container.querySelectorAll('[title="Editar"]')[0])
+      await tick(50)
+    })
+
+    const startInput = container.querySelector('[aria-label="inicio"]') as HTMLInputElement
+    const endInput   = container.querySelector('[aria-label="fin"]')   as HTMLInputElement
+    if (!startInput || !endInput) { expect(startInput).not.toBeNull(); return }
+
+    // start=4s > end=2s
+    await act(async () => {
+      fireEvent.change(startInput, { target: { value: '0:04,000' } })  // 4 s
+      fireEvent.change(endInput,   { target: { value: '0:02,000' } })  // 2 s — start >= end
+    })
+
+    await act(async () => {
+      const saveBtn = Array.from(container.querySelectorAll('button'))
+        .find(b => b.textContent?.trim() === '✓')
+      fireEvent.click(saveBtn!)
+      await tick(50)
+    })
+
+    // ROJO: sin validación, saveEdit cierra la edición aunque sea inválido
+    // VERDE: edición sigue abierta, error específico visible, plT sigue mostrando "0:01"
+    expect(container.querySelector('[aria-label="inicio"]')).not.toBeNull()
+    expect(container.textContent).toContain('inicio ≥ fin')
+    expect(container.textContent).toContain('0:01')
+  })
+
+  // TC-072b: formato inválido → error "formato inválido", phrases[0].start sin cambios
+  it('TC-072b: timestamp con formato inválido → error "formato inválido", timestamp original conservado', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    await act(async () => {
+      fireEvent.click(container.querySelectorAll('[title="Editar"]')[0])
+      await tick(50)
+    })
+
+    const startInput = container.querySelector('[aria-label="inicio"]') as HTMLInputElement
+    if (!startInput) { expect(startInput).not.toBeNull(); return }
+
+    await act(async () => {
+      fireEvent.change(startInput, { target: { value: 'no-es-tiempo' } })
+    })
+
+    await act(async () => {
+      const saveBtn = Array.from(container.querySelectorAll('button'))
+        .find(b => b.textContent?.trim() === '✓')
+      fireEvent.click(saveBtn!)
+      await tick(50)
+    })
+
+    // VERDE: edición sigue abierta, error específico, plT sigue mostrando "0:01"
+    expect(container.querySelector('[aria-label="inicio"]')).not.toBeNull()
+    expect(container.textContent).toContain('formato inválido')
+    expect(container.textContent).toContain('0:01')
   })
 })

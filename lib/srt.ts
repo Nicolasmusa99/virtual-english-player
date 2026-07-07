@@ -29,3 +29,11 @@ export function fmtTime(s: number): string {
   const m = Math.floor(s / 60), sc = Math.floor(s % 60)
   return `${m}:${sc < 10 ? '0' : ''}${sc}`
 }
+
+// Converts seconds to "M:SS,mmm" for timestamp edit inputs.
+export function secToTs(s: number): string {
+  const m  = Math.floor(s / 60)
+  const sc = Math.floor(s % 60)
+  const ms = Math.round((s % 1) * 1000)
+  return `${m}:${sc < 10 ? '0' : ''}${sc},${String(ms).padStart(3, '0')}`
+}
