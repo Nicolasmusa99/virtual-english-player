@@ -1,7 +1,7 @@
 'use client'
 import { useRef, useState, useEffect, useMemo } from 'react'
 import styles from './page.module.css'
-import { Phrase, parseSRT, fmtTime, timeToSec, secToTs } from '@/lib/srt'
+import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import { StageChannel } from '@/lib/stageChannel'
@@ -718,6 +718,82 @@ export default function Player() {
     setEditingError('')
   }
 
+  // Split automático por punto medio; selección de posición de corte queda fuera
+  // de alcance de esta iteración.
+  function splitPhraseAt(idx: number) {
+    const p = phrasesRef.current[idx]
+    if (!p || p.text.length < 2) return
+    const mid = Math.floor(p.text.length / 2)
+    const [a, b] = splitPhrase(p, mid)
+    setIsDirty(true)
+    setPhrases(prev => [...prev.slice(0, idx), a, b, ...prev.slice(idx + 1)])
+    setCurIdx(prev => prev > idx ? prev + 1 : prev)
+    setEditingIdx(prev => prev !== null && prev > idx ? prev + 1 : prev)
+    if (stageOpenRef.current && idx === curIdxRef.current)
+      channelRef.current?.send({ type: 'subtitle', text: a.text, visible: ccRef.current })
+  }
+
+  function mergeWithNext(idx: number) {
+    const ps = phrasesRef.current
+    if (idx < 0 || idx >= ps.length - 1) return
+    const merged = mergePhrase(ps[idx], ps[idx + 1])
+    setIsDirty(true)
+    setPhrases(prev => [...prev.slice(0, idx), merged, ...prev.slice(idx + 2)])
+    setCurIdx(prev => {
+      if (prev === idx + 1) return idx
+      if (prev > idx + 1) return prev - 1
+      return prev
+    })
+    setEditingIdx(prev => {
+      if (prev === null) return null
+      if (prev === idx + 1) return null  // frase en edición queda consumida; cancelar edit
+      if (prev > idx + 1) return prev - 1
+      return prev
+    })
+    const curI = curIdxRef.current
+    if (stageOpenRef.current && (curI === idx || curI === idx + 1))
+      channelRef.current?.send({ type: 'subtitle', text: merged.text, visible: ccRef.current })
+  }
+
+  function deletePhrase(idx: number) {
+    const ps = phrasesRef.current
+    setIsDirty(true)
+    setPhrases(prev => prev.filter((_, i) => i !== idx))
+    setCurIdx(prev => {
+      if (prev < idx)  return prev
+      if (prev > idx)  return prev - 1
+      if (ps.length === 1) return -1
+      return idx > 0 ? idx - 1 : 0
+    })
+    setEditingIdx(prev => {
+      if (prev === null) return null
+      if (prev === idx)  return null  // frase editada fue eliminada; cancelar edit
+      if (prev > idx)    return prev - 1
+      return prev
+    })
+    // Stage notification handled by the curIdx effect: fires when curIdx changes,
+    // sends phrasesRef.current[newCurIdx] or {text:'', visible:false} if -1.
+  }
+
+  function addPhrase() {
+    const currentTime = stageOpenRef.current
+      ? lastStageTimeRef.current
+      : (vidRef.current?.currentTime ?? 0)
+    const insertIdx = phrasesRef.current.findIndex(p => p.start > currentTime)
+    const finalIdx  = insertIdx === -1 ? phrasesRef.current.length : insertIdx
+    // sel:true: newly added phrases are assumed practice material by default.
+    // end is not clamped to video duration — inoffensive; teacher can adjust via timestamp edit.
+    const newPhrase: Phrase = { start: currentTime, end: currentTime + 2, text: 'Nueva frase', sel: true }
+    setIsDirty(true)
+    setPhrases(prev => {
+      const next = [...prev]
+      next.splice(finalIdx, 0, newPhrase)
+      return next
+    })
+    setCurIdx(finalIdx)
+    // editingIdx is impossible here: button is disabled when editingIdx !== null
+  }
+
   // ─── Derived ─────────────────────────────────────────────────────────────
   const isTranscribing = step !== 'idle' && step !== 'done'
   const selPhrases     = phrases.filter(p => p.sel)
@@ -966,6 +1042,11 @@ export default function Player() {
                     Secuencia
                     <div className={styles.plHdR}>
                       <span className={styles.plCount}>{selPhrases.length} sel.</span>
+                      <button
+                        className={styles.plFilter}
+                        onClick={addPhrase}
+                        disabled={editingIdx !== null}
+                      >Agregar frase</button>
                       {(['all', 'sel'] as const).map(f => (
                         <button key={f} className={`${styles.plFilter} ${filter === f ? styles.plFilterAct : ''}`} onClick={() => setFilter(f)}>
                           {f === 'all' ? 'Todas' : 'Sel.'}
@@ -1019,6 +1100,29 @@ export default function Player() {
                                 <div className={styles.plTx}>{hideTexts ? '' : p.text}</div>
                                 <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); startEdit(oi) }} title="Editar">
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                                </button>
+                                {p.text.length >= 2 && (
+                                  <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); splitPhraseAt(oi) }} title="Dividir">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                      <line x1="12" y1="3" x2="12" y2="21"/>
+                                      <polyline points="7 8 12 3 17 8"/>
+                                      <polyline points="7 16 12 21 17 16"/>
+                                    </svg>
+                                  </button>
+                                )}
+                                {oi < phrases.length - 1 && (
+                                  <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); mergeWithNext(oi) }} title="Unir con siguiente">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                      <polyline points="17 8 12 3 7 8"/>
+                                      <line x1="12" y1="3" x2="12" y2="21"/>
+                                    </svg>
+                                  </button>
+                                )}
+                                <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); deletePhrase(oi) }} title="Eliminar">
+                                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                                    <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
+                                    <path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                                  </svg>
                                 </button>
                               </div>
                             )}
