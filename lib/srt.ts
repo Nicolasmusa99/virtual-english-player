@@ -37,3 +37,25 @@ export function secToTs(s: number): string {
   const ms = Math.round((s % 1) * 1000)
   return `${m}:${sc < 10 ? '0' : ''}${sc},${String(ms).padStart(3, '0')}`
 }
+
+export function splitPhrase(phrase: Phrase, charOffset: number): [Phrase, Phrase] {
+  if (charOffset <= 0 || charOffset >= phrase.text.length)
+    throw new RangeError(`charOffset ${charOffset} out of range for text of length ${phrase.text.length}`)
+  const duration = phrase.end - phrase.start
+  const splitAt  = phrase.start + duration * (charOffset / phrase.text.length)
+  const textA    = phrase.text.slice(0, charOffset)
+  const textB    = phrase.text.slice(charOffset).trimStart()
+  return [
+    { start: phrase.start, end: splitAt,    text: textA, sel: phrase.sel },
+    { start: splitAt,      end: phrase.end, text: textB, sel: phrase.sel },
+  ]
+}
+
+export function mergePhrase(a: Phrase, b: Phrase): Phrase {
+  return {
+    start: a.start,
+    end:   b.end,
+    text:  a.text + ' ' + b.text,
+    sel:   a.sel || b.sel,
+  }
+}

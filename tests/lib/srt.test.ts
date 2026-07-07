@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSRT, timeToSec, fmtTime } from '@/lib/srt'
+import { parseSRT, timeToSec, fmtTime, splitPhrase, mergePhrase } from '@/lib/srt'
 
 describe('parseSRT', () => {
   it('parses standard LF input', () => {
@@ -114,5 +114,105 @@ describe('fmtTime', () => {
 
   it('returns 0:00 for negative values', () => {
     expect(fmtTime(-5)).toBe('0:00')
+  })
+})
+
+// ── US-031: splitPhrase y mergePhrase ────────────────────────────────────────
+
+import type { Phrase } from '@/lib/srt'
+
+describe('splitPhrase', () => {
+  // TC-073a: split proporcional — rango [0,10], texto "AAAAA BBBBB" (11 chars), offset=5
+  // A="AAAAA" (5 chars), B="BBBBB" (5 chars após trimStart del espacio en pos 5)
+  // end_A = 0 + 10 * (5/11) ≈ 4.545..., start_B = end_A
+  it('TC-073a: split proporcional — [0,10] "AAAAA BBBBB" en offset 5', () => {
+    const p: Phrase = { start: 0, end: 10, text: 'AAAAA BBBBB', sel: true }
+    const [a, b] = splitPhrase(p, 5)
+    expect(a.text).toBe('AAAAA')
+    expect(b.text).toBe('BBBBB')
+    expect(a.start).toBe(0)
+    expect(b.end).toBe(10)
+    expect(a.end).toBeCloseTo(10 * 5 / 11, 5)
+    expect(b.start).toBe(a.end)
+    expect(a.sel).toBe(true)
+    expect(b.sel).toBe(true)
+  })
+
+  // TC-073b: trimStart en parte B — offset en el espacio de "Hello world"
+  it('TC-073b: parte B aplica trimStart al texto desde el offset', () => {
+    const p: Phrase = { start: 0, end: 10, text: 'Hello world', sel: false }
+    const [a, b] = splitPhrase(p, 5)   // A="Hello", B=" world".trimStart()="world"
+    expect(a.text).toBe('Hello')
+    expect(b.text).toBe('world')
+    expect(a.sel).toBe(false)
+    expect(b.sel).toBe(false)
+  })
+
+  // TC-073c: sel heredado en ambas partes
+  it('TC-073c: sel de la frase original se hereda en ambas mitades', () => {
+    const p: Phrase = { start: 0, end: 6, text: 'AB CD', sel: true }
+    const [a, b] = splitPhrase(p, 2)
+    expect(a.sel).toBe(true)
+    expect(b.sel).toBe(true)
+  })
+
+  // TC-073d: offset inválido — 0 lanza RangeError
+  it('TC-073d: offset 0 lanza RangeError', () => {
+    const p: Phrase = { start: 0, end: 5, text: 'Hello', sel: false }
+    expect(() => splitPhrase(p, 0)).toThrow(RangeError)
+  })
+
+  // TC-073e: offset >= text.length lanza RangeError
+  it('TC-073e: offset >= text.length lanza RangeError', () => {
+    const p: Phrase = { start: 0, end: 5, text: 'Hello', sel: false }
+    expect(() => splitPhrase(p, 5)).toThrow(RangeError)
+    expect(() => splitPhrase(p, 6)).toThrow(RangeError)
+  })
+
+  // TC-073f: start distinto de 0 — splitAt usa phrase.start como base
+  it('TC-073f: phrase con start=10, end=20, texto 10 chars, offset=5 → splitAt=15', () => {
+    const p: Phrase = { start: 10, end: 20, text: 'AAAAAAAAAA', sel: false }
+    const [a, b] = splitPhrase(p, 5)
+    expect(a.start).toBe(10)
+    expect(a.end).toBe(15)
+    expect(b.start).toBe(15)
+    expect(b.end).toBe(20)
+  })
+})
+
+describe('mergePhrase', () => {
+  // TC-074a: merge básico — textos con espacio, rango completo
+  it('TC-074a: merge — texto concatenado con espacio, start/end del par completo', () => {
+    const a: Phrase = { start: 0, end: 4, text: 'Hello', sel: false }
+    const b: Phrase = { start: 4, end: 8, text: 'world', sel: false }
+    const m = mergePhrase(a, b)
+    expect(m.text).toBe('Hello world')
+    expect(m.start).toBe(0)
+    expect(m.end).toBe(8)
+    expect(m.sel).toBe(false)
+  })
+
+  // TC-074b: sel=true si cualquiera lo estaba (a=true, b=false)
+  it('TC-074b: sel=true si cualquiera de los dos tiene sel=true', () => {
+    const a: Phrase = { start: 0, end: 4, text: 'Hello', sel: true }
+    const b: Phrase = { start: 4, end: 8, text: 'world', sel: false }
+    expect(mergePhrase(a, b).sel).toBe(true)
+    expect(mergePhrase(b, a).sel).toBe(true)
+  })
+
+  // TC-074c: ambos sel=false → sel=false
+  it('TC-074c: ambos sel=false → resultado sel=false', () => {
+    const a: Phrase = { start: 0, end: 4, text: 'A', sel: false }
+    const b: Phrase = { start: 4, end: 8, text: 'B', sel: false }
+    expect(mergePhrase(a, b).sel).toBe(false)
+  })
+
+  // TC-074d: merge preserva start de a y end de b
+  it('TC-074d: merge toma start de a y end de b independientemente de sus valores', () => {
+    const a: Phrase = { start: 2.5, end: 5.0, text: 'First', sel: false }
+    const b: Phrase = { start: 5.0, end: 9.3, text: 'Second', sel: false }
+    const m = mergePhrase(a, b)
+    expect(m.start).toBe(2.5)
+    expect(m.end).toBe(9.3)
   })
 })
