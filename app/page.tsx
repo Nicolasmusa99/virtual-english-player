@@ -18,6 +18,8 @@ export default function Player() {
   const progRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const xhrRef  = useRef<XMLHttpRequest | null>(null)
+  const srtReloadRef   = useRef<HTMLInputElement>(null)
+  const exitPendingRef = useRef<(() => void) | null>(null)
 
   // ─── Stage refs ──────────────────────────────────────────────────────────
   const videoFileRef          = useRef<File | null>(null)
@@ -39,6 +41,7 @@ export default function Player() {
   const [videoFileName, setVideoFileName] = useState('')
   const [videoUrl, setVideoUrl]           = useState('')
   const [srtSource, setSrtSource]         = useState('')
+  const [srtReloadError, setSrtReloadError] = useState<string | null>(null)
   const [phrases, setPhrases]             = useState<Phrase[]>([])
   const [curIdx, setCurIdx]               = useState(-1)
   const [ccOn, setCcOn]                   = useState(true)
@@ -390,11 +393,41 @@ export default function Player() {
   // ─── US-025: guardar o confirmar salida ──────────────────────────────────
   function handleExitAttempt() {
     if (isDirty) {
+      exitPendingRef.current = null
       setExitDialog(true)
       capture('exit_confirmation_shown', { has_edits: true, selected_count: selPhrases.length })
       return
     }
     backToLoad()
+  }
+
+  // ─── US-034: recargar SRT sobre video abierto ────────────────────────────
+  function applySrt(parsed: Phrase[], fileName: string) {
+    setPhrases(parsed)
+    setCurIdx(-1)
+    setSrtSource(`SRT · ${parsed.length} frases`)
+    setIsDirty(false)
+    setSrtReloadError(null)
+    capture('srt_loaded_in_player', { file_name: fileName, phrase_count: parsed.length, replaced: true })
+  }
+
+  function handleSrtReload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = ev.target?.result as string
+      const parsed = parseSRT(text)
+      if (parsed.length === 0) { setSrtReloadError('El archivo no contiene frases válidas'); return }
+      if (isDirty) {
+        exitPendingRef.current = () => applySrt(parsed, file.name)
+        setExitDialog(true)
+        return
+      }
+      applySrt(parsed, file.name)
+    }
+    reader.readAsText(file)
   }
 
   // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
@@ -882,6 +915,7 @@ export default function Player() {
               <span className={`${styles.chip} ${styles.chipSrt}`}>{srtSource}</span>
               <span className={`${styles.chip} ${styles.chipZoom}`}><span className={styles.liveDot} />Zoom</span>
               <button className={styles.tbBtn} onClick={downloadSRT}>↓ SRT</button>
+              <button className={styles.tbBtn} onClick={() => srtReloadRef.current?.click()}>↑ Cargar SRT</button>
               <button className={styles.tbBtn} onClick={stageOpen ? () => closeStage(true) : openStage}>
                 {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
               </button>
@@ -1153,15 +1187,43 @@ export default function Player() {
             </div>
           </div>
 
+          <input
+            ref={srtReloadRef}
+            data-testid="srt-reload-input"
+            type="file"
+            accept=".srt,.vtt"
+            style={{ display: 'none' }}
+            onChange={handleSrtReload}
+          />
+          {srtReloadError && (
+            <div className={styles.restoreBanner}>
+              <span className={styles.restoreBannerText}>⚠ {srtReloadError}</span>
+              <button className={styles.discardBtn} onClick={() => setSrtReloadError(null)}>✕</button>
+            </div>
+          )}
           {exitDialog && (
             <div className={styles.exitOverlay}>
               <div className={styles.exitDialog}>
                 <div className={styles.exitTitle}>¿Salir con cambios sin guardar?</div>
-                <button className={styles.exitBtnPrimary} onClick={() => { downloadSRT(); backToLoad() }}>
+                <button className={styles.exitBtnPrimary} onClick={() => {
+                  downloadSRT()
+                  const action = exitPendingRef.current ?? backToLoad
+                  exitPendingRef.current = null
+                  setExitDialog(false)
+                  action()
+                }}>
                   Descargar SRT y salir
                 </button>
-                <button className={styles.exitBtn} onClick={backToLoad}>Salir sin guardar</button>
-                <button className={styles.exitBtnCancel} onClick={() => setExitDialog(false)}>Cancelar</button>
+                <button className={styles.exitBtn} onClick={() => {
+                  const action = exitPendingRef.current ?? backToLoad
+                  exitPendingRef.current = null
+                  setExitDialog(false)
+                  action()
+                }}>Salir sin guardar</button>
+                <button className={styles.exitBtnCancel} onClick={() => {
+                  exitPendingRef.current = null
+                  setExitDialog(false)
+                }}>Cancelar</button>
               </div>
             </div>
           )}
