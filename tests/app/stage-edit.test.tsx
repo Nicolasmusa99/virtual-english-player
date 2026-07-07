@@ -381,6 +381,96 @@ describe('US-032 — agregar y eliminar frases', () => {
   })
 })
 
+// ── US-033: seleccionar / deseleccionar todas ────────────────────────────────
+
+describe('US-033 — Todas ✓ / Ninguna', () => {
+  // Helper: exact text match to avoid colliding with existing "Todas" filter button.
+  function btn(container: HTMLElement, text: string): HTMLButtonElement | undefined {
+    return Array.from(container.querySelectorAll('button'))
+      .find(b => b.textContent?.trim() === text) as HTMLButtonElement | undefined
+  }
+
+  beforeEach(() => {
+    vi.spyOn(window, 'open').mockReturnValue({} as Window)
+  })
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  // TC-077a: "Todas ✓" existe; después de "Ninguna", restaura selección completa → "2 sel."
+  it('TC-077a: "Todas ✓" existe y restaura selección completa', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    // ROJO: botón "Todas ✓" no existe todavía
+    expect(btn(container, 'Todas ✓')).not.toBeUndefined()
+
+    await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
+    expect(container.textContent).toContain('0 sel.')
+
+    await act(async () => { fireEvent.click(btn(container, 'Todas ✓')!); await tick(50) })
+    expect(container.textContent).toContain('2 sel.')
+  })
+
+  // TC-077b: "Todas ✓" re-habilita el botón Práctica (disabled cuando selPhrases.length=0)
+  it('TC-077b: "Todas ✓" re-habilita Práctica tras haberlo deshabilitado con "Ninguna"', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
+    expect(btn(container, 'Práctica')?.disabled).toBe(true)
+
+    await act(async () => { fireEvent.click(btn(container, 'Todas ✓')!); await tick(50) })
+    expect(btn(container, 'Práctica')?.disabled).toBe(false)
+  })
+
+  // TC-078a: "Ninguna" existe; después de click → "0 sel.", Práctica disabled
+  it('TC-078a: "Ninguna" existe y deselecciona todas → "0 sel.", Práctica disabled', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    // ROJO: botón "Ninguna" no existe todavía
+    expect(btn(container, 'Ninguna')).not.toBeUndefined()
+
+    await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
+
+    expect(container.textContent).toContain('0 sel.')
+    expect(btn(container, 'Práctica')?.disabled).toBe(true)
+  })
+
+  // TC-078b: ciclo Ninguna → Todas ✓ → Ninguna → contadores correctos en cada paso
+  it('TC-078b: ciclo Ninguna → Todas ✓ → Ninguna → contadores correctos', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    expect(container.textContent).toContain('2 sel.')
+    await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
+    expect(container.textContent).toContain('0 sel.')
+    await act(async () => { fireEvent.click(btn(container, 'Todas ✓')!); await tick(50) })
+    expect(container.textContent).toContain('2 sel.')
+    await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
+    expect(container.textContent).toContain('0 sel.')
+  })
+
+  // TC-078c: filtro 'sel' activo + "Ninguna" → lista muestra "Sin frases"
+  it('TC-078c: con filtro Sel. activo, "Ninguna" → lista muestra "Sin frases"', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayer(container)
+
+    // Activar filtro 'sel'
+    await act(async () => {
+      const selFilterBtn = Array.from(container.querySelectorAll('button'))
+        .find(b => b.textContent?.trim() === 'Sel.')
+      fireEvent.click(selFilterBtn!)
+      await tick(50)
+    })
+
+    await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
+
+    expect(container.textContent).toContain('Sin frases')
+  })
+})
+
 // ── US-030: editar timestamps inline ────────────────────────────────────────
 // Los inputs usan aria-label="inicio" / aria-label="fin".
 // secToTs(s) → "M:SS,mmm". Errores: "inicio ≥ fin" | "formato inválido".

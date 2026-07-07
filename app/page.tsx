@@ -1044,6 +1044,14 @@ export default function Player() {
                       <span className={styles.plCount}>{selPhrases.length} sel.</span>
                       <button
                         className={styles.plFilter}
+                        onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: true }))); setIsDirty(true) }}
+                      >Todas ✓</button>
+                      <button
+                        className={styles.plFilter}
+                        onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: false }))); setIsDirty(true) }}
+                      >Ninguna</button>
+                      <button
+                        className={styles.plFilter}
                         onClick={addPhrase}
                         disabled={editingIdx !== null}
                       >Agregar frase</button>
