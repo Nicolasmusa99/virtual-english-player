@@ -11,6 +11,7 @@ import type { SessionData } from '@/lib/session'
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5]
+const SIZE_WARN_MB = 200
 
 export default function Player() {
   // ─── DOM refs ────────────────────────────────────────────────────────────
@@ -71,6 +72,7 @@ export default function Player() {
   const [practiceMode, setPracticeMode]   = useState(false)
   const [loopMode, setLoopMode]           = useState(false)
   const [hideTexts, setHideTexts]         = useState(false)
+  const [sizeWarn, setSizeWarn]           = useState<{ file: File; sizeMB: number } | null>(null)
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -546,7 +548,12 @@ export default function Player() {
       }
       r.readAsText(srtFile, 'UTF-8')
     } else {
-      transcribe(vf as File)
+      const sizeMB = (vf as File).size / 1024 / 1024
+      if (sizeMB > SIZE_WARN_MB) {
+        setSizeWarn({ file: vf as File, sizeMB })
+      } else {
+        transcribe(vf as File)
+      }
     }
   }
 
@@ -643,6 +650,16 @@ export default function Player() {
     setStep('idle'); setProgress(0); setErrorMsg('Cancelado.')
     if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setVideoUrl(''); setVideoFileName('')
+    videoFileRef.current = null
+  }
+
+  function handleSizeWarnDismiss() {
+    if (sizeWarn) {
+      capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.sizeMB), duration_s: null, proceeded: false })
+    }
+    setSizeWarn(null)
+    setVideoUrl(''); setVideoFileName('')
+    if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     videoFileRef.current = null
   }
 
@@ -810,6 +827,22 @@ export default function Player() {
 
           {!isTranscribing ? (
             <>
+              {sizeWarn && (
+                <div data-testid="size-warn" className={styles.restoreBanner}>
+                  <span className={styles.restoreBannerText}>
+                    ⚠ {sizeWarn.file.name} pesa {Math.round(sizeWarn.sizeMB)} MB — la subida puede tardar varios minutos.
+                  </span>
+                  <button className={styles.tbBtn}
+                    onClick={() => {
+                      capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.sizeMB), duration_s: null, proceeded: true })
+                      setSizeWarn(null)
+                      transcribe(sizeWarn.file)
+                    }}>
+                    Continuar de todos modos
+                  </button>
+                  <button className={styles.discardBtn} onClick={handleSizeWarnDismiss}>Cancelar</button>
+                </div>
+              )}
               <label
                 className={styles.dropzone}
                 onDragOver={e => { e.preventDefault(); e.currentTarget.setAttribute('data-drag', 'true') }}
