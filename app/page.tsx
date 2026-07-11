@@ -7,6 +7,15 @@ import { capture } from '@/lib/capture'
 import { StageChannel } from '@/lib/stageChannel'
 import { sessionKey, saveSession, loadSession } from '@/lib/session'
 import type { SessionData } from '@/lib/session'
+import { useSession, signIn, signOut } from 'next-auth/react'
+import { upload } from '@vercel/blob/client'
+
+interface LibraryVideoRow {
+  id: string
+  originalName: string
+  status: string
+  phraseCount: number
+}
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
@@ -34,7 +43,7 @@ export default function Player() {
   const pendingRestoreTimeRef = useRef<number | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library'>('load')
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -73,6 +82,18 @@ export default function Player() {
   const [loopMode, setLoopMode]           = useState(false)
   const [hideTexts, setHideTexts]         = useState(false)
   const [sizeWarn, setSizeWarn]           = useState<{ file: File; sizeMB: number } | null>(null)
+  // Biblioteca (Bloque 13)
+  const libraryVideoIdRef = useRef<string | null>(null)
+  const { status: authStatus } = useSession()
+  const [libraryVideos, setLibraryVideos]   = useState<LibraryVideoRow[]>([])
+  const [libraryLoading, setLibraryLoading] = useState(false)
+  const [librarySaving, setLibrarySaving]   = useState(false)
+  const [libraryError, setLibraryError]     = useState('')
+
+  useEffect(() => {
+    if (authStatus === 'authenticated') { setScreen('library'); fetchLibrary() }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authStatus])
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -113,10 +134,18 @@ export default function Player() {
   // `filter` es preferencia de vista: persiste en sesión pero no marca dirty.
   useEffect(() => {
     if (screen !== 'player' || !videoFileName || phrases.length === 0 || restorePrompt !== null) return
-    const size = videoFileRef.current?.size ?? 0
-    const key  = sessionKey(videoFileName, size)
     const tid  = setTimeout(() => {
-      saveSession(key, { phrases, delay, speedIdx, ccOn, filter })
+      if (libraryVideoIdRef.current) {
+        fetch(`/api/videos/${libraryVideoIdRef.current}/session`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phrases, delay, speedIdx, ccOn, filter, srtSource }),
+        }).catch(() => {})
+      } else {
+        const size = videoFileRef.current?.size ?? 0
+        const key  = sessionKey(videoFileName, size)
+        saveSession(key, { phrases, delay, speedIdx, ccOn, filter })
+      }
       capture('session_autosaved', {
         video_file_name: videoFileName,
         phrase_count:    phrases.length,
@@ -358,6 +387,7 @@ export default function Player() {
       } else {
         if (stageOpenRef.current) channelRef.current?.send({ type: 'pause' })
         else { vidRef.current?.pause(); setIsPlaying(false) }
+        capture('practice_mode_completed', { selected_count: ps.filter(p => p.sel).length })
       }
       return
     }
@@ -368,6 +398,7 @@ export default function Player() {
     autoPausedAtRef.current = curI
     if (stageOpenRef.current) channelRef.current?.send({ type: 'pause' })
     else { vidRef.current?.pause(); setIsPlaying(false) }
+    capture('autopause_triggered', { phrase_index: curI })
   }
 
   // ─── US-024: restaurar / descartar sesión ────────────────────────────────
@@ -673,6 +704,112 @@ export default function Player() {
     setStageOpen(false); stageOpenRef.current = false
     videoFileRef.current = null
     setIsDirty(false); setRestorePrompt(null); setExitDialog(false)
+    libraryVideoIdRef.current = null
+  }
+
+  // ─── Biblioteca (Bloque 13) ───────────────────────────────────────────────
+  async function fetchLibrary() {
+    setLibraryLoading(true)
+    try {
+      const res = await fetch('/api/videos')
+      const data = await res.json()
+      setLibraryVideos(data.videos ?? [])
+      capture('library_viewed', { video_count: (data.videos ?? []).length })
+    } catch {
+      setLibraryError('No se pudo cargar la biblioteca.')
+    } finally {
+      setLibraryLoading(false)
+    }
+  }
+
+  async function openFromLibrary(id: string) {
+    setLibraryError('')
+    try {
+      const res = await fetch(`/api/videos/${id}`)
+      const data = await res.json()
+      if (!res.ok || data.video.status !== 'ready' || !data.video.storageUrl) {
+        setLibraryError('Este video expiró — subilo de nuevo para reproducirlo.')
+        capture('library_video_open_blocked_expired', { video_id: id })
+        return
+      }
+      libraryVideoIdRef.current = id
+      videoFileRef.current = null
+      setVideoFileName(data.video.originalName)
+      setVideoUrl(data.video.storageUrl)
+      const s = data.session
+      const savedPhrases = s?.phrases ?? []
+      setPhrases(savedPhrases)
+      setDelay(s?.delay ?? 0); delayRef.current = s?.delay ?? 0
+      setSpeedIdx(s?.speedIdx ?? 2)
+      setCcOn(s?.ccOn ?? true); ccRef.current = s?.ccOn ?? true
+      setFilter(s?.filter ?? 'all')
+      setSrtSource(`${s?.srtSource === 'gemini' ? 'Gemini AI' : 'SRT'} · ${savedPhrases.length} frases`)
+      setCurIdx(-1)
+      setIsDirty(false)
+      setScreen('player')
+      capture('library_video_opened', { video_id: id, phrase_count: savedPhrases.length })
+    } catch {
+      setLibraryError('No se pudo abrir el video.')
+    }
+  }
+
+  async function saveToLibrary() {
+    const file = videoFileRef.current
+    if (!file || phrases.length === 0) return
+    setLibrarySaving(true)
+    setLibraryError('')
+    try {
+      const createRes = await fetch('/api/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalName: file.name, sizeBytes: file.size, mimeType: file.type }),
+      })
+      const createData = await createRes.json()
+      if (!createRes.ok) {
+        setLibraryError(createData.error || 'No se pudo guardar.')
+        if (createRes.status === 413) {
+          capture('library_save_blocked_quota', {
+            attempted_size_mb: Math.round(file.size / 1024 / 1024),
+            used_bytes_mb: Math.round((createData.usedBytes ?? 0) / 1024 / 1024),
+          })
+        }
+        return
+      }
+      const videoId = createData.id as string
+
+      const blob = await upload(`videos/${videoId}/${file.name}`, file, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-upload',
+        clientPayload: JSON.stringify({ videoId }),
+      })
+      await fetch(`/api/videos/${videoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storageUrl: blob.url }),
+      })
+      await fetch(`/api/videos/${videoId}/session`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phrases, delay, speedIdx, ccOn, filter, srtSource: srtSource.startsWith('Gemini') ? 'gemini' : 'srt-upload' }),
+      })
+
+      libraryVideoIdRef.current = videoId
+      capture('video_saved_to_library', { video_id: videoId, phrase_count: phrases.length })
+    } catch {
+      setLibraryError('No se pudo guardar el video en la biblioteca.')
+    } finally {
+      setLibrarySaving(false)
+    }
+  }
+
+  async function deleteFromLibrary(id: string) {
+    try {
+      await fetch(`/api/videos/${id}`, { method: 'DELETE' })
+      setLibraryVideos(prev => prev.filter(v => v.id !== id))
+      capture('library_video_deleted', { video_id: id })
+    } catch {
+      setLibraryError('No se pudo eliminar el video.')
+    }
   }
 
   function downloadSRT() {
@@ -709,9 +846,14 @@ export default function Player() {
     if (newStart >= newEnd) {
       setEditingError('inicio ≥ fin'); return
     }
+    const orig = phrasesRef.current[idx]
+    const startDelta = Math.round((newStart - orig.start) * 1000) / 1000
+    const endDelta   = Math.round((newEnd   - orig.end)   * 1000) / 1000
     setIsDirty(true)
     setPhrases(prev => prev.map((p, i) =>
       i === idx ? { ...p, text: editingText, start: newStart, end: newEnd } : p))
+    if (startDelta !== 0 || endDelta !== 0)
+      capture('phrase_timestamps_edited', { phrase_index: idx, start_delta_s: startDelta, end_delta_s: endDelta })
     setEditingIdx(null)
     setEditingText('')
     setEditingStartTs('')
@@ -738,6 +880,7 @@ export default function Player() {
     const [a, b] = splitPhrase(p, mid)
     setIsDirty(true)
     setPhrases(prev => [...prev.slice(0, idx), a, b, ...prev.slice(idx + 1)])
+    capture('phrase_split', { phrase_index: idx, new_total: phrasesRef.current.length + 1 })
     setCurIdx(prev => prev > idx ? prev + 1 : prev)
     setEditingIdx(prev => prev !== null && prev > idx ? prev + 1 : prev)
     if (stageOpenRef.current && idx === curIdxRef.current)
@@ -750,6 +893,7 @@ export default function Player() {
     const merged = mergePhrase(ps[idx], ps[idx + 1])
     setIsDirty(true)
     setPhrases(prev => [...prev.slice(0, idx), merged, ...prev.slice(idx + 2)])
+    capture('phrase_merged', { phrase_index: idx, new_total: ps.length - 1 })
     setCurIdx(prev => {
       if (prev === idx + 1) return idx
       if (prev > idx + 1) return prev - 1
@@ -770,6 +914,7 @@ export default function Player() {
     const ps = phrasesRef.current
     setIsDirty(true)
     setPhrases(prev => prev.filter((_, i) => i !== idx))
+    capture('phrase_deleted', { phrase_index: idx, new_total: ps.length - 1 })
     setCurIdx(prev => {
       if (prev < idx)  return prev
       if (prev > idx)  return prev - 1
@@ -801,6 +946,7 @@ export default function Player() {
       next.splice(finalIdx, 0, newPhrase)
       return next
     })
+    capture('phrase_added', { at_time_s: currentTime, new_total: phrasesRef.current.length + 1 })
     setCurIdx(finalIdx)
     // editingIdx is impossible here: button is disabled when editingIdx !== null
   }
@@ -823,6 +969,16 @@ export default function Player() {
 
       {screen === 'load' && (
         <div className={styles.loadScreen}>
+          <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
+            {authStatus === 'authenticated' ? (
+              <>
+                <button className={styles.tbBtn} onClick={() => { setScreen('library'); fetchLibrary() }}>📚 Mi biblioteca</button>
+                <button className={styles.tbBtn} onClick={() => signOut()}>Salir</button>
+              </>
+            ) : (
+              <button className={styles.tbBtn} onClick={() => signIn('google')}>Iniciar sesión</button>
+            )}
+          </div>
           <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Player</div>
 
           {!isTranscribing ? (
@@ -898,6 +1054,32 @@ export default function Player() {
         </div>
       )}
 
+      {screen === 'library' && (
+        <div className={styles.loadScreen}>
+          <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Player</div>
+          <div className={styles.dzSub} style={{ marginBottom: 16 }}>Mi biblioteca</div>
+          {libraryError && <div className={styles.errorBox}>{libraryError}</div>}
+          {libraryLoading ? (
+            <div className={styles.progSub}>Cargando...</div>
+          ) : libraryVideos.length === 0 ? (
+            <div className={styles.progSub}>Todavía no guardaste ningún video.</div>
+          ) : (
+            <div style={{ width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {libraryVideos.map(v => (
+                <div key={v.id} className={styles.restoreBanner}>
+                  <span className={styles.restoreBannerText}>
+                    {v.originalName} — {v.phraseCount} frases{v.status === 'expired' ? ' · expirado' : ''}
+                  </span>
+                  <button className={styles.restoreBtn} disabled={v.status === 'expired'} onClick={() => openFromLibrary(v.id)}>Abrir</button>
+                  <button className={styles.discardBtn} onClick={() => deleteFromLibrary(v.id)}>Eliminar</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <button className={styles.tbBtn} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir nuevo video</button>
+        </div>
+      )}
+
       {screen === 'player' && (
         <div className={styles.playerWrap}>
           <div className={styles.topbar}>
@@ -910,6 +1092,11 @@ export default function Player() {
               <span className={`${styles.chip} ${styles.chipZoom}`}><span className={styles.liveDot} />Zoom</span>
               <button className={styles.tbBtn} onClick={downloadSRT}>↓ SRT</button>
               <button className={styles.tbBtn} onClick={() => srtReloadRef.current?.click()}>↑ Cargar SRT</button>
+              {authStatus === 'authenticated' && !libraryVideoIdRef.current && videoFileRef.current && (
+                <button className={styles.tbBtn} disabled={librarySaving} onClick={saveToLibrary}>
+                  {librarySaving ? 'Guardando...' : '📚 Guardar en biblioteca'}
+                </button>
+              )}
               <button className={styles.tbBtn} onClick={stageOpen ? () => closeStage(true) : openStage}>
                 {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
               </button>
@@ -1028,14 +1215,14 @@ export default function Player() {
                   <div className={styles.secLabel}>Modo</div>
                   <div className={styles.modeBtns}>
                     <button className={`${styles.modeBtn} ${autoPause ? styles.modeBtnAct : ''}`}
-                            onClick={() => setAutoPause(p => !p)}>Auto-pausa</button>
+                            onClick={() => { const next = !autoPause; setAutoPause(next); capture('autopause_toggled', { new_state: next ? 'on' : 'off' }) }}>Auto-pausa</button>
                     <button className={`${styles.modeBtn} ${practiceMode ? styles.modeBtnAct : ''}`}
                             disabled={selPhrases.length === 0}
-                            onClick={() => setPracticeMode(p => !p)}>Práctica</button>
+                            onClick={() => { const next = !practiceMode; setPracticeMode(next); capture('practice_mode_toggled', { new_state: next ? 'on' : 'off', selected_count: selPhrases.length }) }}>Práctica</button>
                     <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`}
-                            onClick={() => setLoopMode(p => !p)}>Loop</button>
+                            onClick={() => { const next = !loopMode; setLoopMode(next); capture('phrase_loop_changed', { enabled: next }) }}>Loop</button>
                     <button className={`${styles.modeBtn} ${hideTexts ? styles.modeBtnAct : ''}`}
-                            onClick={() => setHideTexts(p => !p)}>Ocultar</button>
+                            onClick={() => { const next = !hideTexts; setHideTexts(next); capture('text_visibility_toggled', { hidden: next }) }}>Ocultar</button>
                   </div>
                 </div>
 
@@ -1080,11 +1267,11 @@ export default function Player() {
                       <span className={styles.plCount}>{selPhrases.length} sel.</span>
                       <button
                         className={styles.plFilter}
-                        onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: true }))); setIsDirty(true) }}
+                        onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: true }))); setIsDirty(true); capture('phrases_bulk_selection', { action: 'select_all', total: phrasesRef.current.length }) }}
                       >Todas ✓</button>
                       <button
                         className={styles.plFilter}
-                        onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: false }))); setIsDirty(true) }}
+                        onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: false }))); setIsDirty(true); capture('phrases_bulk_selection', { action: 'deselect_all', total: phrasesRef.current.length }) }}
                       >Ninguna</button>
                       <button
                         className={styles.plFilter}
@@ -1212,6 +1399,7 @@ export default function Player() {
                   const action = exitPendingRef.current ?? backToLoad
                   exitPendingRef.current = null
                   setExitDialog(false)
+                  capture('exit_confirmation_resolved', { action: 'download_and_exit' })
                   action()
                 }}>
                   Descargar SRT y salir
@@ -1220,11 +1408,13 @@ export default function Player() {
                   const action = exitPendingRef.current ?? backToLoad
                   exitPendingRef.current = null
                   setExitDialog(false)
+                  capture('exit_confirmation_resolved', { action: 'exit_without_saving' })
                   action()
                 }}>Salir sin guardar</button>
                 <button className={styles.exitBtnCancel} onClick={() => {
                   exitPendingRef.current = null
                   setExitDialog(false)
+                  capture('exit_confirmation_resolved', { action: 'cancel' })
                 }}>Cancelar</button>
               </div>
             </div>

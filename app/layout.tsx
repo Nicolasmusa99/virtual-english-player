@@ -1,5 +1,6 @@
 import type { Metadata } from 'next'
 import { DM_Sans, DM_Mono } from 'next/font/google'
+import { Providers } from './providers'
 import './globals.css'
 
 const dmSans = DM_Sans({ subsets: ['latin'], variable: '--font-sans' })
@@ -13,7 +14,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
-      <body className={`${dmSans.variable} ${dmMono.variable}`}>{children}</body>
+      <body className={`${dmSans.variable} ${dmMono.variable}`}>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   )
 }
