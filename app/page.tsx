@@ -90,11 +90,6 @@ export default function Player() {
   const [librarySaving, setLibrarySaving]   = useState(false)
   const [libraryError, setLibraryError]     = useState('')
 
-  useEffect(() => {
-    if (authStatus === 'authenticated') { setScreen('library'); fetchLibrary() }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authStatus])
-
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
   const curIdxRef    = useRef(-1)

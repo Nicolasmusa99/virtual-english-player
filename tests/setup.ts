@@ -13,7 +13,7 @@ if (typeof window !== 'undefined') {
 // <SessionProvider>, so next-auth/react throws unless it's mocked globally here.
 // Defaults to logged-out so existing tests (written pre-biblioteca) keep seeing
 // the same load/player screens; library-specific tests override via useSessionMock.
-export const useSessionMock = vi.fn(() => ({ data: null, status: 'unauthenticated' as const }))
+export const useSessionMock = vi.fn((): { data: unknown; status: string } => ({ data: null, status: 'unauthenticated' }))
 export const signInMock = vi.fn()
 export const signOutMock = vi.fn()
 
