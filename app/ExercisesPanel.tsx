@@ -1,9 +1,10 @@
-// VE Drills (Bloque 14)
+// VE Drills (Bloque 14) — extended in Bloque 15
 'use client'
 import { useEffect, useState } from 'react'
 import type { Phrase } from '@/lib/srt'
-import type { Level, Scope, GenState, ExerciseSet, MatchItem } from '@/lib/exercises'
+import type { Level, Scope, GenState, ExerciseSet, MatchItem, ExerciseMode, PdfType, PdfVersion } from '@/lib/exercises'
 import { resolveScope } from '@/lib/exercises'
+import { buildStudentContent, buildTeacherContent } from '@/lib/pdf'
 import { capture } from '@/lib/capture'
 
 interface Props {
@@ -14,6 +15,9 @@ interface Props {
 type DrillTab = 'quiz' | 'cloze' | 'match'
 
 export default function ExercisesPanel({ phrases, videoFileName }: Props) {
+  // ── source / generation state ────────────────────────────────────────────
+  const [mode, setMode]           = useState<ExerciseMode>(phrases.length > 0 ? 'video' : 'topic')
+  const [topic, setTopic]         = useState('')
   const [level, setLevel]         = useState<Level>('intermediate')
   const [scope, setScope]         = useState<Scope>('all')
   const [genState, setGenState]   = useState<GenState>('idle')
@@ -21,14 +25,23 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
   const [errorMsg, setErrorMsg]   = useState('')
   const [drillTab, setDrillTab]   = useState<DrillTab>('quiz')
 
+  // ── quiz state ───────────────────────────────────────────────────────────
   const [quizAnswers, setQuizAnswers]       = useState<(number | null)[]>([])
+
+  // ── cloze state ──────────────────────────────────────────────────────────
   const [clozeInputs, setClozeInputs]       = useState<string[]>([])
   const [clozeSubmitted, setClozeSubmitted] = useState<boolean[]>([])
 
+  // ── match state ──────────────────────────────────────────────────────────
   const [shuffledDefs, setShuffledDefs]     = useState<number[]>([])
   const [matchedPairs, setMatchedPairs]     = useState<Set<number>>(new Set())
   const [selectedTerm, setSelectedTerm]     = useState<number | null>(null)
   const [wrongTermFlash, setWrongTermFlash] = useState<number | null>(null)
+
+  // ── PDF panel state ──────────────────────────────────────────────────────
+  const [pdfOpen, setPdfOpen]           = useState(false)
+  const [pdfTypes, setPdfTypes]         = useState<PdfType[]>(['quiz', 'cloze', 'match'])
+  const [pdfVersion, setPdfVersion]     = useState<PdfVersion>('student')
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
@@ -38,12 +51,19 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
     })
   }, [])
 
+  function handleModeChange(m: ExerciseMode) {
+    setMode(m)
+    capture('exercises_source_mode_changed', { mode: m, has_video: phrases.length > 0 })
+  }
+
+  const generateDisabled =
+    (mode === 'topic' || mode === 'both') && !topic.trim()
+
   async function generate() {
-    const sourcePhrases = resolveScope(phrases, scope)
+    const sourcePhrases = (mode === 'topic') ? [] : resolveScope(phrases, scope)
     const startMs = Date.now()
     capture('exercises_generation_started', {
-      level,
-      scope,
+      mode, level, scope,
       phrase_count:    sourcePhrases.length,
       video_file_name: videoFileName,
     })
@@ -52,10 +72,14 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
 
     let httpStatus = 0
     try {
+      const payload: Record<string, unknown> = { level, mode }
+      if (mode !== 'topic') payload.phrases = sourcePhrases
+      if (mode !== 'video') payload.topic = topic.trim()
+
       const res = await fetch('/api/exercises', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ phrases: sourcePhrases, level, scope }),
+        body:    JSON.stringify(payload),
       })
       httpStatus = res.status
       const data = await res.json()
@@ -83,17 +107,79 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
         cloze_count: ex.cloze.length,
         match_count: ex.match.length,
         duration_ms: Date.now() - startMs,
-        level, scope,
+        level, mode,
       })
       setGenState('ready')
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Unknown error'
-      capture('exercises_generation_failed', { http_status: httpStatus, error: msg, level, scope })
+      capture('exercises_generation_failed', { http_status: httpStatus, error: msg, level, mode })
       setErrorMsg(msg)
       setGenState('error')
     }
   }
 
+  async function downloadPdf() {
+    if (!exercises) return
+    const { jsPDF } = await import('jspdf')
+
+    const makePdf = (version: 'student' | 'teacher') => {
+      const doc    = new jsPDF()
+      const W      = 170 // usable width mm
+      const margin = 20
+      let y        = margin
+
+      const write = (text: string, bold = false, size = 11) => {
+        doc.setFont('helvetica', bold ? 'bold' : 'normal')
+        doc.setFontSize(size)
+        const lines = doc.splitTextToSize(text, W) as string[]
+        for (const line of lines) {
+          if (y > 270) { doc.addPage(); y = margin }
+          doc.text(line, margin, y)
+          y += size * 0.45
+        }
+      }
+
+      const title = version === 'student' ? 'Exercises' : 'Exercise Answer Key'
+      write(title, true, 16)
+      y += 4
+
+      const blocks = version === 'student'
+        ? buildStudentContent(exercises!, pdfTypes)
+        : buildTeacherContent(exercises!, pdfTypes)
+
+      for (const block of blocks) {
+        y += 4
+        write(block.heading, true, 13)
+        y += 2
+        for (const line of block.lines) write(line)
+        y += 2
+      }
+
+      doc.save(version === 'student' ? 'ejercicios-alumno.pdf' : 'ejercicios-profesor.pdf')
+    }
+
+    if (pdfVersion === 'both') {
+      makePdf('student')
+      makePdf('teacher')
+    } else {
+      makePdf(pdfVersion)
+    }
+
+    capture('exercises_pdf_downloaded', {
+      version:     pdfVersion,
+      types:       pdfTypes.join(','),
+      source_mode: mode,
+    })
+    setPdfOpen(false)
+  }
+
+  function togglePdfType(t: PdfType) {
+    setPdfTypes(prev =>
+      prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t]
+    )
+  }
+
+  // ── quiz ──────────────────────────────────────────────────────────────────
   function answerQuiz(qi: number, optIdx: number) {
     if (quizAnswers[qi] !== null || !exercises) return
     const correct = optIdx === exercises.quiz[qi].correct
@@ -142,12 +228,47 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
   return (
     <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
+      {/* ── Bloque 15: Source mode selector ── */}
+      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+        {(['video', 'topic', 'both'] as ExerciseMode[]).map(m => (
+          <button
+            key={m}
+            data-testid={`mode-${m}`}
+            data-active={mode === m ? 'true' : 'false'}
+            onClick={() => handleModeChange(m)}
+            style={{
+              ...btnBase, padding: '3px 8px', fontSize: 10,
+              textTransform: 'uppercase' as const,
+              background: mode === m ? 'var(--ac)' : 'transparent',
+              color: mode === m ? '#1a1a1a' : 'var(--tx3)',
+            }}
+          >
+            {m === 'video' ? 'Video' : m === 'topic' ? 'Tópico' : 'Ambos'}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Bloque 15: Topic input (visible when mode !== video) ── */}
+      {mode !== 'video' && (
+        <input
+          data-testid="topic-input"
+          type="text"
+          value={topic}
+          placeholder="Topic (e.g. Second World War)"
+          onChange={e => setTopic(e.target.value)}
+          style={{
+            padding: '5px 8px', border: '1px solid var(--ln)', borderRadius: 4,
+            background: 'var(--p3)', color: 'var(--tx)', fontSize: 11,
+            fontFamily: 'var(--font-mono)',
+          }}
+        />
+      )}
+
       {/* Level + Scope controls */}
       <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' as const }}>
         {(['beginner', 'intermediate', 'advanced'] as Level[]).map(l => (
           <button key={l} onClick={() => setLevel(l)} style={{
-            ...btnBase,
-            padding: '3px 7px',
+            ...btnBase, padding: '3px 7px',
             background: level === l ? 'var(--ac)' : 'transparent',
             color: level === l ? '#1a1a1a' : 'var(--tx3)',
             fontSize: 10, textTransform: 'uppercase' as const,
@@ -155,32 +276,41 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
             {l}
           </button>
         ))}
-        <span style={{ color: 'var(--tx3)', fontSize: 10 }}>·</span>
-        <button data-testid="scope-all" onClick={() => setScope('all')} style={{
-          ...btnBase, padding: '3px 7px',
-          background: scope === 'all' ? 'var(--ac)' : 'transparent',
-          color: scope === 'all' ? '#1a1a1a' : 'var(--tx3)',
-          fontSize: 10,
-        }}>
-          Todas
-        </button>
-        <button data-testid="scope-sel" onClick={() => setScope('sel')} style={{
-          ...btnBase, padding: '3px 7px',
-          background: scope === 'sel' ? 'var(--ac)' : 'transparent',
-          color: scope === 'sel' ? '#1a1a1a' : 'var(--tx3)',
-          fontSize: 10,
-        }}>
-          Sel. ({selCount})
-        </button>
+        {/* Scope selector hidden in topic-only mode */}
+        {mode !== 'topic' && (
+          <>
+            <span style={{ color: 'var(--tx3)', fontSize: 10 }}>·</span>
+            <button data-testid="scope-all" onClick={() => setScope('all')} style={{
+              ...btnBase, padding: '3px 7px',
+              background: scope === 'all' ? 'var(--ac)' : 'transparent',
+              color: scope === 'all' ? '#1a1a1a' : 'var(--tx3)', fontSize: 10,
+            }}>
+              Todas
+            </button>
+            <button data-testid="scope-sel" onClick={() => setScope('sel')} style={{
+              ...btnBase, padding: '3px 7px',
+              background: scope === 'sel' ? 'var(--ac)' : 'transparent',
+              color: scope === 'sel' ? '#1a1a1a' : 'var(--tx3)', fontSize: 10,
+            }}>
+              Sel. ({selCount})
+            </button>
+          </>
+        )}
       </div>
 
       {/* Idle */}
       {genState === 'idle' && (
-        <button data-testid="btn-generate" onClick={generate} style={{
-          ...btnBase, padding: '8px 0', borderColor: 'var(--ac)',
-          color: 'var(--ac)', fontSize: 11, letterSpacing: '1px',
-          textTransform: 'uppercase' as const,
-        }}>
+        <button
+          data-testid="btn-generate"
+          disabled={generateDisabled}
+          onClick={generate}
+          style={{
+            ...btnBase, padding: '8px 0', borderColor: 'var(--ac)',
+            color: generateDisabled ? 'var(--tx3)' : 'var(--ac)',
+            fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase' as const,
+            opacity: generateDisabled ? 0.4 : 1, cursor: generateDisabled ? 'default' : 'pointer',
+          }}
+        >
           GENERAR EJERCICIOS
         </button>
       )}
@@ -229,13 +359,84 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
             ))}
           </div>
 
-          {/* Regenerate */}
-          <button data-testid="btn-generate" onClick={generate} style={{
-            ...btnBase, width: '100%', padding: '4px 0',
-            color: 'var(--tx3)', fontSize: 10, marginBottom: 10,
-          }}>
-            ↺ REGENERAR
-          </button>
+          {/* Regenerate + PDF buttons */}
+          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
+            <button data-testid="btn-generate" onClick={generate} style={{
+              ...btnBase, flex: 1, padding: '4px 0',
+              color: 'var(--tx3)', fontSize: 10,
+            }}>
+              ↺ REGENERAR
+            </button>
+            <button data-testid="btn-pdf" onClick={() => setPdfOpen(true)} style={{
+              ...btnBase, padding: '4px 10px', borderColor: 'var(--ac)',
+              color: 'var(--ac)', fontSize: 10,
+            }}>
+              PDF
+            </button>
+          </div>
+
+          {/* ── Bloque 15: PDF panel ── */}
+          {pdfOpen && (
+            <div data-testid="pdf-panel" style={{
+              border: '1px solid var(--ln)', borderRadius: 6, padding: 12,
+              marginBottom: 10, background: 'var(--p2)',
+            }}>
+              <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 8, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' as const }}>
+                Tipos a incluir
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
+                {(['quiz', 'cloze', 'match'] as PdfType[]).map(t => (
+                  <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--tx)', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      data-testid={`pdf-type-${t}`}
+                      checked={pdfTypes.includes(t)}
+                      onChange={() => togglePdfType(t)}
+                    />
+                    {t === 'quiz' ? 'Quiz' : t === 'cloze' ? 'Fill-in' : 'Match'}
+                  </label>
+                ))}
+              </div>
+              <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 8, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' as const }}>
+                Versión
+              </div>
+              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                {(['student', 'teacher', 'both'] as PdfVersion[]).map(v => (
+                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--tx)', cursor: 'pointer' }}>
+                    <input
+                      type="radio"
+                      data-testid={`pdf-version-${v}`}
+                      name="pdf-version"
+                      checked={pdfVersion === v}
+                      onChange={() => setPdfVersion(v)}
+                    />
+                    {v === 'student' ? 'Alumno' : v === 'teacher' ? 'Profesor' : 'Ambas'}
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button
+                  data-testid="btn-pdf-confirm"
+                  disabled={pdfTypes.length === 0}
+                  onClick={downloadPdf}
+                  style={{
+                    ...btnBase, flex: 1, padding: '6px 0', borderColor: 'var(--ac)',
+                    color: pdfTypes.length === 0 ? 'var(--tx3)' : 'var(--ac)',
+                    fontSize: 10, textTransform: 'uppercase' as const,
+                    opacity: pdfTypes.length === 0 ? 0.4 : 1,
+                    cursor: pdfTypes.length === 0 ? 'default' : 'pointer',
+                  }}
+                >
+                  DESCARGAR
+                </button>
+                <button onClick={() => setPdfOpen(false)} style={{
+                  ...btnBase, padding: '6px 10px', color: 'var(--tx3)', fontSize: 10,
+                }}>
+                  ✕
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* ── Quiz ─────────────────────────────────────────────────────────── */}
           {drillTab === 'quiz' && (
@@ -270,8 +471,7 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
                                 isChosen && !isCorrect        ? 'var(--rd)'    :
                                 isCorrect                     ? 'rgba(45,184,122,0.18)' :
                                 'transparent',
-                              color:
-                                answered && (isChosen || isCorrect) ? '#fff' : 'var(--tx)',
+                              color: answered && (isChosen || isCorrect) ? '#fff' : 'var(--tx)',
                               fontSize: 11, cursor: answered ? 'default' : 'pointer',
                             }}
                           >
@@ -320,9 +520,7 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
                         width: 80, padding: '1px 4px',
                         border: '1px solid var(--ln)', borderRadius: 3,
                         background: 'var(--p3)',
-                        color: submitted
-                          ? (correct ? 'var(--gr)' : 'var(--rd)')
-                          : 'var(--tx)',
+                        color: submitted ? (correct ? 'var(--gr)' : 'var(--rd)') : 'var(--tx)',
                         fontSize: 12,
                       }}
                     />

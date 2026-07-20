@@ -35,3 +35,8 @@ export function resolveScope(phrases: Phrase[], scope: Scope): Phrase[] {
   }
   return phrases
 }
+
+// Bloque 15
+export type ExerciseMode = 'video' | 'topic' | 'both'
+export type PdfType    = 'quiz' | 'cloze' | 'match'
+export type PdfVersion = 'student' | 'teacher' | 'both'

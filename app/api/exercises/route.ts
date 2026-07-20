@@ -1,6 +1,7 @@
-// VE Drills (Bloque 14)
+// VE Drills (Bloque 14) — extended in Bloque 15
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
+import type { ExerciseMode } from '@/lib/exercises'
 
 export const maxDuration = 60
 
@@ -33,19 +34,57 @@ function validateSet(data: unknown): string | null {
   return null
 }
 
+function buildPrompt(mode: ExerciseMode, level: string, topic?: string, transcript?: string): string {
+  const base = `You are an English language teacher creating exercises for ${level} students. All exercise content must be in English.`
+
+  if (mode === 'video') {
+    return `${base}
+Use ONLY vocabulary and structures that appear in the transcript below. Do not introduce words or topics not present in the transcript.
+
+TRANSCRIPT:
+${transcript}
+
+Generate ${level}-level exercises based exclusively on the transcript above.`
+  }
+
+  if (mode === 'topic') {
+    return `${base}
+Generate ${level}-level exercises about the following topic.
+
+TOPIC: ${topic}`
+  }
+
+  // mode === 'both'
+  const transcriptSection = transcript
+    ? `\n\nSUPPORTING TRANSCRIPT (use for vocabulary and examples):\n${transcript}`
+    : ''
+  return `${base}
+Generate ${level}-level exercises focused on the following topic. Use vocabulary and examples from the transcript if provided.
+
+TOPIC: ${topic}${transcriptSection}`
+}
+
 export async function POST(req: NextRequest) {
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
 
   try {
-    const body             = await req.json()
-    const { phrases, level } = body
+    const body = await req.json()
+    const { phrases, level, mode = 'video' as ExerciseMode, topic } = body
 
-    if (!phrases || phrases.length === 0)
-      return NextResponse.json({ error: 'No phrases provided' }, { status: 400 })
+    // Mode-specific input validation
+    if (mode === 'video') {
+      if (!phrases || phrases.length === 0)
+        return NextResponse.json({ error: 'No phrases provided' }, { status: 400 })
+    } else {
+      if (!topic || !topic.trim())
+        return NextResponse.json({ error: 'No topic provided' }, { status: 400 })
+    }
 
     const client     = new Anthropic({ apiKey })
-    const transcript = (phrases as { text: string }[]).map(p => p.text).join('\n')
+    const transcript = phrases?.length
+      ? (phrases as { text: string }[]).map(p => p.text).join('\n')
+      : undefined
 
     const response = await client.messages.create({
       model:      'claude-sonnet-4-6',
@@ -102,16 +141,7 @@ export async function POST(req: NextRequest) {
         },
       }],
       tool_choice: { type: 'tool', name: 'build_exercises' },
-      messages: [{
-        role:    'user',
-        content: `You are an English language teacher creating exercises for ${level} students.
-Use ONLY vocabulary and structures that appear in the transcript below. Do not introduce words or topics not present in the transcript. All exercise content must be in English.
-
-TRANSCRIPT:
-${transcript}
-
-Generate ${level}-level exercises based exclusively on the transcript above.`,
-      }],
+      messages: [{ role: 'user', content: buildPrompt(mode, level, topic?.trim(), transcript) }],
     })
 
     const toolUse = response.content.find(b => b.type === 'tool_use')
