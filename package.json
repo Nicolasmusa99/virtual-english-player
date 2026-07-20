@@ -8,9 +8,11 @@
     "start": "next start",
     "test": "vitest run",
     "test:watch": "vitest",
-    "db:push": "dotenv -e .env.development.local -- drizzle-kit push"
+    "db:push": "dotenv -e .env.development.local -- drizzle-kit push",
+    "smoke:exercises": "dotenv -e .env.local -- node scripts/smoke-exercises.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.112.3",
     "@auth/drizzle-adapter": "^1.11.2",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.6.1",

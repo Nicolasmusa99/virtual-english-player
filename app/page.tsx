@@ -4,6 +4,7 @@ import styles from './page.module.css'
 import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
+import ExercisesPanel from './ExercisesPanel'
 import { StageChannel } from '@/lib/stageChannel'
 import { sessionKey, saveSession, loadSession } from '@/lib/session'
 import type { SessionData } from '@/lib/session'
@@ -89,6 +90,7 @@ export default function Player() {
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [librarySaving, setLibrarySaving]   = useState(false)
   const [libraryError, setLibraryError]     = useState('')
+  const [panelTab, setPanelTab]             = useState<'player' | 'exercises'>('player')
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -1127,6 +1129,25 @@ export default function Player() {
             </div>
 
             <div className={styles.panel}>
+              <div style={{ display: 'flex', borderBottom: '1px solid var(--ln)', flexShrink: 0 }}>
+                {(['player', 'exercises'] as const).map(t => (
+                  <button key={t} data-testid={`tab-${t}`} onClick={() => setPanelTab(t)} style={{
+                    flex: 1, padding: '8px 0', border: 'none',
+                    borderBottom: panelTab === t ? '2px solid var(--ac)' : '2px solid transparent',
+                    background: 'transparent',
+                    color: panelTab === t ? 'var(--ac)' : 'var(--tx3)',
+                    fontSize: 9, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                    letterSpacing: '1px', textTransform: 'uppercase' as const,
+                  }}>
+                    {t === 'player' ? 'Player' : 'Ejercicios'}
+                  </button>
+                ))}
+              </div>
+              {panelTab === 'exercises' ? (
+                <div style={{ flex: 1, overflowY: 'auto' as const }}>
+                  <ExercisesPanel phrases={phrases} videoFileName={videoFileName} />
+                </div>
+              ) : (
               <div className={styles.panelBody}>
                 <div className={styles.section}>
                   <div className={styles.secLabel}>Reproduciendo <span className={styles.secBadge}>⊘ Solo profesor</span></div>
@@ -1368,6 +1389,7 @@ export default function Player() {
                   ))}
                 </div>
               </div>
+              )}
             </div>
           </div>
 
