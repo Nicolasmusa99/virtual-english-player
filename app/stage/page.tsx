@@ -35,6 +35,14 @@ export default function Stage() {
           if (!msg.ccOn) { setSubVisible(false); setSubText('') }
           break
         }
+        // Fix stage + biblioteca: remote URL — set src directly, no ObjectURL needed
+        case 'load_url': {
+          v.src = msg.url
+          v.currentTime = msg.currentTime
+          v.playbackRate = msg.playbackRate
+          if (!msg.ccOn) { setSubVisible(false); setSubText('') }
+          break
+        }
         case 'play':    v.play().catch(() => {}); break
         case 'pause':   v.pause(); break
         case 'seek':    v.currentTime = msg.time; break

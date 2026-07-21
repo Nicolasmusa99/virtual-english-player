@@ -68,6 +68,22 @@ describe('Stage — TC-087', () => {
     expect(video.playbackRate).toBe(1.5)
   })
 
+  // TC-087f: Fix stage + biblioteca — load_url sets src, currentTime, playbackRate
+  it('TC-087f: comando load_url setea src, currentTime y playbackRate del video', async () => {
+    panel = new StageChannel()
+    const { container } = render(<Stage />)
+    const video = container.querySelector('video')!
+
+    await act(async () => {
+      panel.send({ type: 'load_url', url: 'https://cdn.example.com/vid.mp4', fileName: 'vid.mp4', currentTime: 7.5, playbackRate: 1.5, ccOn: true })
+      await tick(50)
+    })
+
+    expect(video.src).toBe('https://cdn.example.com/vid.mp4')
+    expect(video.currentTime).toBe(7.5)
+    expect(video.playbackRate).toBe(1.5)
+  })
+
   it('TC-087e: comando subtitle muestra texto en el overlay', async () => {
     panel = new StageChannel()
     const { container } = render(<Stage />)

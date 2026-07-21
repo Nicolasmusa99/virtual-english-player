@@ -223,6 +223,11 @@ export default function Player() {
     ch.send({ type: 'subtitle', text: ph ? ph.text : '', visible: ccOn && !!ph })
   }, [curIdx, ccOn, stageOpen])
 
+  // Close channel on unmount — prevents orphaned BroadcastChannel listeners
+  useEffect(() => {
+    return () => { if (channelRef.current) { channelRef.current.close(); channelRef.current = null } }
+  }, [])
+
   // ─── Keyboard shortcuts ───────────────────────────────────────────────────
   useEffect(() => {
     if (screen !== 'player') return
@@ -462,7 +467,8 @@ export default function Player() {
 
   // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
   function openStage() {
-    if (!videoFileRef.current) return
+    // Fix stage + biblioteca: allow remote library videos (videoUrl set, videoFileRef null)
+    if (!videoFileRef.current && !videoUrl) return
     const v           = vidRef.current
     const currentTime  = v?.currentTime  ?? 0
     const playbackRate = v?.playbackRate ?? SPEEDS[speedIdx]
@@ -476,14 +482,12 @@ export default function Player() {
     const unsub = ch.onMessage(msg => {
       switch (msg.type) {
         case 'ready':
-          ch.send({
-            type:        'load_blob',
-            blob:        videoFileRef.current!,
-            fileName:    videoFileName,
-            currentTime,
-            playbackRate,
-            ccOn:        ccRef.current,
-          })
+          if (videoFileRef.current) {
+            ch.send({ type: 'load_blob', blob: videoFileRef.current, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
+          } else {
+            // Fix stage + biblioteca: library video — send storageUrl instead of blob
+            ch.send({ type: 'load_url', url: videoUrl, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
+          }
           break
         case 'timeupdate': {
           const { currentTime: ct, duration, isPlaying: playing } = msg
@@ -1094,7 +1098,7 @@ export default function Player() {
                   {librarySaving ? 'Guardando...' : '📚 Guardar en biblioteca'}
                 </button>
               )}
-              <button className={styles.tbBtn} onClick={stageOpen ? () => closeStage(true) : openStage}>
+              <button className={styles.tbBtn} disabled={!stageOpen && !videoUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
                 {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
               </button>
               <button className={styles.tbBtn} onClick={handleExitAttempt}>← Cargar otro</button>

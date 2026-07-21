@@ -10,6 +10,7 @@
 
 export type PanelCmd =
   | { type: 'load_blob'; blob: Blob; fileName: string; currentTime: number; playbackRate: number; ccOn: boolean }
+  | { type: 'load_url';  url: string; fileName: string; currentTime: number; playbackRate: number; ccOn: boolean } // Fix stage + biblioteca
   | { type: 'play' }
   | { type: 'pause' }
   | { type: 'seek'; time: number }

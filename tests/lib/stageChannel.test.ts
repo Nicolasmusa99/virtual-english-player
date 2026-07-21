@@ -1,8 +1,9 @@
 import { describe, it, expect } from 'vitest'
 import { StageChannel } from '@/lib/stageChannel'
 
-// BroadcastChannel in jsdom delivers messages as tasks — flush with this helper
-function tick() { return new Promise<void>(resolve => setTimeout(resolve, 0)) }
+// BroadcastChannel in jsdom delivers messages as macrotasks — 0 ms is non-deterministic
+// under load; 10 ms is enough to flush without being slow.
+function tick() { return new Promise<void>(resolve => setTimeout(resolve, 10)) }
 
 // Unique channel name per test run to avoid cross-test interference
 const CH = 've-stage-test'
@@ -104,6 +105,25 @@ describe('StageChannel', () => {
     expect(msg.currentTime).toBe(3.5)
     expect(msg.playbackRate).toBe(1.25)
     expect(msg.ccOn).toBe(false)
+
+    unsub(); cleanup()
+  })
+
+  it('entrega load_url con todos los campos del mensaje', async () => {
+    const { a, b, cleanup } = pair()
+    const received: unknown[] = []
+    const unsub = b.onMessage(msg => received.push(msg))
+
+    a.send({ type: 'load_url', url: 'https://cdn.example.com/vid.mp4', fileName: 'vid.mp4', currentTime: 5.0, playbackRate: 1.0, ccOn: true })
+    await tick()
+
+    const msg = received[0] as { type: string; url: string; fileName: string; currentTime: number; playbackRate: number; ccOn: boolean }
+    expect(msg.type).toBe('load_url')
+    expect(msg.url).toBe('https://cdn.example.com/vid.mp4')
+    expect(msg.fileName).toBe('vid.mp4')
+    expect(msg.currentTime).toBe(5.0)
+    expect(msg.playbackRate).toBe(1.0)
+    expect(msg.ccOn).toBe(true)
 
     unsub(); cleanup()
   })
