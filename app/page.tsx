@@ -6,6 +6,8 @@ import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
 import { StageChannel } from '@/lib/stageChannel'
+import { ExercisesChannel } from '@/lib/exercisesChannel'
+import { resolveScope } from '@/lib/exercises'
 import { sessionKey, saveSession, loadSession } from '@/lib/session'
 import type { SessionData } from '@/lib/session'
 import { useSession, signIn, signOut } from 'next-auth/react'
@@ -43,8 +45,12 @@ export default function Player() {
   const stageDurationRef      = useRef(0)
   const pendingRestoreTimeRef = useRef<number | null>(null)
 
+  // ─── Exercises window refs ────────────────────────────────────────────────
+  const exercisesChannelRef      = useRef<ExercisesChannel | null>(null)
+  const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
+
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises'>('load')
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -74,6 +80,7 @@ export default function Player() {
   const [isPlaying, setIsPlaying]         = useState(false)
   const [vol, setVol]                     = useState(100)
   const [stageOpen, setStageOpen]         = useState(false)
+  const [exercisesOpen, setExercisesOpen] = useState(false)
   // US-023/024/025 persistence state
   const [isDirty, setIsDirty]             = useState(false)
   const [restorePrompt, setRestorePrompt] = useState<SessionData | null>(null)
@@ -546,6 +553,41 @@ export default function Player() {
     }
   }
 
+  // ─── Exercises window (US-055) ────────────────────────────────────────────
+  function openExercisesWindow() {
+    // Snapshot at open time — use the player's current display filter as scope
+    const scope = filter
+    const filtered = resolveScope(phrases, scope)
+    const ch = new ExercisesChannel()
+    exercisesChannelRef.current = ch
+
+    const unsub = ch.onMessage(msg => {
+      if (msg.type === 'ready') {
+        ch.send({ type: 'load_phrases', phrases: filtered.map(p => p.text), level: 'intermediate', fileName: videoFileName, scope })
+      } else if (msg.type === 'closed') {
+        closeExercisesWindow(false)
+      }
+    })
+    exercisesChannelUnsubRef.current = unsub
+
+    setExercisesOpen(true)
+    window.open('/exercises-window', '_blank', 'width=900,height=700,menubar=no,toolbar=no,location=no,status=no')
+    capture('exercises_generator_window_opened', { scope, phrase_count: filtered.length })
+  }
+
+  function closeExercisesWindow(sendClose = true) {
+    const ch = exercisesChannelRef.current
+    if (ch) {
+      if (sendClose) ch.send({ type: 'close' })
+      exercisesChannelUnsubRef.current?.()
+      exercisesChannelUnsubRef.current = null
+      ch.close()
+      exercisesChannelRef.current = null
+    }
+    setExercisesOpen(false)
+  }
+
+
   // ─── File handling ────────────────────────────────────────────────────────
   function handleFiles(files: File[]) {
     let vf: File | null = null, sf: File | null = null  // eslint-disable-line
@@ -971,6 +1013,10 @@ export default function Player() {
       {screen === 'load' && (
         <div className={styles.loadScreen}>
           <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
+            <button className={styles.tbBtn} onClick={() => {
+              setScreen('exercises')
+              capture('exercises_section_opened', { has_session: authStatus === 'authenticated' })
+            }}>Armar ejercicios</button>
             {authStatus === 'authenticated' ? (
               <>
                 <button className={styles.tbBtn} onClick={() => { setScreen('library'); fetchLibrary() }}>📚 Mi biblioteca</button>
@@ -1055,6 +1101,18 @@ export default function Player() {
         </div>
       )}
 
+      {screen === 'exercises' && (
+        <div className={styles.loadScreen}>
+          <div style={{ position: 'absolute', top: 16, right: 16 }}>
+            <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
+          </div>
+          <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Ejercicios</div>
+          <div style={{ width: '100%', maxWidth: 500 }}>
+            <ExercisesPanel phrases={[]} videoFileName="" singleMode="topic" />
+          </div>
+        </div>
+      )}
+
       {screen === 'library' && (
         <div className={styles.loadScreen}>
           <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Player</div>
@@ -1098,6 +1156,11 @@ export default function Player() {
                   {librarySaving ? 'Guardando...' : '📚 Guardar en biblioteca'}
                 </button>
               )}
+              <button className={styles.tbBtn} data-testid="btn-open-exercises"
+                disabled={phrases.length === 0}
+                onClick={exercisesOpen ? () => closeExercisesWindow(true) : openExercisesWindow}>
+                {exercisesOpen ? '✕ Cerrar generador' : '⊞ Abrir generador'}
+              </button>
               <button className={styles.tbBtn} disabled={!stageOpen && !videoUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
                 {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
               </button>
@@ -1149,7 +1212,13 @@ export default function Player() {
               </div>
               {panelTab === 'exercises' ? (
                 <div style={{ flex: 1, overflowY: 'auto' as const }}>
-                  <ExercisesPanel phrases={phrases} videoFileName={videoFileName} />
+                  {exercisesOpen ? (
+                    <div data-testid="exercises-open-hint" style={{ padding: 20, color: 'var(--tx3)', fontSize: 12, textAlign: 'center' as const }}>
+                      El generador está abierto en otra ventana.
+                    </div>
+                  ) : (
+                    <ExercisesPanel phrases={phrases} videoFileName={videoFileName} singleMode="video" />
+                  )}
                 </div>
               ) : (
               <div className={styles.panelBody}>

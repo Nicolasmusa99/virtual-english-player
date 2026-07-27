@@ -10,13 +10,14 @@ import { capture } from '@/lib/capture'
 interface Props {
   phrases: Phrase[]
   videoFileName: string
+  singleMode?: ExerciseMode
 }
 
 type DrillTab = 'quiz' | 'cloze' | 'match'
 
-export default function ExercisesPanel({ phrases, videoFileName }: Props) {
+export default function ExercisesPanel({ phrases, videoFileName, singleMode }: Props) {
   // ── source / generation state ────────────────────────────────────────────
-  const [mode, setMode]           = useState<ExerciseMode>(phrases.length > 0 ? 'video' : 'topic')
+  const [mode, setMode]           = useState<ExerciseMode>(singleMode ?? (phrases.length > 0 ? 'video' : 'topic'))
   const [topic, setTopic]         = useState('')
   const [level, setLevel]         = useState<Level>('intermediate')
   const [scope, setScope]         = useState<Scope>('all')
@@ -228,25 +229,27 @@ export default function ExercisesPanel({ phrases, videoFileName }: Props) {
   return (
     <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
 
-      {/* ── Bloque 15: Source mode selector ── */}
-      <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
-        {(['video', 'topic', 'both'] as ExerciseMode[]).map(m => (
-          <button
-            key={m}
-            data-testid={`mode-${m}`}
-            data-active={mode === m ? 'true' : 'false'}
-            onClick={() => handleModeChange(m)}
-            style={{
-              ...btnBase, padding: '3px 8px', fontSize: 10,
-              textTransform: 'uppercase' as const,
-              background: mode === m ? 'var(--ac)' : 'transparent',
-              color: mode === m ? '#1a1a1a' : 'var(--tx3)',
-            }}
-          >
-            {m === 'video' ? 'Video' : m === 'topic' ? 'Tópico' : 'Ambos'}
-          </button>
-        ))}
-      </div>
+      {/* ── Bloque 15: Source mode selector (hidden when singleMode locks the mode) ── */}
+      {!singleMode && (
+        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
+          {(['video', 'topic', 'both'] as ExerciseMode[]).map(m => (
+            <button
+              key={m}
+              data-testid={`mode-${m}`}
+              data-active={mode === m ? 'true' : 'false'}
+              onClick={() => handleModeChange(m)}
+              style={{
+                ...btnBase, padding: '3px 8px', fontSize: 10,
+                textTransform: 'uppercase' as const,
+                background: mode === m ? 'var(--ac)' : 'transparent',
+                color: mode === m ? '#1a1a1a' : 'var(--tx3)',
+              }}
+            >
+              {m === 'video' ? 'Video' : m === 'topic' ? 'Tópico' : 'Ambos'}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* ── Bloque 15: Topic input (visible when mode !== video) ── */}
       {mode !== 'video' && (

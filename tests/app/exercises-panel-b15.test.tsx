@@ -87,28 +87,30 @@ describe('TC-113 — default source mode', () => {
 })
 
 // ── TC-112: generate disabled when topic empty ──────────────────────────────
+// Note: tested on ExercisesPanel directly because the Player renders it with
+// singleMode="video" (Bloque 16) which hides the mode selector.
 
 describe('TC-112 — generate disabled when topic empty', () => {
   afterEach(() => vi.restoreAllMocks())
 
   it('switching to topic mode and leaving topic empty disables generate button', async () => {
-    const { container } = render(<Player />)
-    await loadPlayer(container)
-    await openExercisesTab(container)
+    const phrases: Phrase[] = [{ start: 0, end: 1, text: 'Hello world', sel: false }]
+    const { container } = render(
+      <ExercisesPanel phrases={phrases} videoFileName="test.mp4" />
+    )
 
-    // switch to topic mode
     const topicModeBtn = container.querySelector('[data-testid="mode-topic"]') as HTMLButtonElement
     await act(async () => { fireEvent.click(topicModeBtn) })
 
-    // topic input should be empty → generate disabled
     const genBtn = container.querySelector('[data-testid="btn-generate"]') as HTMLButtonElement
     expect(genBtn.disabled).toBe(true)
   })
 
   it('typing a topic enables the generate button', async () => {
-    const { container } = render(<Player />)
-    await loadPlayer(container)
-    await openExercisesTab(container)
+    const phrases: Phrase[] = [{ start: 0, end: 1, text: 'Hello world', sel: false }]
+    const { container } = render(
+      <ExercisesPanel phrases={phrases} videoFileName="test.mp4" />
+    )
 
     const topicModeBtn = container.querySelector('[data-testid="mode-topic"]') as HTMLButtonElement
     await act(async () => { fireEvent.click(topicModeBtn) })
