@@ -11,9 +11,9 @@ if (typeof window !== 'undefined') {
 // app/page.tsx calls useSession() unconditionally (Bloque 13 — biblioteca).
 // Component tests render <Player /> in isolation, without app/layout.tsx's
 // <SessionProvider>, so next-auth/react throws unless it's mocked globally here.
-// Defaults to logged-out so existing tests (written pre-biblioteca) keep seeing
-// the same load/player screens; library-specific tests override via useSessionMock.
-export const useSessionMock = vi.fn((): { data: unknown; status: string } => ({ data: null, status: 'unauthenticated' }))
+// Default is authenticated because the load screen now requires login (gate de login).
+// Tests that specifically verify unauthenticated behavior must set status explicitly.
+export const useSessionMock = vi.fn((): { data: unknown; status: string } => ({ data: { user: { email: 'test@example.com' } }, status: 'authenticated' }))
 export const signInMock = vi.fn()
 export const signOutMock = vi.fn()
 

@@ -199,3 +199,48 @@
 .modeBtn:disabled { opacity: 0.35; cursor: not-allowed; }
 .modeBtnAct { background: var(--ac2); border-color: var(--ac3); color: var(--ac); }
 .modeBtnAct:hover { background: var(--ac); color: #111; border-color: var(--ac); }
+
+/* ── WELCOME SCREEN (load, unauthenticated) — Rediseño visual ── */
+.welcomeScreen {
+  position: fixed; inset: 0; overflow: hidden;
+  background: #F7F3EC;
+  background-image:
+    radial-gradient(ellipse at 15% 15%, rgba(61,107,92,.04) 0%, transparent 60%),
+    radial-gradient(ellipse at 85% 85%, rgba(232,197,71,.06) 0%, transparent 60%);
+  display: flex; align-items: center; justify-content: center;
+}
+.wWordmark {
+  position: absolute; top: 20px; left: 20px;
+  display: flex; align-items: center; gap: 7px;
+  font-family: var(--font-jb-mono, 'JetBrains Mono', monospace);
+  font-size: 12px; color: #6B6355; user-select: none;
+}
+.wWordmarkDot { width: 7px; height: 7px; border-radius: 50%; background: #E8C547; flex-shrink: 0; }
+.wCenter { display: flex; flex-direction: column; align-items: center; gap: 24px; }
+.wIsotipo {
+  width: 56px; height: 56px; border-radius: 16px; background: #3D6B5C;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-fraunces, 'Fraunces', serif);
+  font-size: 27px; font-weight: 600; color: #E8C547;
+}
+.wTitle {
+  font-family: var(--font-fraunces, 'Fraunces', serif);
+  font-size: 40px; font-weight: 500; color: #2B2620;
+  letter-spacing: -0.015em; text-align: center; line-height: 1.1; margin: 0;
+}
+.wHighlightWrap { position: relative; display: inline-block; isolation: isolate; }
+.wHighlightWrap::after {
+  content: ''; position: absolute; left: -2px; right: -2px; bottom: 2px;
+  height: 12px; background: rgba(232,197,71,.42);
+  border-radius: 3px 8px 4px 9px / 6px 3px 8px 4px; z-index: -1;
+}
+.wSignInBtn {
+  display: flex; align-items: center; gap: 10px;
+  padding: 13px 28px; border-radius: 12px; border: none;
+  background: #3D6B5C; color: #fff;
+  font-family: var(--font-public-sans, 'Public Sans', sans-serif);
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+.wSignInBtn:hover { background: #2C4F43; }
+.wSignInBtn:active { transform: scale(0.98); }
