@@ -24,6 +24,8 @@ type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5]
 const SIZE_WARN_MB = 200
+const SECTION_SECONDS = 2   // duración (s) de cada sección dentro de una frase (programable)
+const NAV_HOLD_MS     = 450 // ms entre frase y frase al mantener ← / → presionada
 
 export default function Player() {
   // ─── DOM refs ────────────────────────────────────────────────────────────
@@ -44,6 +46,7 @@ export default function Player() {
   const lastStageTimeRef      = useRef(0)
   const stageDurationRef      = useRef(0)
   const pendingRestoreTimeRef = useRef<number | null>(null)
+  const navHoldRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // ─── Exercises window refs ────────────────────────────────────────────────
   const exercisesChannelRef      = useRef<ExercisesChannel | null>(null)
@@ -236,22 +239,38 @@ export default function Player() {
   }, [])
 
   // ─── Keyboard shortcuts ───────────────────────────────────────────────────
+  // Esquema por flechas (2026-09-03): →/← navegan frases (con barrido al
+  // mantener), ↓ reinicia la frase, ↑ salta al inicio de la sección actual.
+  // A/D/R/W eliminadas; el volumen queda solo por el slider (US-010).
   useEffect(() => {
     if (screen !== 'player') return
+    const stopHold = () => { if (navHoldRef.current) { clearInterval(navHoldRef.current); navHoldRef.current = null } }
+    const startHold = (step: () => boolean) => {
+      if (navHoldRef.current) return          // ya corriendo → no arrancar dos
+      if (!step()) return                     // paso inmediato; si ya está en el extremo, no loop
+      navHoldRef.current = setInterval(() => { if (!step()) stopHold() }, NAV_HOLD_MS) // frená en el borde
+    }
     const onKey = (e: KeyboardEvent) => {
       if ((e.target as HTMLElement).tagName === 'INPUT') return
       switch (e.key) {
-        case ' ':          e.preventDefault(); togglePlay();  break
-        case 'ArrowLeft':  case 'a': case 'A': e.preventDefault(); prevPhrase();  break
-        case 'ArrowRight': case 'd': case 'D': e.preventDefault(); nextPhrase();  break
-        case 'w': case 'W': e.preventDefault(); microRepeat(); break
-        case 'r': case 'R': e.preventDefault(); repeatPhrase(); break
-        case 'ArrowUp':   e.preventDefault(); if (vidRef.current) vidRef.current.volume = Math.min(1, vidRef.current.volume + 0.1); break
-        case 'ArrowDown': e.preventDefault(); if (vidRef.current) vidRef.current.volume = Math.max(0, vidRef.current.volume - 0.1); break
+        case ' ':          e.preventDefault(); togglePlay(); break
+        case 'ArrowRight': e.preventDefault(); if (!e.repeat) startHold(nextPhrase); break
+        case 'ArrowLeft':  e.preventDefault(); if (!e.repeat) startHold(prevPhrase); break
+        case 'ArrowDown':  e.preventDefault(); if (!e.repeat) repeatPhrase(); break
+        case 'ArrowUp':    e.preventDefault(); if (!e.repeat) sectionJump();  break
       }
     }
+    const onKeyUp = (e: KeyboardEvent) => { if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') stopHold() }
+    const onBlur = () => stopHold()
     window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keyup', onKeyUp)
+    window.addEventListener('blur', onBlur)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      window.removeEventListener('keyup', onKeyUp)
+      window.removeEventListener('blur', onBlur)
+      stopHold()   // sin intervalos colgados al desmontar / cambiar de screen
+    }
   }, [screen])
 
   // ─── Scroll active phrase into view ──────────────────────────────────────
@@ -303,25 +322,24 @@ export default function Player() {
     if (vidRef.current) vidRef.current.currentTime = time
   }
 
-  function prevPhrase() {
+  // Devuelven true si el índice cambió (para frenar el barrido en los extremos).
+  function prevPhrase(): boolean {
     const ps = phrasesRef.current
     const cur = curIdxRef.current
-    if (practiceModeRef.current) {
-      const idx = [...ps].slice(0, cur).map((p, i) => ({ p, i })).filter(x => x.p.sel).pop()?.i ?? cur
-      jumpTo(idx)
-    } else {
-      jumpTo(Math.max(0, cur - 1))
-    }
+    const idx = practiceModeRef.current
+      ? ([...ps].slice(0, cur).map((p, i) => ({ p, i })).filter(x => x.p.sel).pop()?.i ?? cur)
+      : Math.max(0, cur - 1)
+    jumpTo(idx)
+    return idx !== cur
   }
-  function nextPhrase() {
+  function nextPhrase(): boolean {
     const ps = phrasesRef.current
     const cur = curIdxRef.current
-    if (practiceModeRef.current) {
-      const idx = ps.findIndex((p, i) => p.sel && i > cur)
-      jumpTo(idx !== -1 ? idx : cur)
-    } else {
-      jumpTo(Math.min(ps.length - 1, cur + 1))
-    }
+    const idx = practiceModeRef.current
+      ? (() => { const f = ps.findIndex((p, i) => p.sel && i > cur); return f !== -1 ? f : cur })()
+      : Math.min(ps.length - 1, cur + 1)
+    jumpTo(idx)
+    return idx !== cur
   }
 
   function repeatPhrase() {
@@ -331,16 +349,16 @@ export default function Player() {
     if (vidRef.current) vidRef.current.currentTime = time
   }
 
-  function microRepeat() {
+  // ↑ — salto al inicio de la sección (grilla fija de SECTION_SECONDS desde
+  // phrase.start). Si ya está en el primer tramo, vuelve a phrase.start.
+  function sectionJump() {
     if (curIdxRef.current < 0) return
-    const phraseStart = phrasesRef.current[curIdxRef.current]?.start ?? 0
-    if (stageOpenRef.current) {
-      channelRef.current?.send({ type: 'seek', time: Math.max(phraseStart, lastStageTimeRef.current - 2) })
-      return
-    }
-    if (!vidRef.current) return
-    vidRef.current.currentTime = Math.max(phraseStart, vidRef.current.currentTime - 2)
-    setSubVisible(false); setTimeout(() => setSubVisible(true), 80)
+    const ph = phrasesRef.current[curIdxRef.current]; if (!ph) return
+    const base = stageOpenRef.current ? lastStageTimeRef.current : (vidRef.current?.currentTime ?? ph.start)
+    const rel = Math.max(0, base - ph.start)
+    const target = Math.min(ph.end, ph.start + Math.floor(rel / SECTION_SECONDS) * SECTION_SECONDS)
+    if (stageOpenRef.current) { channelRef.current?.send({ type: 'seek', time: target }); return }
+    if (vidRef.current) vidRef.current.currentTime = target
   }
 
   function toggleSel(idx: number) {
@@ -1309,13 +1327,9 @@ export default function Player() {
                     </button>
                   </div>
                   <div className={styles.microGrid}>
-                    <button className={`${styles.mcBtn} ${styles.mcBl}`} onClick={microRepeat}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 .49-3.5" /></svg>
-                      Micro-rep.<span className={styles.kc}>W</span>
-                    </button>
                     <button className={styles.mcBtn} onClick={repeatPhrase}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
-                      Repetir<span className={styles.kc}>R</span>
+                      Reiniciar<span className={styles.kc}>↓</span>
                     </button>
                   </div>
                 </div>
@@ -1477,7 +1491,7 @@ export default function Player() {
                 </div>
 
                 <div className={styles.kbHint}>
-                  {[['Spc', 'Play'], ['A', '← Frase'], ['D', 'Frase →'], ['W', 'Micro'], ['R', 'Repetir']].map(([k, l]) => (
+                  {[['Spc', 'Play'], ['←', 'Frase ant.'], ['→', 'Frase sig.'], ['↓', 'Reiniciar'], ['↑', 'Sección']].map(([k, l]) => (
                     <span key={k} className={styles.kbItem}><span className={styles.kbKey}>{k}</span>{l}</span>
                   ))}
                 </div>

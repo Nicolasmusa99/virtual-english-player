@@ -209,7 +209,7 @@ describe('US-027 — modo práctica', () => {
 
     // "Siguiente frase" — en práctica debe ir a p2 (start=7), no a p1 (start=4)
     await act(async () => {
-      fireEvent.keyDown(document.body, { key: 'D' })
+      fireEvent.keyDown(document.body, { key: 'ArrowRight' })
       await tick(60)
     })
 
@@ -238,9 +238,9 @@ describe('US-027 — modo práctica', () => {
     // Posicionarse en frase 0 via timeupdate del stage
     await sendTimeUpdate(mockStage, 1.5)
 
-    // "Siguiente frase" con teclado 'D'
+    // "Siguiente frase" con teclado (ArrowRight)
     await act(async () => {
-      fireEvent.keyDown(document.body, { key: 'D' })
+      fireEvent.keyDown(document.body, { key: 'ArrowRight' })
       await tick(60)
     })
 
