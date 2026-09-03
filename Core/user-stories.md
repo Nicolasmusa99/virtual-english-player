@@ -328,6 +328,12 @@ Math.max(0, v.volume - 0.1).
 
 - Los atajos ↑/↓ son no-op cuando un \<input\> está enfocado.
 
+- **[Corregida 2026-09-03]** Los atajos de teclado ↑/↓ para volumen se
+  **eliminaron** al reasignar las flechas al nuevo esquema de navegación
+  (↑ = salto de sección, ↓ = reiniciar frase; ver US-011/012/056). El
+  volumen queda **solo por el slider** (`app/page.tsx:238-267`). El slider
+  y su regla de 0–100 no cambian.
+
 ### **Bloque 4 — Navegación de frases**
 
 #### **US-011 — Navegación entre frases**
@@ -362,6 +368,15 @@ UC-04 Al cambiar curIdx, un useEffect hace scroll suave al elemento
 
 - Los atajos son no-op cuando un \<input\> está enfocado.
 
+- **[Corregida 2026-09-03]** La navegación por teclado es ahora **solo por
+  flechas**: → = siguiente, ← = anterior. Las teclas **A y D se eliminaron**
+  (no quedan como alias). Además, **mantener presionada** → o ← activa un
+  **barrido continuo** frase a frase por un loop propio (`setInterval` a
+  `NAV_HOLD_MS = 450 ms`, `app/page.tsx:238-267`), que ignora el
+  auto-repeat del OS (`e.repeat`), respeta los límites (no pasa de la
+  primera/última) y se corta en `keyup`, `blur`, cambio de pantalla o
+  desmontaje. Los botones "Anterior"/"Siguiente" no cambian.
+
 #### **US-012 — Repetir frase actual**
 
 COMO profesor\
@@ -383,6 +398,11 @@ pausar.
   todavía).
 
 - El atajo R es no-op si un \<input\> está enfocado.
+
+- **[Corregida 2026-09-03]** El atajo cambió de **R** a **↓** (ArrowDown);
+  la tecla R se eliminó. La función `repeatPhrase()` y el botón (renombrado
+  a "Reiniciar", con badge ↓) no cambian su comportamiento
+  (`app/page.tsx:238-267`, botón en la leyenda del panel).
 
 #### **US-013 — Micro-repetición (retroceso de 2 s)**
 
@@ -410,6 +430,13 @@ en true tras 80 ms.
   es null.
 
 - El atajo W es no-op si un \<input\> está enfocado.
+
+- **[Corregida 2026-09-03]** La micro-repetición fue **eliminada por
+  completo**: se removieron la tecla **W**, el botón "Micro-rep." del panel
+  y la función `microRepeat()`. Su rol de "escuchar el último tramo sin
+  reiniciar la frase" quedó **reemplazado por el salto de sección** de la
+  tecla ↑ (grilla fija programable), documentado en **US-056**. La US-013 se
+  conserva como histórico de la feature original.
 
 ### **Bloque 5 — Subtítulos**
 
@@ -1688,6 +1715,45 @@ a la regla de US-040).
 - El ternario "Iniciar sesión" de `app/page.tsx:1045-1047` es código
   muerto (rama inalcanzable): la pantalla de carga ya exige sesión.
 
+### **Bloque 18 — Salto por sección dentro de la frase**
+
+*Agregado 2026-09-03. Reemplaza la micro-repetición (US-013) por una grilla
+de secciones de duración fija, navegable con la tecla ↑.*
+
+#### **US-056 — Salto al inicio de la sección con ↑**
+
+COMO profesor\
+QUIERO volver al inicio de la sección actual dentro de la frase con la
+tecla ↑\
+PARA que el alumno reescuche un tramo corto y parejo sin reiniciar toda la
+frase ni retroceder un valor fijo de segundos
+
+**Casos de uso**
+
+UC-01 El profesor presiona ↑ (sin input enfocado): se llama a
+`sectionJump()` (`app/page.tsx`).\
+UC-02 La frase se subdivide en secciones de duración fija desde
+`phrase.start`, cada una de `SECTION_SECONDS` (por defecto 2 s). El destino
+es el inicio de la sección que contiene el `currentTime` actual:
+`section_start = phrase.start + Math.floor((currentTime - phrase.start) / SECTION_SECONDS) * SECTION_SECONDS`,
+acotado a `[phrase.start, phrase.end]`.\
+UC-03 Si el `currentTime` ya está en el primer tramo, ↑ vuelve a
+`phrase.start`.\
+UC-04 Con el stage abierto, el salto se envía como `seek` por el canal
+(igual que la navegación de frases), usando `lastStageTimeRef` como tiempo
+base.
+
+**Reglas**
+
+- La grilla es **automática y pareja** desde `phrase.start`; no hay marcas
+  manuales.
+
+- `SECTION_SECONDS` es una **constante configurable** declarada arriba de
+  `app/page.tsx` (`const SECTION_SECONDS = 2`).
+
+- `sectionJump()` es no-op si `curIdxRef.current < 0` o no hay frase
+  activa, y no-op si un \<input\> está enfocado.
+
 ### **Enmiendas a reglas existentes**
 
 **US-016 (Ajuste de delay de subtítulos):** se define un límite al
@@ -1703,3 +1769,10 @@ anotada en la propia US-040.
 GB se aplica en servidor; la expiración automática sigue sin implementar
 (consistente con el "fuera de alcance" de su UC-02).
 `VIDEO_RETENTION_DAYS` está definido pero no se usa.
+
+**US-010/011/012/013 (Teclado del player) — [Corregida 2026-09-03]:** nuevo
+esquema por flechas. →/← navegan (con barrido al mantener, `NAV_HOLD_MS`),
+↓ reinicia la frase, ↑ salta a la sección (US-056). Se eliminaron A, D, R,
+W, la micro-repetición completa (US-013) y el volumen por teclado (US-010,
+queda el slider). Código en `app/page.tsx:238-267`; constantes
+`SECTION_SECONDS` y `NAV_HOLD_MS`.

@@ -170,6 +170,11 @@ or SRT parse). **Screen:** SCR-005
 **Trigger:** jumpTo() is called via “Anterior”/“Siguiente” buttons or
 A/D keys. **Screen:** SCR-005
 
+> **[Corregida 2026-09-03]** Sigue **[No implementado]** (no hay
+> `capture()` real). Si se cablea, el disparador ya no son las teclas A/D
+> sino **→/←** (y el barrido al mantener); ver US-011 [Corregida]. No se
+> agregó instrumentación para no crear un evento sin `capture()`.
+
 | **Property** | **Type** | **Description**        |
 |:-------------|----------|------------------------|
 | direction    | string   | “prev” or “next”       |

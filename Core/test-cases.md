@@ -1226,3 +1226,101 @@ locales. **Preconditions:** video local + stage. **Steps:**
 1.  Abrir stage con un video local. **Expected result:** `load_blob` +
     `URL.createObjectURL`. **Type:** Integration
     *(`tests/app/stage-library.test.tsx`)*
+
+------------------------------------------------------------------------
+
+## Enmienda — nuevo esquema de teclas del player (2026-09-03)
+
+Cubre el remapeo por flechas (US-011/012/013 [Corregida] + US-056).
+Tests reales en `tests/app/keyboard-nav.test.tsx`.
+
+## TC-143 — → avanza una frase (US-011)
+
+**Description:** Una pulsación de ArrowRight avanza a la frase siguiente.
+**Preconditions:** player con 4 frases, frase activa = 1. **Steps:**
+
+1.  `keyDown` ArrowRight. **Expected result:** contador "2 / 4";
+    `currentTime` cerca de `phrase[1].start`. **Type:** Component
+
+## TC-144 — ← retrocede una frase (US-011)
+
+**Description:** Una pulsación de ArrowLeft retrocede una frase.
+**Preconditions:** frase activa = 2. **Steps:**
+
+1.  `keyDown` ArrowLeft. **Expected result:** contador "1 / 4". **Type:**
+    Component
+
+## TC-145 — mantener → repite y frena al soltar (US-011)
+
+**Description:** Mantener ArrowRight dispara el paso repetidamente
+(`NAV_HOLD_MS`) y se detiene en `keyup`. **Preconditions:** player con 4
+frases. **Steps:**
+
+1.  `keyDown` ArrowRight y esperar ~1 s. **Expected result:** el seek se
+    invoca ≥2 veces (inmediato + intervalo).
+2.  `keyUp` ArrowRight y esperar. **Expected result:** no hay más
+    invocaciones (el intervalo se limpió). **Type:** Component *(en jsdom
+    se mide por invocaciones al seek, no por el índice visible)*
+
+## TC-146 — mantener ← repite en reversa y frena al soltar (US-011)
+
+**Description:** Igual que TC-145 pero con ArrowLeft. **Preconditions:**
+player con 4 frases. **Steps:**
+
+1.  `keyDown` ArrowLeft ~1 s → seek ≥2 veces.
+2.  `keyUp` → se detiene. **Type:** Component
+
+## TC-147 — ↓ reinicia la frase actual (US-012)
+
+**Description:** ArrowDown lleva el `currentTime` a `phrase.start`.
+**Preconditions:** frase activa = 1, `currentTime` avanzado dentro de
+ella. **Steps:**
+
+1.  `keyDown` ArrowDown. **Expected result:** `currentTime` ≈
+    `phrase[1].start` (+0.05). **Type:** Component
+
+## TC-148 — ↑ salta al inicio de la sección (US-056)
+
+**Description:** ArrowUp lleva al inicio de la sección
+(`SECTION_SECONDS = 2`); si ya está en el primer tramo, a `phrase.start`.
+**Preconditions:** frase larga (0–10 s). **Steps:**
+
+1.  Con `currentTime = 5.3`, `keyDown` ArrowUp. **Expected result:**
+    `currentTime = 4`.
+2.  Con `currentTime = 1.2`, `keyDown` ArrowUp. **Expected result:**
+    `currentTime = 0` (`phrase.start`). **Type:** Component
+
+## TC-149 — A, D, R, W son no-op (US-011/012/013)
+
+**Description:** Las teclas eliminadas no navegan ni tocan el tiempo.
+**Preconditions:** frase activa = 2. **Steps:**
+
+1.  `keyDown` a/A/d/D/r/R/w/W. **Expected result:** contador "2 / 4" y
+    `currentTime` sin cambios. **Type:** Component
+
+## TC-150 — atajos no-op con foco en \<input\> (US-011)
+
+**Description:** Con el foco en un input, las flechas no navegan.
+**Preconditions:** frase activa = 2. **Steps:**
+
+1.  `keyDown` ArrowRight con `target` = input. **Expected result:**
+    contador "2 / 4" (sin cambio). **Type:** Component
+
+## TC-151 — sin intervalos colgados al desmontar (US-011)
+
+**Description:** Al desmontar el player durante un barrido, el intervalo
+se limpia. **Preconditions:** ArrowRight mantenida (intervalo activo).
+**Steps:**
+
+1.  `unmount()`. **Expected result:** `clearInterval` se invoca en el
+    cleanup. **Type:** Component
+
+## TC-152 — el barrido frena en los extremos (US-011)
+
+**Description:** Mantener → en la última frase (o ← en la primera) no
+arranca el auto-repeat. **Preconditions:** frase activa en un extremo.
+**Steps:**
+
+1.  `keyDown` ArrowRight en la última (y ArrowLeft en la primera) ~1 s.
+    **Expected result:** el seek se invoca a lo sumo una vez (re-seek
+    inmediato); no hay intervalo. **Type:** Component
