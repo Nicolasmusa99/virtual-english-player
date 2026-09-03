@@ -232,12 +232,15 @@ phrases\[0\].end. **Steps:**
 
 ## TC-025 — Content words are highlighted in subtitle (US-009)
 
-**Description:** Verify hl() wraps content words in amber .
-**Preconditions:** N/A (unit test on lib/hl.tsx). **Steps:**
+**Description:** ~~Verify hl() wraps content words in amber.~~ **[Corregida
+2026-09-03]** El resaltado ámbar se eliminó (US-014): `hl()` ya no aplica
+color; los subtítulos se renderizan en blanco. **Preconditions:** N/A (unit
+test on lib/hl.tsx). **Steps:**
 
-1.  Call hl(“the quick brown fox”). **Expected result:** “the” is plain
-    text; “quick”, “brown” are wrapped in . **Type:** Unit **Note:**
-    Covered by tests/lib/hl.test.tsx.
+1.  Call hl(“the quick brown fox”). **Expected result:** devuelve el texto
+    plano como `ReactNode[]` **sin ningún** `<span style="color:…">`; el
+    `textContent` es idéntico al input. **Type:** Unit **Note:** Covered by
+    tests/lib/hl.test.tsx (tests de "comportamiento base" enmendados).
 
 ## TC-026 — Toggle subtitles off (US-010)
 

@@ -478,6 +478,15 @@ verdaderos.
 - El rendering de hl() vía React es seguro contra XSS: el contenido se
   trata como nodos de texto, nunca como HTML crudo.
 
+- **[Corregida 2026-09-03]** El resaltado ámbar de las "palabras de
+  contenido" se **eliminó**: los subtítulos se renderizan **todo en blanco**
+  (sin excepción, tanto en el overlay principal como en la ventana de stage,
+  ver SCR-006/SCR-023). `hl()` quedó como passthrough que devuelve el texto
+  plano (`lib/hl.tsx`); ya no genera `<span style="color:#E8C547">` (esto
+  reemplaza a UC-04 y a la regla de "palabras de contenido destacadas"). El
+  `SET SKIP` y la lógica de highlight quedan en el código sin usarse. La
+  sincronización (RAF/timeupdate/delay) y la seguridad XSS **no cambian**.
+
 #### **US-015 — Activar / desactivar subtítulos**
 
 COMO profesor\
