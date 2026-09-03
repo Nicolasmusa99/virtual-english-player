@@ -883,3 +883,346 @@ TC-051/052 (/api/upload-init) siguen vigentes como tests de una ruta que
 existe en el código pero que el cliente no invoca actualmente — queda
 como “escape hatch” documentado para si Gemini resuelve el CORS en el
 futuro.
+
+------------------------------------------------------------------------
+
+## Enmienda — casos nuevos (auditoría 2026-09-03)
+
+Se agregan los casos que cubren Biblioteca (Bloque 13), VE Drills y el
+gate de login. **Numeración:** para no romper la trazabilidad, los TC
+que los tests ya citan conservan su ID (TC-110–117 del Bloque 15,
+TC-134–140 del Bloque 16). Los rangos **TC-118–133** quedan reservados
+sin asignar. La biblioteca y el Bloque 14 usan TC-092–109.
+
+**Colisión TC-089 / TC-090:** el doc asigna TC-089 = "Stage opens at
+current time/state (US-039)" y TC-090 = "Closing stage preserves session
+(US-039)". Pero `tests/app/load-nav.test.tsx` cita TC-089 (navegación /
+biblioteca), `tests/app/login-gate.test.tsx` cita TC-090 (gate) y
+`tests/app/stage-edit.test.tsx` también cita TC-089. No se renumeran los
+IDs del doc; los casos canónicos de biblioteca/gate se documentan abajo
+(TC-092/094 y TC-102) y esos tests deberían migrar a los IDs nuevos.
+
+## TC-092 — Login con Google entra a la app (US-040 / US-047)
+
+**Description:** Autenticarse con Google habilita la pantalla de carga.
+**Preconditions:** `authStatus === 'unauthenticated'`; se ve SCR-025.
+**Steps:**
+
+1.  Click "Iniciar sesión con Google" → `signIn('google')`.
+2.  Volver autenticado. **Expected result:** `authStatus ===
+    'authenticated'`; se renderiza el dropzone y el topbar (biblioteca /
+    salir). **Type:** E2E *(colisión: `login-gate.test.tsx` cita TC-090)*
+
+## TC-093 — Logout invalida la sesión (US-040)
+
+**Description:** "Salir" cierra la sesión de servidor.
+**Preconditions:** autenticado en SCR-load. **Steps:**
+
+1.  Click "Salir" → `signOut()`. **Expected result:** vuelve a SCR-025;
+    no hay acceso al dropzone. **Type:** E2E
+
+## TC-094 — Listar biblioteca del usuario, orden descendente (US-041)
+
+**Description:** GET /api/videos devuelve solo los videos del usuario,
+más reciente primero, con phraseCount. **Preconditions:** usuario con ≥2
+videos guardados. **Steps:**
+
+1.  Entrar a "📚 Mi biblioteca" → `fetchLibrary()`. **Expected result:**
+    filas ordenadas por `created_at` desc; cada una con nombre y cantidad
+    de frases; dispara `library_viewed`. **Type:** Integration
+    *(`tests/api/videos.test.ts`; colisión: `load-nav.test.tsx` cita
+    TC-089)*
+
+## TC-095 — Guardar video: flujo POST → Blob → PATCH → PUT (US-042)
+
+**Description:** `saveToLibrary()` crea metadata, sube a Blob, confirma
+storageUrl y persiste la sesión. **Preconditions:** autenticado, video
+en memoria, ≥1 frase. **Steps:**
+
+1.  Click "📚 Guardar en biblioteca". **Expected result:** POST
+    /api/videos → upload() → PATCH storageUrl (status 'ready') → PUT
+    session; dispara `video_saved_to_library`; el botón desaparece.
+    **Type:** Integration *(`tests/api/videos.test.ts`,
+    `videos-detail.test.ts`, `videos-session.test.ts`,
+    `blob-upload.test.ts`)*
+
+## TC-096 — Guardar bloqueado por cuota (US-042 / US-046)
+
+**Description:** Si POST /api/videos responde 413, no se sube el archivo.
+**Preconditions:** cuota casi llena. **Steps:**
+
+1.  Guardar un video que excede QUOTA_BYTES. **Expected result:** error
+    "límite de espacio"; dispara `library_save_blocked_quota`; no hay
+    upload a Blob. **Type:** Integration
+
+## TC-097 — Reabrir video ready vs. expirado (US-043 / US-046)
+
+**Description:** Un video 'ready' carga la sesión; uno expirado se
+bloquea. **Preconditions:** biblioteca con un video 'ready' y uno
+'expired'. **Steps:**
+
+1.  "Abrir" el 'ready' → carga player con frases/delay/speed/cc/filter;
+    dispara `library_video_opened`.
+2.  "Abrir" el 'expired' (o status ≠ 'ready' / sin storageUrl) →
+    bloqueado con mensaje; dispara `library_video_open_blocked_expired`.
+    **Expected result:** ambos comportamientos. **Type:** Integration
+    *(`tests/api/videos-detail.test.ts`)*
+
+## TC-098 — Autoguardado a DB cuando el video viene de biblioteca (US-044)
+
+**Description:** Con `libraryVideoIdRef` seteado, el autosave va a PUT
+/api/videos/[id]/session en vez de localStorage. **Preconditions:**
+video abierto desde biblioteca. **Steps:**
+
+1.  Editar una frase y esperar ~500 ms. **Expected result:** PUT a la DB
+    (upsert); no se escribe localStorage. **Type:** Integration
+    *(`tests/api/videos-session.test.ts`)*
+
+## TC-099 — Eliminar video borra fila y blob (US-045)
+
+**Description:** DELETE /api/videos/[id] borra la fila (cascada sobre
+video_sessions) y el blob best-effort. **Preconditions:** video propio en
+la biblioteca. **Steps:**
+
+1.  Click "Eliminar". **Expected result:** la fila desaparece; dispara
+    `library_video_deleted`; DELETE del blob es best-effort. **Type:**
+    Integration *(`tests/api/videos-detail.test.ts`)*
+
+## TC-100 — Cuota validada en el servidor (US-046)
+
+**Description:** `getUsedBytes` suma solo videos 'ready' y compara contra
+QUOTA_BYTES (8 GB) en POST /api/videos y en blob-upload.
+**Preconditions:** n/a. **Steps:**
+
+1.  Superar la cuota vía POST y vía token de blob. **Expected result:**
+    413 en ambos; nunca solo cliente. **Type:** Unit/Integration
+    *(`tests/lib/library.test.ts`, `videos.test.ts`, `blob-upload.test.ts`)*
+
+## TC-101 — Ownership: no operar sobre video ajeno (US-045 / US-046)
+
+**Description:** `getOwnedVideo` impide abrir/borrar/editar videos de
+otro usuario. **Preconditions:** dos usuarios. **Steps:**
+
+1.  Usuario A intenta GET/DELETE/PUT sobre un video de B. **Expected
+    result:** 404 "Video no encontrado". **Type:** Integration
+
+## TC-102 — Gate de login obligatorio (US-047)
+
+**Description:** Sin sesión no hay acceso al dropzone.
+**Preconditions:** `authStatus !== 'authenticated'`. **Steps:**
+
+1.  Cargar la app. **Expected result:** solo SCR-025 (bienvenida +
+    Google); no se renderiza el dropzone (`app/page.tsx:1014-1033`).
+    **Type:** E2E *(`tests/app/login-gate.test.tsx`, hoy cita TC-090)*
+
+## TC-103 — Generar ejercicios OK (US-048)
+
+**Description:** POST /api/exercises devuelve un set válido (quiz 5 /
+cloze 6 / match 6). **Preconditions:** frases cargadas o tópico.
+**Steps:**
+
+1.  Click "GENERAR EJERCICIOS". **Expected result:** `validateSet` pasa;
+    se renderizan los tres tipos; dispara `exercises_generation_started`
+    y `exercises_generated`. **Type:** Integration
+    *(`tests/api/exercises.test.ts`, `tests/app/exercises-panel.test.tsx`)*
+
+## TC-104 — Generación falla → estado error (US-048)
+
+**Description:** Error o set malformado deja el panel en estado 'error'.
+**Preconditions:** API responde 4xx/5xx o JSON inválido. **Steps:**
+
+1.  Generar con el mock de error. **Expected result:** mensaje de error;
+    dispara `exercises_generation_failed`; el modelo malformado devuelve
+    502. **Type:** Integration
+
+## TC-105 — Switch de pestaña PLAYER / EJERCICIOS (US-049)
+
+**Description:** El panel derecho alterna entre player y ejercicios.
+**Preconditions:** player abierto. **Steps:**
+
+1.  Click "EJERCICIOS". **Expected result:** se monta `ExercisesPanel`
+    (`singleMode="video"`); dispara `exercises_tab_opened`. **Type:**
+    Component
+
+## TC-106 — Responder quiz marca correcto/incorrecto (US-050)
+
+**Description:** Elegir opción evalúa la respuesta. **Preconditions:**
+quiz generado. **Steps:**
+
+1.  Click en una opción. **Expected result:** feedback correcto/incorrecto;
+    dispara `quiz_answered { question_index, selected, correct }`.
+    **Type:** Component *(`tests/app/exercises-panel.test.tsx`)*
+
+## TC-107 — Fill-in compara la respuesta (US-050)
+
+**Description:** Submit de un cloze compara contra el valor esperado.
+**Preconditions:** cloze generado. **Steps:**
+
+1.  Escribir y enviar. **Expected result:** dispara `cloze_answered {
+    item_index, correct }`. **Type:** Component
+
+## TC-108 — Match empareja y completa (US-050)
+
+**Description:** Emparejar todos los pares completa el ejercicio.
+**Preconditions:** match generado. **Steps:**
+
+1.  Emparejar cada término con su definición. **Expected result:** cada
+    intento dispara `match_pair_attempted`; el último dispara
+    `match_completed { total }`. **Type:** Component
+
+## TC-109 — resolveScope 'sel' con fallback a 'all' (US-054)
+
+**Description:** `resolveScope(phrases, 'sel')` usa solo seleccionadas, o
+todas si no hay ninguna seleccionada. **Preconditions:** n/a. **Steps:**
+
+1.  Llamar con sel vacío y con sel no vacío. **Expected result:** fallback
+    correcto. **Type:** Unit *(`tests/lib/exercises.test.ts`)*
+
+## TC-110 — Validación mode=topic (US-051)
+
+**Description:** Con mode 'topic' se requiere `topic` y `phrases` puede
+ir vacío. **Preconditions:** n/a. **Steps:**
+
+1.  POST /api/exercises con mode='topic' sin topic → 400; con topic → OK.
+    **Expected result:** validación correcta. **Type:** Integration
+    *(`tests/api/exercises-b15.test.ts`)*
+
+## TC-111 — Validación mode=both (US-051)
+
+**Description:** Con mode 'both' se combinan transcripción y tópico.
+**Preconditions:** n/a. **Steps:**
+
+1.  POST con mode='both', phrases y topic. **Expected result:** el prompt
+    combina ambos; dispara `exercises_source_mode_changed` en el cambio de
+    modo. **Type:** Integration *(`tests/api/exercises-b15.test.ts`)*
+
+## TC-112 — Export PDF desde el panel (US-052)
+
+**Description:** El panel de PDF descarga con la versión y tipos
+elegidos. **Preconditions:** ejercicios generados. **Steps:**
+
+1.  Elegir tipos y versión, click "DESCARGAR". **Expected result:** se
+    genera el PDF; dispara `exercises_pdf_downloaded { version, types,
+    source_mode }`. **Type:** Component *(`tests/app/exercises-panel-b15.test.tsx`)*
+
+## TC-113 — Contenido del PDF por tipo (US-052)
+
+**Description:** Los tipos deseleccionados no aparecen en el PDF.
+**Preconditions:** set con quiz/cloze/match. **Steps:**
+
+1.  Desmarcar "Match" y descargar. **Expected result:** el PDF no incluye
+    match. **Type:** Component *(`tests/app/exercises-panel-b15.test.tsx`)*
+
+## TC-114 — "GENERAR" deshabilitado sin tópico (US-051)
+
+**Description:** En modo topic/both con el campo vacío, el botón está
+disabled. **Preconditions:** mode='topic', topic=''. **Steps:**
+
+1.  Observar el botón. **Expected result:** `generateDisabled === true`.
+    **Type:** Component *(`tests/app/exercises-panel-b15.test.tsx`)*
+
+## TC-115 — buildStudentContent sin respuestas (US-052)
+
+**Description:** La versión alumno omite las respuestas correctas.
+**Preconditions:** ExerciseSet de prueba. **Steps:**
+
+1.  Llamar `buildStudentContent(set, types)`. **Expected result:** quiz
+    sin marcar correcta, cloze con `___`, match desordenado. **Type:**
+    Unit *(`tests/lib/pdf.test.ts`)*
+
+## TC-116 — buildTeacherContent con respuestas (US-052)
+
+**Description:** La versión profesor marca correctas y rellena blanks.
+**Preconditions:** ExerciseSet de prueba. **Steps:**
+
+1.  Llamar `buildTeacherContent(set, types)`. **Expected result:** quiz
+    con ✓ + explicación, cloze con la respuesta, match resuelto. **Type:**
+    Unit *(`tests/lib/pdf.test.ts`)*
+
+## TC-117 — Versión "Ambas" genera dos PDFs (US-052)
+
+**Description:** pdfVersion='both' produce alumno + profesor.
+**Preconditions:** ejercicios generados. **Steps:**
+
+1.  Elegir "Ambas" y descargar. **Expected result:** se generan dos
+    documentos. **Type:** Component *(`tests/app/exercises-panel-b15.test.tsx`)*
+
+## TC-134 — Sección topic-only fuerza singleMode (US-053)
+
+**Description:** `screen === 'exercises'` renderiza el panel en modo
+topic. **Preconditions:** autenticado, sin video. **Steps:**
+
+1.  Click "Armar ejercicios" en la carga. **Expected result:** panel con
+    `phrases=[]` y `singleMode="topic"`; dispara `exercises_section_opened`.
+    **Type:** Component *(`tests/app/exercises-section.test.tsx`)*
+
+## TC-135 — Topic-only sin selector de scope (US-053)
+
+**Description:** En topic-only no se muestra el control de scope.
+**Preconditions:** sección de ejercicios abierta. **Steps:**
+
+1.  Inspeccionar el panel. **Expected result:** input de tópico visible,
+    scope oculto. **Type:** Component *(`tests/app/exercises-section.test.tsx`)*
+
+## TC-136 — Apertura de la ventana autónoma (US-055)
+
+**Description:** "⊞ Abrir generador" abre la ventana y envía las frases.
+**Preconditions:** player con frases. **Steps:**
+
+1.  Click "Abrir generador" → `openExercisesWindow()`. **Expected
+    result:** `window.open('/exercises-window')`; `load_phrases` por
+    `ve-exercises-v1`; dispara `exercises_generator_window_opened`.
+    **Type:** Integration *(`tests/app/exercises-window.test.tsx`)*
+
+## TC-137 — La ventana responde 'ready' y recibe las frases (US-055)
+
+**Description:** La ventana emite 'ready' y carga `load_phrases` una vez.
+**Preconditions:** ventana abierta. **Steps:**
+
+1.  Montar `/exercises-window`. **Expected result:** envía 'ready';
+    convierte las frases a `Phrase[]`; renderiza `ExercisesPanel`.
+    **Type:** Component *(`tests/app/exercises-window.test.tsx`)*
+
+## TC-138 — Autonomía tras cerrar el player (US-055)
+
+**Description:** La ventana sigue funcionando aunque el player se cierre.
+**Preconditions:** ventana con frases cargadas. **Steps:**
+
+1.  Cerrar el player. **Expected result:** la ventana mantiene su estado
+    y permite generar. **Type:** Integration *(`tests/app/exercises-window.test.tsx`)*
+
+## TC-139 — Cierre de la ventana emite 'closed' (US-055)
+
+**Description:** `beforeunload` / "Cerrar generador" notifican al player.
+**Preconditions:** ventana abierta. **Steps:**
+
+1.  Cerrar la ventana. **Expected result:** se emite 'closed'; el player
+    limpia `exercisesOpen`. **Type:** Integration *(`tests/app/exercises-window.test.tsx`)*
+
+## TC-140 — Botón deshabilitado sin frases (US-055)
+
+**Description:** "Abrir generador" está disabled si `phrases.length ===
+0`. **Preconditions:** player sin frases. **Steps:**
+
+1.  Observar el botón. **Expected result:** disabled. **Type:** Component
+    *(`tests/app/exercises-window.test.tsx`)*
+
+## TC-141 — Stage reproduce video de biblioteca vía load_url (US-037 / US-055)
+
+**Description:** El stage acepta `load_url` (storage remoto) además de
+`load_blob`. **Preconditions:** video abierto desde biblioteca + stage
+abierto. **Steps:**
+
+1.  Abrir stage con un video de la biblioteca. **Expected result:** el
+    stage carga el video desde `storageUrl`. **Type:** Integration
+    *(`tests/app/stage-library.test.tsx`, hoy con placeholders TC-lib /
+    TC-library)*
+
+## TC-142 — Stage con video local vía load_blob (US-037)
+
+**Description:** Regresión: el stage sigue aceptando Blob para videos
+locales. **Preconditions:** video local + stage. **Steps:**
+
+1.  Abrir stage con un video local. **Expected result:** `load_blob` +
+    `URL.createObjectURL`. **Type:** Integration
+    *(`tests/app/stage-library.test.tsx`)*
