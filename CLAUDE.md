@@ -55,7 +55,7 @@ Ver `.env.example` para la plantilla completa.
 
 ## Documentación funcional (`Core/`)
 
-Especificación viva en Markdown (fuente de verdad; los `.docx` son histórico congelado): `user-stories.md` (US-001..US-055), `screen-inventory.md` (SCR-001..SCR-030), `test-cases.md` (TC-001..TC-142), `posthog-events.md`. La auditoría más reciente está en `Core/AUDIT-2026-09-03.md`.
+Especificación viva en Markdown (fuente de verdad; los `.docx` son histórico congelado): `user-stories.md` (US-001..US-056), `screen-inventory.md` (SCR-001..SCR-030), `test-cases.md` (TC-001..TC-152), `posthog-events.md`. La auditoría más reciente está en `Core/AUDIT-2026-09-03.md`.
 
 ## Architecture
 
