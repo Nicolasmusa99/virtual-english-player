@@ -4,6 +4,56 @@ All events should be fired from app/page.tsx client-side. Use
 posthog.capture(eventName, properties) after integrating the PostHog JS
 SDK.
 
+------------------------------------------------------------------------
+
+## Estado de implementación — auditoría 2026-09-03
+
+El wrapper real de analítica es `capture(event, props)` en
+`lib/capture.ts` (delega en `window.__ve_posthog.capture`). Ground truth
+verificado con `grep -rn "capture(" app lib`: **40** nombres de evento
+únicos disparan realmente en el código (46 call sites menos 3 del propio
+wrapper). De los **46** eventos que este documento define, **22** están
+instrumentados, **24 NO** y **18** eventos reales no estaban
+documentados (se agregan más abajo).
+
+**Eventos documentados SIN `capture()` en el código — [No implementado —
+verificado 2026-09-03].** Los siguientes 24 eventos (la tanda "core" del
+player) están especificados abajo pero nunca se cablearon; `grep` de
+cada nombre en `app/` + `lib/` devuelve 0 ocurrencias. La "Nota de
+alcance (2026-07-11)" del final reconcilió 13 eventos agregados después
+(que sí disparan) pero no marcó que esta tanda base seguía sin
+instrumentar. Quedan como **backlog de instrumentación pendiente** (no se
+eliminan; la especificación sigue vigente):
+
+`video_loaded`, `transcription_started`, `transcription_upload_complete`,
+`transcription_succeeded`, `transcription_failed`,
+`transcription_cancelled`, `srt_loaded_from_file`, `srt_downloaded`,
+`player_opened`, `playback_toggled`, `phrase_navigated`,
+`phrase_repeated`, `micro_repeat_used`, `subtitles_toggled`,
+`playback_speed_changed`, `subtitle_delay_changed`,
+`subtitle_delay_reset`, `phrase_selection_toggled`,
+`phrase_list_filter_changed`, `phrase_edited`, `phrase_edit_cancelled`,
+`player_exited`, `progress_bar_scrubbed`, `volume_changed`.
+
+> El encabezado de cada uno de esos 24 eventos, más abajo, debe leerse
+> con el marcador **[No implementado — verificado 2026-09-03]** aplicado.
+
+**Eventos instrumentados (22):** `session_autosaved`,
+`session_restore_prompted`, `session_restore_resolved`,
+`exit_confirmation_shown`, `exit_confirmation_resolved`,
+`autopause_toggled`, `autopause_triggered`, `practice_mode_toggled`,
+`practice_mode_completed`, `phrase_loop_changed`,
+`text_visibility_toggled`, `phrase_timestamps_edited`, `phrase_split`,
+`phrase_merged`, `phrase_added`, `phrase_deleted`,
+`phrases_bulk_selection`, `srt_loaded_in_player`, `phrase_tick_clicked`,
+`upload_size_warning_shown`, `stage_window_opened`, `stage_window_closed`.
+
+**Eventos reales que faltaban en este documento (18)** — agregados en las
+secciones "Eventos de Biblioteca (Bloque 13)" y "Eventos de VE Drills
+(Bloques 14–16)" antes de la nota final.
+
+------------------------------------------------------------------------
+
 ## video_loaded
 
 **Trigger:** User drops or selects files and a valid video is identified
@@ -476,6 +526,214 @@ mode (US-037 / US-039). **Screen:** SCR-024
 
 ------------------------------------------------------------------------
 
+## Eventos de Biblioteca (Bloque 13) — [Instrumentado 2026-09-03]
+
+Estos 6 eventos ya disparan en el código (`app/page.tsx`) pero no estaban
+en este documento; son exactamente los que la nota de alcance de más
+abajo daba por "documentados por separado" (referencia circular resuelta,
+ver corrección 2026-09-03). Cubren US-040..US-046 / SCR-025, SCR-026.
+
+### library_viewed
+
+**Trigger:** `fetchLibrary()` recibe la lista de la biblioteca (entrar a
+"📚 Mi biblioteca"). **archivo:línea:** `app/page.tsx:760`. **Screen:**
+SCR-026
+
+| **Property** | **Type** | **Description**                    |
+|:-------------|----------|------------------------------------|
+| video_count  | number   | Cantidad de videos en la biblioteca |
+
+### library_video_opened
+
+**Trigger:** `openFromLibrary()` carga con éxito un video `ready` desde la
+biblioteca. **archivo:línea:** `app/page.tsx:793`. **Screen:** SCR-026 →
+SCR-005
+
+| **Property** | **Type** | **Description**                 |
+|:-------------|----------|---------------------------------|
+| video_id     | string   | UUID del video                  |
+| phrase_count | number   | Frases cargadas desde la sesión |
+
+### library_video_open_blocked_expired
+
+**Trigger:** intento de abrir un video cuyo `status !== 'ready'` o sin
+`storageUrl` (expirado). **archivo:línea:** `app/page.tsx:775`. **Screen:**
+SCR-026
+
+| **Property** | **Type** | **Description** |
+|:-------------|----------|-----------------|
+| video_id     | string   | UUID del video  |
+
+### video_saved_to_library
+
+**Trigger:** `saveToLibrary()` completa el flujo POST → upload Blob →
+PATCH → PUT session. **archivo:línea:** `app/page.tsx:840`. **Screen:**
+SCR-005
+
+| **Property** | **Type** | **Description**              |
+|:-------------|----------|------------------------------|
+| video_id     | string   | UUID del video creado        |
+| phrase_count | number   | Frases guardadas en la sesión |
+
+### library_save_blocked_quota
+
+**Trigger:** `POST /api/videos` responde 413 (cuota de 8 GB excedida) al
+guardar. **archivo:línea:** `app/page.tsx:814`. **Screen:** SCR-005
+
+| **Property**      | **Type** | **Description**                     |
+|:------------------|----------|-------------------------------------|
+| attempted_size_mb | number   | Tamaño del video que se quiso subir |
+| used_bytes_mb     | number   | Bytes ya usados por el usuario (MB) |
+
+### library_video_deleted
+
+**Trigger:** `deleteFromLibrary()` tras `DELETE /api/videos/[id]`.
+**archivo:línea:** `app/page.tsx:852`. **Screen:** SCR-026
+
+| **Property** | **Type** | **Description** |
+|:-------------|----------|-----------------|
+| video_id     | string   | UUID del video  |
+
+------------------------------------------------------------------------
+
+## Eventos de VE Drills (Bloques 14–16) — [Instrumentado 2026-09-03]
+
+12 eventos del motor de ejercicios. Salvo aclaración, disparan desde
+`app/ExercisesPanel.tsx`. Cubren US-048..US-055 / SCR-027, SCR-028,
+SCR-029, SCR-030.
+
+### exercises_tab_opened
+
+**Trigger:** montaje del panel de ejercicios (useEffect).
+**archivo:línea:** `app/ExercisesPanel.tsx:49`. **Screen:** SCR-027
+
+| **Property**    | **Type** | **Description**                |
+|:----------------|----------|--------------------------------|
+| video_file_name | string   | Video activo (o "" sin video)  |
+| selected_count  | number   | Frases seleccionadas al abrir  |
+
+### exercises_source_mode_changed
+
+**Trigger:** cambio de modo de fuente (`handleModeChange`).
+**archivo:línea:** `app/ExercisesPanel.tsx:57`. **Screen:** SCR-027
+
+| **Property** | **Type** | **Description**                 |
+|:-------------|----------|---------------------------------|
+| mode         | string   | "video", "topic" o "both"       |
+| has_video    | boolean  | Si hay frases de video cargadas |
+
+### exercises_generation_started
+
+**Trigger:** click "GENERAR EJERCICIOS". **archivo:línea:**
+`app/ExercisesPanel.tsx:66`. **Screen:** SCR-027 / SCR-028
+
+| **Property**    | **Type** | **Description**                     |
+|:----------------|----------|-------------------------------------|
+| mode            | string   | "video" / "topic" / "both"          |
+| level           | string   | "beginner" / "intermediate" / "advanced" |
+| scope           | string   | "all" / "sel" (según modo)          |
+| phrase_count    | number   | Frases enviadas al modelo           |
+| video_file_name | string   | Video activo                        |
+
+### exercises_generated
+
+**Trigger:** respuesta OK de `POST /api/exercises`. **archivo:línea:**
+`app/ExercisesPanel.tsx:106`. **Screen:** SCR-027 / SCR-028
+
+| **Property** | **Type** | **Description**                 |
+|:-------------|----------|---------------------------------|
+| quiz_count   | number   | Preguntas de quiz generadas     |
+| cloze_count  | number   | Ítems fill-in generados         |
+| match_count  | number   | Pares de match generados        |
+| duration_ms  | number   | Latencia de la generación       |
+| level        | string   | Nivel usado                     |
+| mode         | string   | Modo usado                      |
+
+### exercises_generation_failed
+
+**Trigger:** error de `POST /api/exercises`. **archivo:línea:**
+`app/ExercisesPanel.tsx:116`. **Screen:** SCR-027 / SCR-028
+
+| **Property** | **Type**       | **Description**       |
+|:-------------|----------------|-----------------------|
+| http_status  | number \| null | Código HTTP si aplica |
+| error        | string         | Mensaje de error      |
+| level        | string         | Nivel intentado       |
+| mode         | string         | Modo intentado        |
+
+### exercises_pdf_downloaded
+
+**Trigger:** click "DESCARGAR" en el panel de PDF. **archivo:línea:**
+`app/ExercisesPanel.tsx:169`. **Screen:** SCR-030
+
+| **Property** | **Type** | **Description**                          |
+|:-------------|----------|------------------------------------------|
+| version      | string   | "student" / "teacher" / "both"           |
+| types        | string   | Tipos incluidos, join con coma           |
+| source_mode  | string   | Modo de generación de origen             |
+
+### quiz_answered
+
+**Trigger:** click en una opción de una pregunta de quiz.
+**archivo:línea:** `app/ExercisesPanel.tsx:188`. **Screen:** SCR-027
+
+| **Property**   | **Type** | **Description**              |
+|:---------------|----------|------------------------------|
+| question_index | number   | Índice de la pregunta        |
+| selected       | number   | Índice de opción elegida     |
+| correct        | boolean  | Si la opción es la correcta  |
+
+### cloze_answered
+
+**Trigger:** submit de un ítem fill-in. **archivo:línea:**
+`app/ExercisesPanel.tsx:196`. **Screen:** SCR-027
+
+| **Property** | **Type** | **Description**            |
+|:-------------|----------|----------------------------|
+| item_index   | number   | Índice del ítem cloze      |
+| correct      | boolean  | Si la respuesta es correcta |
+
+### match_pair_attempted
+
+**Trigger:** click en una definición para intentar un match.
+**archivo:línea:** `app/ExercisesPanel.tsx:208`. **Screen:** SCR-027
+
+| **Property** | **Type** | **Description**             |
+|:-------------|----------|-----------------------------|
+| term_index   | number   | Índice del término          |
+| def_index    | number   | Índice de la definición     |
+| correct      | boolean  | Si el par coincide          |
+
+### match_completed
+
+**Trigger:** se completa el último par del ejercicio de match.
+**archivo:línea:** `app/ExercisesPanel.tsx:215`. **Screen:** SCR-027
+
+| **Property** | **Type** | **Description**        |
+|:-------------|----------|------------------------|
+| total        | number   | Total de pares         |
+
+### exercises_section_opened
+
+**Trigger:** click "Armar ejercicios" en la pantalla de carga (sección
+topic-only). **archivo:línea:** `app/page.tsx:1038`. **Screen:** SCR-028
+
+| **Property** | **Type** | **Description**                  |
+|:-------------|----------|----------------------------------|
+| has_session  | boolean  | Si el usuario está autenticado   |
+
+### exercises_generator_window_opened
+
+**Trigger:** click "⊞ Abrir generador" (ventana autónoma).
+**archivo:línea:** `app/page.tsx:575`. **Screen:** SCR-029
+
+| **Property** | **Type** | **Description**                  |
+|:-------------|----------|----------------------------------|
+| scope        | string   | "all" / "sel"                    |
+| phrase_count | number   | Frases enviadas a la ventana     |
+
+------------------------------------------------------------------------
+
 ## Nota de alcance (2026-07-11)
 
 Los 13 eventos marcados **\[Instrumentado 2026-07-11\]** o **\[Corregido
@@ -494,3 +752,15 @@ documento**: pertenecen al Bloque 13 (cuentas de usuario + storage en la
 nube), que se documentó por separado en `Core/posthog-events.md.docx` y
 todavía no fue reconciliado con este Google Doc — queda pendiente de una
 revisión de seguridad y consistencia antes de fusionarlo acá.
+
+**[Corregida 2026-09-03]** La referencia era circular: el "documento
+aparte" citado (`Core/posthog-events.md.docx`) es **este mismo archivo**,
+y los 6 eventos de biblioteca **no** estaban en él. La auditoría los
+verificó en el **código real** (`app/page.tsx:760, 775, 793, 814, 840,
+852`) y quedaron reconciliados en la sección "Eventos de Biblioteca
+(Bloque 13)" de arriba. Junto con ellos se agregaron los 12 eventos de VE
+Drills (Bloques 14–16) que tampoco figuraban. Además, la auditoría
+detectó que **24** eventos "core" del player especificados en este
+documento nunca se cablearon (ver "Estado de implementación —
+2026-09-03"): la reconciliación de 2026-07-11 solo cubrió los 13 eventos
+agregados en los Bloques C/D/E, no la tanda base.
