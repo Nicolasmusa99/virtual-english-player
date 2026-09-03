@@ -1232,9 +1232,15 @@ de servidor se invalida.
 
 **Reglas**
 
-- El modo sin cuenta (arrastrar video directo, US-001) sigue disponible
-  sin iniciar sesión — no se fuerza login para transcribir un video
-  suelto.
+- **[Corregida 2026-09-03]** El modo sin cuenta ya **no** está
+  disponible. Lo especificado originalmente ("arrastrar video directo,
+  US-001, sin iniciar sesión") fue reemplazado por un **gate de login
+  obligatorio**: con `authStatus !== 'authenticated'` la app solo
+  renderiza la pantalla de bienvenida con el botón de Google
+  (`app/page.tsx:1014-1031`); el dropzone existe únicamente autenticado
+  (`app/page.tsx:1033`). Ver US-047 y SCR-025. (Nota de código: el
+  ternario `app/page.tsx:1045-1047` "Iniciar sesión" quedó como código
+  muerto — su rama nunca renderiza.)
 
 - El proveedor de autenticación es exclusivamente Google (Auth.js /
   NextAuth v5); no hay registro con email y contraseña.
@@ -1423,6 +1429,17 @@ exportable desde las frases guardadas.
 - QUOTA_BYTES y VIDEO_RETENTION_DAYS son constantes centralizadas en
   lib/library.ts.
 
+- **[Verificado 2026-09-03]** La cuota de 8 GB **sí** se aplica en
+  servidor: `app/api/videos/route.ts:40` responde 413 al superarla, con
+  re-chequeo en `app/api/blob-upload/route.ts:26`
+  (`QUOTA_BYTES`/`getUsedBytes` en `lib/library.ts:5,12`). La expiración
+  sigue **sin implementar**, consistente con lo que UC-02 declara "fuera
+  de alcance": `VIDEO_RETENTION_DAYS = 90` está definido
+  (`lib/library.ts:6`) pero no se usa en ningún lado, y nada transiciona
+  un video a `status='expired'` (sin cron ni chequeo lazy). El modelo de
+  datos, la UI (`app/page.tsx:1150,1152`) y el evento
+  `library_video_open_blocked_expired` ya contemplan el estado expirado.
+
 **Estados**
 
 - status = 'uploading': fila creada, archivo aún subiéndose a Blob.
@@ -1433,8 +1450,256 @@ exportable desde las frases guardadas.
 - status = 'expired': archivo pesado borrado por retención; frases/SRT
   siguen disponibles para exportar.
 
+### **Bloque 14 — VE Drills (generador de ejercicios)**
+
+*Agregado 2026-09-03 por auditoría. El código etiqueta este trabajo como
+"Bloque 14" (`app/api/exercises/route.ts:1`, `lib/exercises.ts:1`). Motor
+de ejercicios a partir de la transcripción, generado con Anthropic Claude
+(`claude-sonnet-4-6`, `app/api/exercises/route.ts:90`), no Gemini.*
+
+#### **US-048 — Generar ejercicios desde la transcripción**
+
+COMO profesor\
+QUIERO generar ejercicios (quiz, fill-in y match) a partir de las frases
+del video\
+PARA darle práctica autónoma al alumno sobre el material de la clase
+
+**Casos de uso**
+
+UC-01 El profesor abre la pestaña "Ejercicios" y hace clic en "GENERAR
+EJERCICIOS": se llama a `generate()` (`app/ExercisesPanel.tsx:63`), que
+hace `POST /api/exercises`.\
+UC-02 El servidor arma el prompt según el modo (`buildPrompt`) y pide a
+Claude una respuesta estructurada vía tool-use `build_exercises`
+(`app/api/exercises/route.ts`).\
+UC-03 La respuesta se valida con `validateSet` (quiz de 5, cloze de 6 con
+`___`, match de 6); si es malformada, responde 502.\
+UC-04 El panel muestra los tres tipos de ejercicio en sub-pestañas.
+
+**Reglas**
+
+- El modelo es Anthropic `claude-sonnet-4-6`; la API key es
+  `ANTHROPIC_API_KEY` (`app/api/exercises/route.ts:68`). `maxDuration =
+  60`.
+
+- El alcance de frases se resuelve con `resolveScope`
+  (`lib/exercises.ts:31`): 'sel' usa solo seleccionadas, con fallback a
+  todas si no hay ninguna.
+
+#### **US-049 — Pestaña de ejercicios en el player**
+
+COMO profesor\
+QUIERO una pestaña "Ejercicios" junto a "Player" dentro de la pantalla de
+reproducción\
+PARA armar la práctica sin salir del video
+
+**Casos de uso**
+
+UC-01 El header del panel derecho alterna "PLAYER" / "EJERCICIOS"
+(`app/page.tsx:1218-1242`) vía el estado `panelTab`.\
+UC-02 En modo "EJERCICIOS" se renderiza `ExercisesPanel` con
+`singleMode="video"` (fuerza modo video y muestra el selector de scope).\
+UC-03 Si el generador ya está abierto en otra ventana (US-055), la
+pestaña muestra el hint "El generador está abierto en otra ventana".
+
+**Reglas**
+
+- La pestaña de ejercicios embebida y la ventana autónoma (US-055) son
+  mutuamente excluyentes para las mismas frases.
+
+#### **US-050 — Resolver ejercicios interactivos**
+
+COMO alumno\
+QUIERO responder el quiz, completar los fill-in y emparejar los match en
+pantalla\
+PARA autoevaluarme sobre el vocabulario y las frases del video
+
+**Casos de uso**
+
+UC-01 En el quiz, al elegir una opción se marca correcto/incorrecto
+(`app/ExercisesPanel.tsx:188`).\
+UC-02 En fill-in, al enviar una respuesta se compara contra el valor
+esperado (`app/ExercisesPanel.tsx:196`).\
+UC-03 En match, al clickear una definición se intenta emparejar con el
+término seleccionado (`app/ExercisesPanel.tsx:208`); al completar el
+último par se marca el ejercicio terminado
+(`app/ExercisesPanel.tsx:215`).
+
+**Reglas**
+
+- La corrección es en el cliente contra la respuesta que devolvió el
+  modelo; no hay round-trip por respuesta.
+
+### **Bloque 15 — Generación avanzada y export a PDF**
+
+*Agregado 2026-09-03 por auditoría. El código etiqueta este trabajo como
+"Bloque 15" (`app/ExercisesPanel.tsx:1`, `lib/pdf.ts:1`).*
+
+#### **US-051 — Generación por modo: video, tópico o ambos**
+
+COMO profesor\
+QUIERO elegir si los ejercicios salen del video, de un tópico libre o de
+ambos\
+PARA armar práctica incluso sin un video cargado
+
+**Casos de uso**
+
+UC-01 El selector "Video / Tópico / Ambos" (`app/ExercisesPanel.tsx:232`)
+cambia `mode` vía `handleModeChange`; se oculta si el panel corre con
+`singleMode`.\
+UC-02 Con `mode !== 'video'` aparece un input de tópico
+(`app/ExercisesPanel.tsx:254`, placeholder "Topic (e.g. Second World
+War)").\
+UC-03 `generate()` envía `phrases=[]` si el modo es 'topic', y el texto
+del tópico si el modo no es 'video'.
+
+**Reglas**
+
+- El botón "GENERAR" queda deshabilitado si el modo requiere tópico y el
+  campo está vacío (`generateDisabled`, `app/ExercisesPanel.tsx:60`).
+
+#### **US-052 — Exportar ejercicios a PDF (alumno / profesor)**
+
+COMO profesor\
+QUIERO descargar los ejercicios en PDF, en versión para el alumno y/o con
+respuestas para mí\
+PARA repartirlos impresos o por archivo sin depender de la pantalla
+
+**Casos de uso**
+
+UC-01 El panel de PDF (`app/ExercisesPanel.tsx:381`) ofrece checkboxes de
+tipo (quiz/cloze/match) y radios de versión (Alumno / Profesor / Ambas).\
+UC-02 "DESCARGAR" llama a `downloadPdf()` (`app/ExercisesPanel.tsx`), que
+carga `jspdf` dinámicamente y arma el contenido con las funciones puras
+`buildStudentContent` / `buildTeacherContent` (`lib/pdf.ts:10,45`).\
+UC-03 La versión alumno omite respuestas; la versión profesor marca la
+correcta y agrega la explicación / el valor del blank.
+
+**Reglas**
+
+- Si la versión elegida es "Ambas" se generan dos PDFs.
+
+#### **US-053 — Sección de ejercicios independiente (sin video)**
+
+COMO profesor\
+QUIERO armar ejercicios por tópico desde la pantalla de inicio, sin
+cargar ningún video\
+PARA preparar material aunque no tenga (todavía) el video de la clase
+
+**Casos de uso**
+
+UC-01 En la pantalla de carga, "Armar ejercicios" hace
+`setScreen('exercises')` y dispara `exercises_section_opened`
+(`app/page.tsx:1036-1039`).\
+UC-02 La pantalla `screen === 'exercises'` (`app/page.tsx:1124-1134`)
+renderiza `ExercisesPanel` con `phrases=[]` y `singleMode="topic"`.
+
+**Reglas**
+
+- En modo topic-only no se muestra el selector de scope (no hay frases de
+  video que filtrar).
+
+#### **US-054 — Nivel, alcance y regeneración**
+
+COMO profesor\
+QUIERO elegir el nivel (beginner/intermediate/advanced) y el alcance de
+frases, y poder regenerar\
+PARA ajustar la dificultad y el foco de la práctica
+
+**Casos de uso**
+
+UC-01 Los selectores de `level` y `scope` (`lib/exercises.ts:4-5`)
+alimentan `generate()` y viajan en el evento
+`exercises_generation_started`.\
+UC-02 "↺ REGENERAR" vuelve a llamar a `generate()` con los mismos
+parámetros.
+
+**Reglas**
+
+- `scope` solo aplica cuando el modo incluye video; en topic-only se
+  ignora.
+
+### **Bloque 16 — Ventana autónoma de ejercicios**
+
+*Agregado 2026-09-03 por auditoría. El código etiqueta este trabajo como
+"Bloque 16" y ya reserva el ID **US-055**
+(`app/exercises-window/page.tsx:2`, `lib/exercisesChannel.ts:1`,
+`app/page.tsx:556`).*
+
+#### **US-055 — Generador de ejercicios en ventana independiente**
+
+COMO profesor\
+QUIERO abrir el generador de ejercicios en una ventana aparte que siga
+funcionando aunque cierre el player\
+PARA proyectar o trabajar los ejercicios en un segundo monitor / pestaña
+
+**Casos de uso**
+
+UC-01 "⊞ Abrir generador" llama a `openExercisesWindow()`
+(`app/page.tsx:556-576`): abre `window.open('/exercises-window')` y envía
+las frases + nivel + scope por `BroadcastChannel 've-exercises-v1'`
+(`lib/exercisesChannel.ts`).\
+UC-02 La ventana (`app/exercises-window/page.tsx`) responde `ready`,
+recibe `load_phrases` una sola vez y a partir de ahí es autónoma: renderiza
+`ExercisesPanel` con `singleMode="video"`.\
+UC-03 Al cerrar la ventana se emite `closed`; "✕ Cerrar generador"
+(`closeExercisesWindow`, `app/page.tsx:578-588`) cierra el canal.
+
+**Reglas**
+
+- El botón queda deshabilitado si no hay frases (`phrases.length === 0`).
+
+- El canal `ve-exercises-v1` es independiente del canal `ve-stage-v1` del
+  stage (US-037).
+
+### **Bloque 17 — Rediseño de bienvenida y gate de acceso**
+
+*Agregado 2026-09-03 por auditoría. Corresponde al commit más reciente
+("rediseño visual pantalla de bienvenida + gate de login obligatorio").
+Numéricamente US-047 va con este bloque aunque cronológicamente sea
+posterior a US-055.*
+
+#### **US-047 — Gate de login obligatorio y pantalla de bienvenida**
+
+COMO producto\
+QUIERO exigir inicio de sesión con Google antes de usar la app y mostrar
+una bienvenida de marca\
+PARA que toda actividad quede asociada a una cuenta y unificar la
+identidad visual
+
+**Casos de uso**
+
+UC-01 Con `authStatus !== 'authenticated'`, la app renderiza solo la
+pantalla de bienvenida (`app/page.tsx:1014-1031`): wordmark "Virtual
+English", isotipo "VE" y botón "Iniciar sesión con Google"
+(`signIn('google')`).\
+UC-02 Recién autenticado, se habilita la pantalla de carga con el dropzone
+y el topbar ("Armar ejercicios", "📚 Mi biblioteca", "Salir")
+(`app/page.tsx:1033-1048`).\
+UC-03 No existe camino de invitado: sin sesión no hay dropzone (enmienda
+a la regla de US-040).
+
+**Reglas**
+
+- El rediseño incorpora las fuentes Fraunces, Public Sans y JetBrains
+  Mono (`app/layout.tsx`); `app/providers.tsx` envuelve la app con
+  `SessionProvider` de NextAuth.
+
+- El ternario "Iniciar sesión" de `app/page.tsx:1045-1047` es código
+  muerto (rama inalcanzable): la pantalla de carga ya exige sesión.
+
 ### **Enmiendas a reglas existentes**
 
 **US-016 (Ajuste de delay de subtítulos):** se define un límite al
 ajuste de delay, acotándolo a un rango de ±10 s, para evitar valores
 absurdos. Antes el código no definía mínimo ni máximo.
+
+**US-040 (Inicio de sesión) — [Corregida 2026-09-03]:** se eliminó el
+modo invitado. El acceso ahora requiere login con Google (gate duro, ver
+US-047). La regla original que permitía transcribir sin cuenta quedó
+anotada en la propia US-040.
+
+**US-046 (Cuota y expiración) — [Verificado 2026-09-03]:** la cuota de 8
+GB se aplica en servidor; la expiración automática sigue sin implementar
+(consistente con el "fuera de alcance" de su UC-02).
+`VIDEO_RETENTION_DAYS` está definido pero no se usa.
