@@ -29,26 +29,23 @@ describe('hl() — comportamiento base', () => {
     expect(SKIP.has('for')).toBe(true)
   })
 
-  it('resalta palabras de más de 3 chars que no están en SKIP', () => {
+  // [Corregida 2026-09-03] hl() ya NO resalta: los subtítulos van en blanco (US-014).
+  it('no envuelve en span de color palabras largas fuera de SKIP', () => {
     const el = hlContainer('beautiful')
-    const spans = el.querySelectorAll('span[style]')
-    expect(spans).toHaveLength(1)
-    expect(spans[0].textContent).toBe('beautiful')
+    expect(el.querySelectorAll('span[style]')).toHaveLength(0)
+    expect(el.textContent).toBe('beautiful')
   })
 
-  it('resalta solo algunas palabras en frase mixta', () => {
+  it('en frase mixta no aplica color a ninguna palabra', () => {
     const el = hlContainer('the quick fox')
-    const spans = el.querySelectorAll('span[style]')
-    expect(spans).toHaveLength(1)
-    expect(spans[0].textContent).toBe('quick')
+    expect(el.querySelectorAll('span[style]')).toHaveLength(0)
     expect(el.textContent).toBe('the quick fox')
   })
 
-  it('ignora puntuación al decidir si resaltar', () => {
+  it('devuelve el texto plano tal cual (con puntuación) sin resaltar', () => {
     const el = hlContainer('hello,')
-    const spans = el.querySelectorAll('span[style]')
-    expect(spans).toHaveLength(1)
-    expect(spans[0].textContent).toBe('hello,')
+    expect(el.querySelectorAll('span[style]')).toHaveLength(0)
+    expect(el.textContent).toBe('hello,')
   })
 })
 
