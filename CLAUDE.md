@@ -57,6 +57,16 @@ Ver `.env.example` para la plantilla completa.
 
 Especificación viva en Markdown (fuente de verdad; los `.docx` son histórico congelado): `user-stories.md` (US-001..US-056), `screen-inventory.md` (SCR-001..SCR-030), `test-cases.md` (TC-001..TC-152), `posthog-events.md`. La auditoría más reciente está en `Core/AUDIT-2026-09-03.md`.
 
+## Design tokens (identidad Virtual English, Rediseño 2026-09-03)
+
+Todo el color de la app pasa por variables CSS en **`app/globals.css` (`:root`)** — no hay hex de marca hardcodeados en el código de producción (el único hex crudo intencional es el SVG del logo de Google en la bienvenida). Para recolorear la plataforma se editan las definiciones de los tokens ahí; el resto (`page.module.css` y estilos inline en `ExercisesPanel.tsx` / `exercises-window` / `stage`) consume `var(--*)`.
+
+- **Superficies (navy tint):** `--p1..p5` de más oscuro a más claro (`#0F1B2D → #2B4668`).
+- **Texto (tono frío):** `--tx` (`#EAF1F8`) > `--tx2` (`#A6BACE`) > `--tx3` (`#7E97B4`, tenue).
+- **Acento de marca:** `--ac` celeste `#6AA0E6` (texto/íconos/ticks/estados activos, AA sobre navy) + `--ac2/--ac3` (tints). `--acDeep #3D6FB6` / `--acDeepHover #2F5A94` para **fills sólidos con texto blanco** (botón Play). Sobre un fill celeste (`--ac`) el texto oscuro es `--p1`.
+- **Estado:** `--gr` verde (live/SRT/OK), `--bl` cian `#2BB0E0` (info: volumen/delay+/restore — deliberadamente distinto de los azules de marca), `--rd` rojo `#E86B6B` (error/delay−).
+- La bienvenida (SCR-025) va con **fondo blanco** y `public/logo-ve.jpeg` (fuera del tema oscuro, para fundir el JPEG). Los subtítulos van **blancos** (US-014), no se pintan de acento.
+
 ## Architecture
 
 Single-page Next.js 15 (App Router) + React 19 + Tailwind v4 application. Core files:
