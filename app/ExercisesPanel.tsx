@@ -242,7 +242,7 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
                 ...btnBase, padding: '3px 8px', fontSize: 10,
                 textTransform: 'uppercase' as const,
                 background: mode === m ? 'var(--ac)' : 'transparent',
-                color: mode === m ? '#1a1a1a' : 'var(--tx3)',
+                color: mode === m ? 'var(--p1)' : 'var(--tx3)',
               }}
             >
               {m === 'video' ? 'Video' : m === 'topic' ? 'Tópico' : 'Ambos'}
@@ -273,7 +273,7 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
           <button key={l} onClick={() => setLevel(l)} style={{
             ...btnBase, padding: '3px 7px',
             background: level === l ? 'var(--ac)' : 'transparent',
-            color: level === l ? '#1a1a1a' : 'var(--tx3)',
+            color: level === l ? 'var(--p1)' : 'var(--tx3)',
             fontSize: 10, textTransform: 'uppercase' as const,
           }}>
             {l}
@@ -286,14 +286,14 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
             <button data-testid="scope-all" onClick={() => setScope('all')} style={{
               ...btnBase, padding: '3px 7px',
               background: scope === 'all' ? 'var(--ac)' : 'transparent',
-              color: scope === 'all' ? '#1a1a1a' : 'var(--tx3)', fontSize: 10,
+              color: scope === 'all' ? 'var(--p1)' : 'var(--tx3)', fontSize: 10,
             }}>
               Todas
             </button>
             <button data-testid="scope-sel" onClick={() => setScope('sel')} style={{
               ...btnBase, padding: '3px 7px',
               background: scope === 'sel' ? 'var(--ac)' : 'transparent',
-              color: scope === 'sel' ? '#1a1a1a' : 'var(--tx3)', fontSize: 10,
+              color: scope === 'sel' ? 'var(--p1)' : 'var(--tx3)', fontSize: 10,
             }}>
               Sel. ({selCount})
             </button>
@@ -561,7 +561,7 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
                         background:
                           matched  ? 'rgba(45,184,122,0.18)' :
                           flashing ? 'rgba(204,68,68,0.18)'  :
-                          selected ? 'rgba(232,197,71,0.18)' :
+                          selected ? 'rgba(106,160,230,0.18)' :
                           'transparent',
                         color:
                           matched  ? 'var(--gr)'  :

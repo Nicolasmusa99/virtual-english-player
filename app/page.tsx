@@ -1031,10 +1031,9 @@ export default function Player() {
       {/* Rediseño visual — bienvenida */}
       {screen === 'load' && authStatus !== 'authenticated' && (
         <div className={styles.welcomeScreen}>
-          <div className={styles.wWordmark}><span className={styles.wWordmarkDot} />Virtual English</div>
           <div className={styles.wCenter}>
-            <div className={styles.wIsotipo}>VE</div>
-            <h1 className={styles.wTitle}>Virtual <span className={styles.wHighlightWrap}>English</span></h1>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img className={styles.wLogo} src="/logo-ve.jpeg" alt="Virtual English" />
             <button className={styles.wSignInBtn} onClick={() => signIn('google')}>
               <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
                 <path d="M17.64 9.2a10.34 10.34 0 0 0-.164-1.84H9v3.48h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908C16.658 14.252 17.64 11.945 17.64 9.2z" fill="#4285F4"/>
@@ -1362,7 +1361,7 @@ export default function Player() {
                   <div className={styles.secLabel}>Delay subtítulos</div>
                   <div className={styles.delayRow}>
                     <button className={styles.delayBtn} onClick={() => adjDelay(-0.5)}>−</button>
-                    <div className={styles.delayVal} style={{ color: delay === 0 ? '#E8C547' : delay > 0 ? '#4B8FD8' : '#CC4444' }}>
+                    <div className={styles.delayVal} style={{ color: delay === 0 ? 'var(--ac)' : delay > 0 ? 'var(--bl)' : 'var(--rd)' }}>
                       {delay > 0 ? '+' : ''}{delay.toFixed(1)} s
                     </div>
                     <button className={styles.delayBtn} onClick={() => adjDelay(0.5)}>+</button>
