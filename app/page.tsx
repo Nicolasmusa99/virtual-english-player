@@ -1048,7 +1048,7 @@ export default function Player() {
       )}
 
       {screen === 'load' && authStatus === 'authenticated' && (
-        <div className={styles.loadScreen}>
+        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
           <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
             <button className={styles.tbBtn} onClick={() => {
               setScreen('exercises')
@@ -1139,7 +1139,7 @@ export default function Player() {
       )}
 
       {screen === 'exercises' && (
-        <div className={styles.loadScreen}>
+        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
           <div style={{ position: 'absolute', top: 16, right: 16 }}>
             <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
           </div>
@@ -1151,7 +1151,7 @@ export default function Player() {
       )}
 
       {screen === 'library' && (
-        <div className={styles.loadScreen}>
+        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
           <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Player</div>
           <div className={styles.dzSub} style={{ marginBottom: 16 }}>Mi biblioteca</div>
           {libraryError && <div className={styles.errorBox}>{libraryError}</div>}

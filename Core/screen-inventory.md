@@ -1,6 +1,8 @@
 # Screen Inventory — Virtual English Player
 
 > **[Rediseño 2026-09-03]** Rebranding a la identidad **Virtual English**: paleta nueva basada en la del sitio de marca (navy `#1F3556` + azul brillante `#3D6FB6` + celeste `#6AA0E6` + blanco). Las superficies oscuras se viraron a **navy tint** (`--p1..p5`), el texto a tono frío (`--tx/tx2/tx3`) y el **acento ámbar (`#E8C547`) se remplazó por azul** (celeste `--ac #6AA0E6` para texto/íconos/ticks/estados activos; azul primario `--acDeep #3D6FB6` con texto blanco para el botón Play). El azul de estado (`--bl`) pasó a cian `#2BB0E0` para no confundirse con los azules de marca. Todo el cambio pasa por variables CSS en `app/globals.css`. Los subtítulos siguen **blancos** (US-014). Afecta transversalmente a todas las SCR; abajo se anotan las representativas.
+>
+> **[Rediseño 2026-09-04]** Las **pantallas de gestión** (carga/load autenticada, biblioteca, sección de ejercicios y ventana autónoma del generador) pasaron a **tema claro** consistente con la home (fondo blanco `#FFFFFF` + navy `#1F3556` + azul `#3D6FB6`). Implementado con una clase `lightScope` (`app/page.module.css`) que **remapea los tokens** a la paleta clara en ese subárbol — el **player/stage siguen oscuros** (no llevan la clase; el panel de ejercicios *dentro* del player queda oscuro, la versión standalone/ventana queda clara).
 
 | **ID de Pantalla** | **Nombre de pantalla** | **Plataforma** | **Clave Foránea** | **Detalle visual** | **Estado** | **Última revisión** |
 |:---|----|----|----|----|----|----|

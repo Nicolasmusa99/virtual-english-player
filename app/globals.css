@@ -14,7 +14,7 @@
   --bl:#2BB0E0; --bl2:rgba(43,176,224,0.1); --bl3:rgba(43,176,224,0.28);
   --pu:#9B7FD4;
   /* Error red: lightened for legibility on navy */
-  --rd:#E86B6B;
+  --rd:#E86B6B; --rd2:rgba(232,107,107,0.10); --rd3:rgba(232,107,107,0.30);
 }
 html, body { height: 100%; overflow: hidden; background: #000; color: var(--tx); font-family: var(--font-sans, 'DM Sans', sans-serif); font-size: 13px; -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 2px; }
