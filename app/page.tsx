@@ -1362,7 +1362,7 @@ export default function Player() {
                   <div className={styles.secLabel}>Delay subtítulos</div>
                   <div className={styles.delayRow}>
                     <button className={styles.delayBtn} onClick={() => adjDelay(-0.5)}>−</button>
-                    <div className={styles.delayVal} style={{ color: delay === 0 ? '#E8C547' : delay > 0 ? '#4B8FD8' : '#CC4444' }}>
+                    <div className={styles.delayVal} style={{ color: delay === 0 ? 'var(--ac)' : delay > 0 ? 'var(--bl)' : 'var(--rd)' }}>
                       {delay > 0 ? '+' : ''}{delay.toFixed(1)} s
                     </div>
                     <button className={styles.delayBtn} onClick={() => adjDelay(0.5)}>+</button>

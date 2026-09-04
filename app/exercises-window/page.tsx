@@ -46,7 +46,7 @@ export default function ExercisesWindow() {
         data-testid="exercises-waiting"
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          height: '100vh', fontFamily: 'monospace', color: '#888', fontSize: 13,
+          height: '100vh', fontFamily: 'monospace', color: 'var(--tx2)', fontSize: 13,
         }}
       >
         Esperando datos del reproductor…

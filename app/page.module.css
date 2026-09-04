@@ -6,7 +6,7 @@
 .logoDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ac); flex-shrink: 0; }
 
 .dropzone { width: 520px; max-width: 94vw; border: 1px dashed rgba(255,255,255,0.13); border-radius: 14px; padding: 40px 36px; text-align: center; cursor: pointer; transition: all 0.18s; background: var(--p1); display: block; }
-.dropzone:hover, .dropzone[data-drag] { border-color: var(--ac3); background: rgba(232,197,71,0.03); }
+.dropzone:hover, .dropzone[data-drag] { border-color: var(--ac3); background: var(--ac2); }
 .dzIcon { width: 48px; height: 48px; border-radius: 12px; background: var(--p3); border: 1px solid var(--ln2); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
 .dzIcon svg { width: 22px; height: 22px; color: var(--tx2); }
 .dzTitle { font-size: 16px; font-weight: 500; color: var(--tx); margin-bottom: 6px; letter-spacing: -0.2px; }
@@ -54,7 +54,7 @@
 /* VIDEO STAGE */
 .stage { background: #000; display: flex; flex-direction: column; position: relative; overflow: hidden; }
 .shareHint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; font-family: var(--font-mono); font-size: 9px; color: rgba(255,255,255,0.25); display: flex; align-items: center; gap: 5px; pointer-events: none; white-space: nowrap; background: rgba(0,0,0,0.4); backdrop-filter: blur(4px); padding: 3px 12px; border-radius: 20px; letter-spacing: 0.5px; border: 1px solid rgba(255,255,255,0.06); }
-.shareHintDot { width: 4px; height: 4px; border-radius: 50%; background: rgba(75,143,216,0.6); flex-shrink: 0; }
+.shareHintDot { width: 4px; height: 4px; border-radius: 50%; background: var(--ac); flex-shrink: 0; }
 .videoWrap { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; min-height: 0; }
 .subOverlay { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; align-items: flex-end; padding: 0 6% 5%; pointer-events: none; z-index: 20; }
 .subBox { background: rgba(0,0,0,0.82); padding: 10px 32px 12px; border-radius: 4px; font-family: var(--font-sans); font-size: clamp(16px, 2.2vw, 26px); font-weight: 400; color: #ffffff; line-height: 1.55; text-align: center; max-width: 900px; letter-spacing: 0.02em; text-shadow: 0 1px 4px rgba(0,0,0,0.8); animation: subFadeIn 0.15s ease; }
@@ -77,15 +77,15 @@
 .pThumb { position: absolute; top: 50%; transform: translate(-50%,-50%); width: 11px; height: 11px; border-radius: 50%; background: #fff; border: 2px solid var(--ac); opacity: 0; transition: opacity 0.15s; pointer-events: none; }
 .progTrack:hover .pThumb { opacity: 1; }
 .ptick { position: absolute; top: -2px; width: 1.5px; height: 7px; border-radius: 1px; background: rgba(255,255,255,0.14); }
-.ptickSel { background: rgba(232,197,71,0.5); }
+.ptickSel { background: var(--ac); }
 
 .pb { display: flex; align-items: center; justify-content: center; gap: 4px; margin-top: 11px; }
 .pbBtn { width: 32px; height: 32px; border-radius: 7px; border: 1px solid var(--ln); background: transparent; color: var(--tx2); cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.1s; flex-shrink: 0; }
 .pbBtn:hover { background: var(--p3); color: var(--tx); border-color: var(--ln2); }
 .pbBtn:active { transform: scale(0.92); }
 .pbBtn svg { width: 13px; height: 13px; pointer-events: none; }
-.pbPlay { border-radius: 50% !important; width: 40px !important; height: 40px !important; background: var(--ac) !important; border-color: var(--ac) !important; color: #111 !important; box-shadow: 0 2px 12px rgba(232,197,71,0.28); }
-.pbPlay:hover { background: #d4af30 !important; }
+.pbPlay { border-radius: 50% !important; width: 40px !important; height: 40px !important; background: var(--acDeep) !important; border-color: var(--acDeep) !important; color: #fff !important; box-shadow: 0 2px 12px rgba(61,111,182,0.35); }
+.pbPlay:hover { background: var(--acDeepHover) !important; }
 .pbPlay svg { width: 14px !important; height: 14px !important; }
 .pbSep { width: 1px; height: 16px; background: var(--ln); flex-shrink: 0; margin: 0 1px; }
 
@@ -109,7 +109,7 @@
 .mcBtn:hover { background: var(--p3); color: var(--tx); border-color: var(--ln2); }
 .mcBtn:active { transform: scale(0.97); }
 .mcBl { border-color: var(--bl3); color: var(--bl); background: var(--bl2); }
-.mcBl:hover { background: rgba(75,143,216,0.18); }
+.mcBl:hover { background: var(--bl3); }
 .mcBtn svg { width: 11px; height: 11px; flex-shrink: 0; }
 .kc { font-family: var(--font-mono); font-size: 8px; background: var(--p4); border: 1px solid var(--ln); padding: 1px 4px; border-radius: 2px; color: var(--tx3); margin-left: auto; flex-shrink: 0; }
 
@@ -143,17 +143,17 @@
 .plEmpty { padding: 16px 14px; font-size: 11px; color: var(--tx3); text-align: center; }
 .plItem { display: flex; align-items: flex-start; gap: 6px; padding: 5px 14px; cursor: pointer; transition: background 0.08s; border-left: 2px solid transparent; }
 .plItem:hover { background: rgba(255,255,255,0.02); }
-.plAct { background: rgba(232,197,71,0.05) !important; border-left-color: var(--ac) !important; padding-left: 12px !important; }
+.plAct { background: var(--ac2) !important; border-left-color: var(--ac) !important; padding-left: 12px !important; }
 .plN { font-family: var(--font-mono); font-size: 9px; color: var(--tx3); padding-top: 2px; width: 14px; flex-shrink: 0; text-align: right; }
 .plAct .plN { color: var(--ac); }
 .plB { flex: 1; min-width: 0; }
 .plT { font-family: var(--font-mono); font-size: 9px; color: var(--tx3); }
-.plAct .plT { color: rgba(232,197,71,0.6); }
+.plAct .plT { color: var(--ac); }
 .plTx { font-size: 11px; color: var(--tx2); line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .plAct .plTx { color: var(--tx); }
 .plCk { width: 13px; height: 13px; border-radius: 3px; border: 1px solid var(--ln2); flex-shrink: 0; margin-top: 2px; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: all 0.1s; }
 .plSel .plCk { background: var(--ac); border-color: var(--ac); }
-.plCk svg { width: 8px; height: 8px; color: #111; }
+.plCk svg { width: 8px; height: 8px; color: var(--p1); }
 
 .kbHint { padding: 8px 14px; border-top: 1px solid var(--ln); flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; }
 .kbItem { display: flex; align-items: center; gap: 4px; font-size: 9px; color: var(--tx3); }
@@ -172,8 +172,8 @@
 .plEditInput { width: 100%; background: var(--p3); border: 1px solid var(--ac3); border-radius: 4px; padding: 4px 7px; font-family: var(--font-sans); font-size: 11px; color: var(--tx); outline: none; }
 .plEditInput:focus { border-color: var(--ac); }
 .plEditBtns { display: flex; gap: 4px; }
-.plEditSave { padding: 2px 8px; border-radius: 4px; border: none; background: var(--ac); color: #111; font-size: 10px; cursor: pointer; font-weight: 600; }
-.plEditSave:hover { background: #d4af30; }
+.plEditSave { padding: 2px 8px; border-radius: 4px; border: none; background: var(--ac); color: var(--p1); font-size: 10px; cursor: pointer; font-weight: 600; }
+.plEditSave:hover { background: var(--acDeep); color: #fff; }
 .plEditCancel { padding: 2px 8px; border-radius: 4px; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); font-size: 10px; cursor: pointer; }
 .plEditCancel:hover { background: var(--p3); color: var(--tx2); }
 
@@ -181,7 +181,7 @@
 .restoreBanner { display: flex; align-items: center; gap: 10px; padding: 8px 16px; background: var(--bl2); border-bottom: 1px solid var(--bl3); font-size: 12px; color: var(--tx2); flex-shrink: 0; }
 .restoreBannerText { flex: 1; }
 .restoreBtn { padding: 4px 12px; border-radius: 5px; border: 1px solid var(--ac3); background: var(--ac2); color: var(--ac); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: background 0.12s; }
-.restoreBtn:hover { background: var(--ac); color: #111; }
+.restoreBtn:hover { background: var(--ac); color: var(--p1); }
 .discardBtn { padding: 4px 10px; border-radius: 5px; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: all 0.12s; }
 .discardBtn:hover { background: var(--p3); color: var(--tx2); }
 
@@ -190,7 +190,7 @@
 .exitDialog { background: var(--p2); border: 1px solid var(--ln2); border-radius: 10px; padding: 20px 24px; max-width: 360px; width: 90%; display: flex; flex-direction: column; gap: 8px; }
 .exitTitle { font-size: 13px; color: var(--tx); font-weight: 500; margin-bottom: 6px; line-height: 1.4; }
 .exitBtnPrimary { padding: 9px 14px; border-radius: 7px; border: 1px solid var(--ac3); background: var(--ac2); color: var(--ac); font-size: 12px; cursor: pointer; font-family: var(--font-sans); text-align: left; transition: all 0.12s; }
-.exitBtnPrimary:hover { background: var(--ac); color: #111; }
+.exitBtnPrimary:hover { background: var(--ac); color: var(--p1); }
 .exitBtn { padding: 9px 14px; border-radius: 7px; border: 1px solid var(--ln2); background: var(--p3); color: var(--tx2); font-size: 12px; cursor: pointer; font-family: var(--font-sans); text-align: left; transition: all 0.12s; }
 .exitBtn:hover { background: var(--p4); color: var(--tx); }
 .exitBtnCancel { padding: 7px 14px; border-radius: 7px; border: 1px solid transparent; background: transparent; color: var(--tx3); font-size: 11px; cursor: pointer; font-family: var(--font-sans); transition: all 0.12s; align-self: center; }
@@ -203,7 +203,7 @@
 .modeBtn:active { transform: scale(0.97); }
 .modeBtn:disabled { opacity: 0.35; cursor: not-allowed; }
 .modeBtnAct { background: var(--ac2); border-color: var(--ac3); color: var(--ac); }
-.modeBtnAct:hover { background: var(--ac); color: #111; border-color: var(--ac); }
+.modeBtnAct:hover { background: var(--ac); color: var(--p1); border-color: var(--ac); }
 
 /* ── WELCOME SCREEN (load, unauthenticated) — Rediseño visual ── */
 .welcomeScreen {
