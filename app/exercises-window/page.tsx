@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import ExercisesPanel from '../ExercisesPanel'
 import type { Phrase } from '@/lib/srt'
+import styles from '../page.module.css'
 
 interface WindowState {
   phrases: Phrase[]
@@ -44,9 +45,10 @@ export default function ExercisesWindow() {
     return (
       <div
         data-testid="exercises-waiting"
+        className={styles.lightScope}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          height: '100vh', fontFamily: 'monospace', color: 'var(--tx2)', fontSize: 13,
+          height: '100vh', background: 'var(--p1)', fontFamily: 'monospace', color: 'var(--tx2)', fontSize: 13,
         }}
       >
         Esperando datos del reproductor…
@@ -55,12 +57,14 @@ export default function ExercisesWindow() {
   }
 
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 16px' }}>
-      <ExercisesPanel
-        phrases={state.phrases}
-        videoFileName={state.fileName}
-        singleMode="video"
-      />
+    <div className={styles.lightScope} style={{ minHeight: '100vh', background: 'var(--p1)' }}>
+      <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 16px' }}>
+        <ExercisesPanel
+          phrases={state.phrases}
+          videoFileName={state.fileName}
+          singleMode="video"
+        />
+      </div>
     </div>
   )
 }
