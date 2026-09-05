@@ -32,6 +32,16 @@ soltados, se muestra un mensaje de error y el flujo se detiene.
 - El tipo del archivo debe comenzar con video/ o la extensión debe
   coincidir con /.(avi\|mp4\|mkv\|mov\|webm\|m4v)\$/i.
 
+- **\[Corregida 2026-09-05\] Formatos reproducibles vs. transcribibles:** el
+  `<video>` del navegador solo reproduce MP4/H.264, WEBM, OGG y (en Safari/Chrome)
+  MOV; **AVI y MKV se transcriben pero NO se reproducen** en el navegador. Al soltar
+  un formato no reproducible (`PLAYABLE_VIDEO_RE` en `app/page.tsx`) se muestra un
+  **aviso no bloqueante** (no se rechaza: el profesor puede querer solo el SRT)
+  recomendando convertir a MP4. El dropzone anuncia solo formatos reproducibles
+  (MP4/WEBM/MOV + SRT); ya no resalta AVI/MKV. *Backlog: transcodificación
+  automática AVI→MP4 pendiente para cuando el proyecto pase a Vercel Pro (hoy
+  inviable: límite de 60s del plan Hobby y sin ffmpeg en serverless).*
+
 - El \<input\> acepta también .srt para permitir la carga combinada (ver
   US-002).
 
