@@ -61,7 +61,8 @@ export default function Player() {
   const [progress, setProgress]           = useState(0)
   const [errorMsg, setErrorMsg]           = useState('')
   const [videoFileName, setVideoFileName] = useState('')
-  const [videoUrl, setVideoUrl]           = useState('')
+  const [videoUrl, setVideoUrl]           = useState('')   // objectURL local (File en memoria)
+  const [storageUrl, setStorageUrl]       = useState('')   // URL del Blob (fallback cuando no hay File local)
   const [srtSource, setSrtSource]         = useState('')
   const [srtReloadError, setSrtReloadError] = useState<string | null>(null)
   const [phrases, setPhrases]             = useState<Phrase[]>([])
@@ -495,7 +496,7 @@ export default function Player() {
   // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
   function openStage() {
     // Fix stage + biblioteca: allow remote library videos (videoUrl set, videoFileRef null)
-    if (!videoFileRef.current && !videoUrl) return
+    if (!videoFileRef.current && !videoUrl && !storageUrl) return
     const v           = vidRef.current
     const currentTime  = v?.currentTime  ?? 0
     const playbackRate = v?.playbackRate ?? SPEEDS[speedIdx]
@@ -513,7 +514,7 @@ export default function Player() {
             ch.send({ type: 'load_blob', blob: videoFileRef.current, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
           } else {
             // Fix stage + biblioteca: library video — send storageUrl instead of blob
-            ch.send({ type: 'load_url', url: videoUrl, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
+            ch.send({ type: 'load_url', url: videoUrl || storageUrl, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
           }
           break
         case 'timeupdate': {
@@ -756,6 +757,9 @@ export default function Player() {
         alert('El video se subió y transcribió bien, y el .srt ya se descargó. Pero no se pudo guardar la sesión en tu biblioteca: si abrís este video desde la biblioteca más tarde, puede aparecer sin subtítulos.')
       }
 
+      // Guardamos la URL del Blob como fallback (reabrir/recargar). NO reemplaza el objectURL local:
+      // el recién-transcrito sigue reproduciéndose desde el File en memoria (instantáneo, sin re-descarga).
+      setStorageUrl(blob.url)
       libraryVideoIdRef.current = createdVideoId
       capture('video_saved_to_library', { video_id: createdVideoId, phrase_count: parsed.length })
 
@@ -811,7 +815,7 @@ export default function Player() {
     if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setScreen('load'); setStep('idle'); setProgress(0)
     setPhrases([]); setCurIdx(-1); setIsPlaying(false)
-    setVideoUrl(''); setErrorMsg(''); setSrtSource('')
+    setVideoUrl(''); setStorageUrl(''); setErrorMsg(''); setSrtSource('')
     setStageOpen(false); stageOpenRef.current = false
     videoFileRef.current = null
     setIsDirty(false); setRestorePrompt(null); setExitDialog(false)
@@ -846,7 +850,7 @@ export default function Player() {
       libraryVideoIdRef.current = id
       videoFileRef.current = null
       setVideoFileName(data.video.originalName)
-      setVideoUrl(data.video.storageUrl)
+      setStorageUrl(data.video.storageUrl); setVideoUrl('')
       const s = data.session
       const savedPhrases = s?.phrases ?? []
       setPhrases(savedPhrases)
@@ -1249,7 +1253,7 @@ export default function Player() {
                 onClick={exercisesOpen ? () => closeExercisesWindow(true) : openExercisesWindow}>
                 {exercisesOpen ? '✕ Cerrar generador' : '⊞ Abrir generador'}
               </button>
-              <button className={styles.tbBtn} disabled={!stageOpen && !videoUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
+              <button className={styles.tbBtn} disabled={!stageOpen && !videoUrl && !storageUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
                 {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
               </button>
               <button className={styles.tbBtn} onClick={handleExitAttempt}>← Cargar otro</button>
@@ -1273,7 +1277,7 @@ export default function Player() {
                 : <div className={styles.shareHint}><span className={styles.shareHintDot} />Compartir en Zoom — el alumno solo ve esto</div>
               }
               <div className={styles.videoWrap}>
-                <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || undefined)}
+                <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || storageUrl || undefined)}
                   style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
                 {ccOn && subText && !stageOpen && !hideTexts && (
                   <div className={styles.subOverlay}>
