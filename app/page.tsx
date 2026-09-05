@@ -24,6 +24,8 @@ type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5]
 const DURATION_WARN_MIN = 15   // límite real: ~15 min por el maxDuration=300s de /api/transcribe
+// Formatos que el <video> del navegador SÍ reproduce. AVI/MKV/etc. se transcriben pero no se reproducen.
+const PLAYABLE_VIDEO_RE = /\.(mp4|m4v|webm|ogg|ogv|mov)$/i
 const SECTION_SECONDS = 2   // duración (s) de cada sección dentro de una frase (programable)
 const NAV_HOLD_MS     = 450 // ms entre frase y frase al mantener ← / → presionada
 
@@ -621,6 +623,10 @@ export default function Player() {
     const url = URL.createObjectURL(vf as File)
     panelVideoUrlRef.current = url
     setVideoUrl(url)
+    // Aviso no bloqueante (no rechaza): formatos que se transcriben pero el navegador no reproduce.
+    if (!PLAYABLE_VIDEO_RE.test((vf as File).name)) {
+      alert(`"${(vf as File).name}": este formato (AVI, MKV, etc.) se transcribe, pero el navegador no lo reproduce. Vas a poder generar y descargar el SRT; para reproducir el video, convertilo a MP4 antes de subirlo.`)
+    }
     const srtFile = sf as File | null
     if (srtFile) {
       const r = new FileReader()
@@ -1144,11 +1150,12 @@ export default function Player() {
                 <div className={styles.dzTitle}>Arrastrá el video aquí</div>
                 <div className={styles.dzSub}>
                   Gemini transcribe el audio automáticamente y genera el SRT.<br />
+                  Para reproducir en el navegador subí MP4 o WEBM — AVI/MKV se transcriben pero no se reproducen (convertilos a MP4).<br />
                   También podés arrastrar video + SRT juntos si ya lo tenés.
                 </div>
                 <div className={styles.dzFormats}>
-                  {['MP4', 'AVI', 'MKV', 'MOV', 'WEBM', 'SRT'].map(f => (
-                    <span key={f} className={`${styles.fmt} ${['MP4', 'AVI', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
+                  {['MP4', 'WEBM', 'MOV', 'SRT'].map(f => (
+                    <span key={f} className={`${styles.fmt} ${['MP4', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
                   ))}
                 </div>
               </label>
