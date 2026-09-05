@@ -85,36 +85,49 @@ QUIERO subir un video sin SRT para que Gemini genere los subtítulos
 automáticamente\
 PARA no tener que crear ni buscar el archivo de subtítulos
 
-**Casos de uso**
+**Casos de uso** \[Corregida 2026-09-05\] — el video ya no se manda por
+FormData a `/api/transcribe` (rebotaba con **HTTP 413** en Vercel: el body de
+funciones serverless tiene un tope de ~4.5 MB, así que videos de 5-8 MB nunca
+salían de Vercel). Ahora el browser sube el video **directo a Vercel Blob** (mismo
+mecanismo que la biblioteca) y `/api/transcribe` recibe la **URL del Blob**. Como
+efecto de esta fusión, el video queda **guardado en la biblioteca** del profesor.
 
-UC-01 Se llama a transcribe(videoFile): se crea un FormData con el video
-y se envía vía XMLHttpRequest a POST /api/transcribe.\
-UC-02 Durante la subida, xhr.upload.onprogress actualiza step =
-'uploading', el mensaje con el porcentaje, y progress en el rango 5 %–35
-%.\
-UC-03 Al completarse la subida (xhr.upload.onloadend), step pasa a
-'transcribing', progress salta a 40 % y comienza un intervalo de
-animación que avanza de forma aleatoria hasta 88 %.\
-UC-04 En el servidor, el video se sube a Gemini con protocolo
-reanudable, se espera a que el archivo quede ACTIVE (hasta 30 × 3 s) y
-se llama a gemini-2.5-flash:generateContent con un prompt estricto que
-exige salida SRT pura.\
-UC-05 En xhr.onload con status 2xx, se llama a parseSRT(data.srt). Si
-produce frases, progress pasa a 100 % y tras 300 ms la pantalla cambia a
-'player'.\
-UC-06 Si data.error está presente, parseSRT devuelve 0 frases, o el
-status HTTP no es 2xx, se muestra errorMsg y se resetea el estado a
-idle.\
-UC-07 Si ocurre un error de red, xhr.onerror muestra 'Error de red.
-Verificá tu conexión.'.
+UC-01 `transcribe(videoFile)` es async: (1) `POST /api/videos` crea la fila y
+valida cuota; (2) `upload()` de `@vercel/blob/client` sube el video directo a Blob
+(esquiva el 413 **y** el CORS de Gemini); (3) `PATCH /api/videos/[id]` confirma la
+`storageUrl`; (4) `POST /api/transcribe { blobUrl, mimeType }` (JSON, no FormData).\
+UC-02 Durante la subida, `upload({ onUploadProgress })` actualiza step =
+'uploading' con el **porcentaje real** de subida a Blob (progress 2 %–35 %).\
+UC-03 Al terminar la subida, step pasa a 'transcribing' con el mensaje
+"Transcribiendo con Gemini…", progress salta a 40 % y arranca la animación
+aleatoria hasta 88 %.\
+UC-04 En el servidor, `/api/transcribe` hace `fetch(blobUrl)` para bajar el
+video de Blob y sigue **exactamente igual** que antes: sube a Gemini con protocolo
+reanudable, espera ACTIVE (hasta 30 × 3 s) y llama a
+gemini-2.5-flash:generateContent con el prompt SRT-only.\
+UC-05 Si la respuesta trae SRT válido, se descarga el .srt, se guarda la sesión
+(`PUT /api/videos/[id]/session` con las phrases), progress pasa a 100 % y tras
+300 ms la pantalla cambia a 'player'.\
+UC-06 Si falla la subida, la transcripción, o el SRT tiene 0 frases, se muestra
+errorMsg, se resetea a idle **y se borra el video recién creado**
+(`DELETE /api/videos/[id]`, `keepalive:true`) para no dejar huérfanos ni ocupar
+cuota (flag `succeeded` en el `finally`).\
+UC-07 Si el guardado de la sesión (paso 5) falla, se avisa al profesor (no se
+silencia): la transcripción igual funciona en la sesión activa y el .srt ya se
+descargó.
 
 **Reglas**
 
-- El XHR se guarda en xhrRef.current para poder cancelarlo sin desmontar
-  el componente.
+- Un `AbortController` (`abortRef.current`) permite cancelar la subida y la
+  transcripción sin desmontar el componente.
 
 - El GEMINI_API_KEY nunca sale del servidor; el frontend solo habla con
-  /api/transcribe.
+  /api/transcribe (que recibe la URL del Blob, no el archivo).
+
+- `/api/upload-init` sigue **muerta a propósito**: era el intento de PUT
+  browser→Gemini, bloqueado por el CORS de Google (Gemini no manda
+  Access-Control-Allow-Origin en el endpoint de upload reanudable). No reactivar;
+  la solución fue Vercel Blob, no upload-init.
 
 - maxDuration de la ruta es 300 s (requiere Vercel Pro; Hobby Plan tiene
   límite de 60 s).
@@ -154,8 +167,9 @@ archivo equivocado
 
 UC-01 El profesor hace clic en "Cancelar" durante step = 'uploading' o
 step = 'transcribing'.\
-UC-02 Se llama a xhrRef.current.abort() y xhrRef.current se establece en
-null.\
+UC-02 \[Corregida 2026-09-05\] Se llama a abortRef.current.abort() (antes
+xhrRef); el `finally` de transcribe() borra el video ya creado para no dejar
+huérfanos.\
 UC-03 step regresa a 'idle', progress a 0, errorMsg muestra
 'Cancelado.', y se borran videoUrl y videoFileName.\
 UC-04 El dropzone vuelve a ser visible e interactivo.
@@ -1118,24 +1132,27 @@ QUIERO recibir un aviso si el video es demasiado grande o largo antes de
 iniciar la transcripción\
 PARA evitar esperas inútiles y errores de timeout
 
-**Casos de uso**
+**Casos de uso** \[Corregida 2026-09-05\] — el chequeo pasó de **tamaño** a
+**duración**. El límite real ya no es el peso del archivo (el 413 de body de
+Vercel se resolvió subiendo a Blob, ver US-003) sino la **duración**: `/api/transcribe`
+tiene `maxDuration=300s`, así que videos largos pueden no completar la transcripción.
+Se eliminó `SIZE_WARN_MB`; ahora hay `DURATION_WARN_MIN = 15`.
 
-UC-01 Tras detectar un video válido (US-001), se evalúa file.size contra
-un umbral configurado.\
-UC-02 Si supera el umbral, se muestra un aviso con el tamaño detectado y
-la recomendación de recortar o usar un SRT propio (US-002), pero se
-permite continuar.\
-UC-03 Si la duración leída del metadata supera el margen seguro de
-procesamiento, se advierte sobre el límite de maxDuration de la ruta de
-transcripción (US-003).
+UC-01 Tras detectar un video válido (US-001), se lee la duración del metadata con
+un `<video>` sonda (`onloadedmetadata`).\
+UC-02 Si la duración supera `DURATION_WARN_MIN` (15 min), se muestra un aviso con
+la duración detectada y la advertencia de que puede no completar la transcripción,
+pero se permite continuar.\
+UC-03 Si no se puede leer la duración (`onerror`), se continúa sin aviso (no se
+bloquea al profesor por un metadata ilegible).
 
 **Reglas**
 
 - La validación es informativa, no bloqueante: el profesor decide si
   igual sube.
 
-- El umbral de tamaño y el de duración son constantes configurables en
-  un único lugar.
+- El umbral de duración (`DURATION_WARN_MIN`) es una constante configurable en un
+  único lugar (`app/page.tsx`).
 
 #### **US-037 — Stage en ventana independiente para segundo monitor**
 
