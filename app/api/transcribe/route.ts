@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 // Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
 
-async function uploadToGemini(file: File, mimeType: string, apiKey: string): Promise<string> {
+async function uploadToGemini(file: Blob, mimeType: string, apiKey: string): Promise<string> {
   const startRes = await fetch(
     `https://generativelanguage.googleapis.com/upload/v1beta/files`,
     {
@@ -66,13 +66,20 @@ export async function POST(req: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
 
   try {
-    const formData = await req.formData()
-    const file = formData.get('file') as File | null
-    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    const { blobUrl, mimeType: mimeIn } = await req.json()
+    if (!blobUrl || typeof blobUrl !== 'string') {
+      return NextResponse.json({ error: 'blobUrl requerido' }, { status: 400 })
+    }
 
-    const mimeType = file.type || 'video/mp4'
+    // El video vive en Vercel Blob (subido directo por el browser). Lo bajamos acá y se lo
+    // pasamos a Gemini igual que antes. Esto evita el límite de 4.5 MB de body de Vercel.
+    const dl = await fetch(blobUrl)
+    if (!dl.ok) throw new Error(`No se pudo descargar el video del storage: ${dl.status}`)
+    const file = await dl.blob()
+
+    const mimeType = mimeIn || file.type || 'video/mp4'
     const sizeMB = (file.size / 1024 / 1024).toFixed(1)
-    console.log(`[transcribe] File: ${file.name} — ${sizeMB} MB — ${mimeType}`)
+    console.log(`[transcribe] Blob: ${sizeMB} MB — ${mimeType}`)
     console.log(`[transcribe] Uploading to Gemini...`)
 
     const fileUri = await uploadToGemini(file, mimeType, apiKey)
