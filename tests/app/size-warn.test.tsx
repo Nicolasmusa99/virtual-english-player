@@ -1,8 +1,10 @@
-// Bloque F — US-036: validación de tamaño antes de subir
-// TC-083:  video > umbral → aviso informativo no bloqueante con tamaño detectado
+// Bloque F — US-036: validación de DURACIÓN antes de subir [Corregida 2026-09-05]
+// El chequeo pasó de tamaño (MB) a duración (min): el límite real es ~15 min por el
+// maxDuration=300s de /api/transcribe, no el peso del archivo.
+// TC-083:  video > 15 min → aviso informativo no bloqueante con la duración detectada
 // TC-083b: "Continuar de todos modos" → transcripción inicia
 // TC-083c: "Cancelar" → banner desaparece, drop zone limpio (video state reseteado)
-// TC-084:  video ≤ umbral → sin aviso, flujo continúa normalmente
+// TC-084:  video ≤ 15 min → sin aviso, flujo continúa normalmente
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, fireEvent } from '@testing-library/react'
@@ -10,56 +12,77 @@ import Player from '@/app/page'
 
 function tick(ms = 50) { return new Promise<void>(r => setTimeout(r, ms)) }
 
-// Crea un File con size mockeado sin allocar memoria real.
-function fakeVideoFile(name: string, sizeBytes: number): File {
+// Crea un File de video con size mockeado sin allocar memoria real.
+function fakeVideoFile(name: string): File {
   const f = new File(['x'], name, { type: 'video/mp4' })
-  Object.defineProperty(f, 'size', { value: sizeBytes })
+  Object.defineProperty(f, 'size', { value: 6 * 1024 * 1024 })
   return f
 }
 
-describe('US-036 — validación de tamaño antes de subir', () => {
+// handleFiles lee la duración con un <video> sonda (probe.src → onloadedmetadata).
+// jsdom no dispara loadedmetadata ni calcula duration, así que interceptamos
+// document.createElement('video') y devolvemos una sonda que resuelve la duración pedida.
+function mockVideoProbe(durationSec: number) {
+  const orig = document.createElement.bind(document)
+  vi.spyOn(document, 'createElement').mockImplementation((tag: string, opts?: ElementCreationOptions) => {
+    if (tag === 'video') {
+      const el: Record<string, unknown> = { preload: '', duration: durationSec, onloadedmetadata: null, onerror: null }
+      let _src = ''
+      Object.defineProperty(el, 'src', {
+        get() { return _src },
+        set(v: string) {
+          _src = v
+          Promise.resolve().then(() => { if (typeof el.onloadedmetadata === 'function') (el.onloadedmetadata as () => void)() })
+        },
+      })
+      return el as unknown as HTMLElement
+    }
+    return orig(tag, opts)
+  })
+}
+
+describe('US-036 — validación de duración antes de subir', () => {
   beforeEach(() => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url')
-    // Previene que xhr.send() haga una conexión real a localhost → evita que onerror
-    // resetee step a 'idle' dentro de los 50ms del tick, lo que haría que isTranscribing
-    // vuelva a false y el dropzone reaparezca antes de que el test pueda verificarlo.
-    vi.spyOn(XMLHttpRequest.prototype, 'send').mockImplementation(() => {})
+    // transcribe() ahora usa fetch (ya no XHR). Lo dejamos pendiente (nunca resuelve) para que,
+    // tras "Continuar"/flujo corto, step quede en 'uploading' y podamos verificar la UI sin que
+    // un rechazo lo resetee a 'idle' dentro del tick.
+    vi.spyOn(globalThis, 'fetch').mockImplementation(() => new Promise<Response>(() => {}))
   })
   afterEach(() => {
     vi.restoreAllMocks()
   })
 
-  // TC-083: un video que supera el umbral (>200 MB) muestra el aviso informativo.
-  // El aviso no bloquea la UI (sigue en load screen) e indica el tamaño detectado.
-  // ROJO: data-testid="size-warn" no existe todavía en app/page.tsx.
-  it('TC-083: video de 201 MB → aviso visible con el tamaño, carga no inicia sola', async () => {
+  // TC-083: un video que supera el umbral (>15 min) muestra el aviso informativo.
+  it('TC-083: video de 20 min → aviso visible con la duración, carga no inicia sola', async () => {
+    mockVideoProbe(20 * 60)
     const { container } = render(<Player />)
 
-    const bigFile = fakeVideoFile('lecture.mp4', 201 * 1024 * 1024)
+    const longFile = fakeVideoFile('lecture.mp4')
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
 
     await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [bigFile] } })
+      fireEvent.change(fileInput, { target: { files: [longFile] } })
       await tick(50)
     })
 
-    // ROJO: el banner data-testid="size-warn" no existe todavía
     const banner = container.querySelector('[data-testid="size-warn"]')
     expect(banner).not.toBeNull()
 
-    // El tamaño detectado debe aparecer en el texto del aviso
-    expect(banner!.textContent).toMatch(/201/)
+    // La duración detectada (min) debe aparecer en el texto del aviso
+    expect(banner!.textContent).toMatch(/20/)
+    expect(banner!.textContent).toMatch(/min/)
 
     // El aviso es no bloqueante: el drop zone sigue disponible (seguimos en load screen)
     expect(container.querySelector('input[type="file"]')).not.toBeNull()
   })
 
-  // TC-084: un video dentro del umbral (≤200 MB) no muestra aviso alguno.
-  // El flujo continúa normalmente (transcribe() es llamado).
-  it('TC-084: video de 10 MB → sin aviso, flujo continúa normalmente', async () => {
+  // TC-084: un video dentro del umbral (≤15 min) no muestra aviso; el flujo continúa.
+  it('TC-084: video de 5 min → sin aviso, flujo continúa normalmente', async () => {
+    mockVideoProbe(5 * 60)
     const { container } = render(<Player />)
 
-    const normalFile = fakeVideoFile('short.mp4', 10 * 1024 * 1024)
+    const normalFile = fakeVideoFile('short.mp4')
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
 
     await act(async () => {
@@ -69,28 +92,25 @@ describe('US-036 — validación de tamaño antes de subir', () => {
 
     // Sin aviso
     expect(container.querySelector('[data-testid="size-warn"]')).toBeNull()
-
-    // El flujo avanzó: la UI ya no muestra el drop zone (se está transcribiendo)
-    // o al menos no hay banner de aviso de tamaño
-    // (fetch falla en test environment pero eso es esperado — sólo verificamos el warning)
+    // El flujo avanzó: transcribe() puso step='uploading' → el drop zone se ocultó
+    expect(container.querySelector('input[type="file"]')).toBeNull()
   })
 
   // TC-083b: tras el aviso, "Continuar de todos modos" inicia la transcripción
   it('TC-083b: click en "Continuar de todos modos" → transcripción inicia (drop zone desaparece)', async () => {
+    mockVideoProbe(20 * 60)
     const { container, queryByText } = render(<Player />)
 
-    const bigFile = fakeVideoFile('lecture.mp4', 201 * 1024 * 1024)
+    const longFile = fakeVideoFile('lecture.mp4')
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
 
     await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [bigFile] } })
+      fireEvent.change(fileInput, { target: { files: [longFile] } })
       await tick(50)
     })
 
-    // Banner visible
     expect(container.querySelector('[data-testid="size-warn"]')).not.toBeNull()
 
-    // ROJO: el botón "Continuar de todos modos" no existe todavía
     const proceedBtn = queryByText(/continuar de todos modos/i)
     expect(proceedBtn).not.toBeNull()
 
@@ -104,22 +124,21 @@ describe('US-036 — validación de tamaño antes de subir', () => {
     expect(container.querySelector('input[type="file"]')).toBeNull()
   })
 
-  // TC-083c: "Cancelar" cierra el banner y resetea el estado de video — el profesor
-  // vuelve al drop zone limpio y puede arrastrar video+SRT juntos (flujo US-002).
+  // TC-083c: "Cancelar" cierra el banner y resetea el estado de video.
   it('TC-083c: "Cancelar" → banner desaparece, drop zone disponible y video state limpio', async () => {
+    mockVideoProbe(20 * 60)
     const { container, queryByText } = render(<Player />)
 
-    const bigFile = fakeVideoFile('lecture.mp4', 201 * 1024 * 1024)
+    const longFile = fakeVideoFile('lecture.mp4')
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
 
     await act(async () => {
-      fireEvent.change(fileInput, { target: { files: [bigFile] } })
+      fireEvent.change(fileInput, { target: { files: [longFile] } })
       await tick(50)
     })
 
     expect(container.querySelector('[data-testid="size-warn"]')).not.toBeNull()
 
-    // ROJO: el botón "Cancelar" no existe todavía
     const cancelBtn = queryByText(/^cancelar$/i)
     expect(cancelBtn).not.toBeNull()
 
