@@ -23,7 +23,9 @@ interface LibraryVideoRow {
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
 const SPEEDS = [0.5, 0.75, 1.0, 1.25, 1.5]
-const SIZE_WARN_MB = 200
+const DURATION_WARN_MIN = 15   // límite real: ~15 min por el maxDuration=300s de /api/transcribe
+// Formatos que el <video> del navegador SÍ reproduce. AVI/MKV/etc. se transcriben pero no se reproducen.
+const PLAYABLE_VIDEO_RE = /\.(mp4|m4v|webm|ogg|ogv|mov)$/i
 const SECTION_SECONDS = 2   // duración (s) de cada sección dentro de una frase (programable)
 const NAV_HOLD_MS     = 450 // ms entre frase y frase al mantener ← / → presionada
 
@@ -32,7 +34,7 @@ export default function Player() {
   const vidRef  = useRef<HTMLVideoElement>(null)
   const progRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
-  const xhrRef  = useRef<XMLHttpRequest | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const srtReloadRef   = useRef<HTMLInputElement>(null)
   const exitPendingRef = useRef<(() => void) | null>(null)
 
@@ -59,7 +61,8 @@ export default function Player() {
   const [progress, setProgress]           = useState(0)
   const [errorMsg, setErrorMsg]           = useState('')
   const [videoFileName, setVideoFileName] = useState('')
-  const [videoUrl, setVideoUrl]           = useState('')
+  const [videoUrl, setVideoUrl]           = useState('')   // objectURL local (File en memoria)
+  const [storageUrl, setStorageUrl]       = useState('')   // URL del Blob (fallback cuando no hay File local)
   const [srtSource, setSrtSource]         = useState('')
   const [srtReloadError, setSrtReloadError] = useState<string | null>(null)
   const [phrases, setPhrases]             = useState<Phrase[]>([])
@@ -92,7 +95,7 @@ export default function Player() {
   const [practiceMode, setPracticeMode]   = useState(false)
   const [loopMode, setLoopMode]           = useState(false)
   const [hideTexts, setHideTexts]         = useState(false)
-  const [sizeWarn, setSizeWarn]           = useState<{ file: File; sizeMB: number } | null>(null)
+  const [sizeWarn, setSizeWarn]           = useState<{ file: File; durationMin: number } | null>(null)
   // Biblioteca (Bloque 13)
   const libraryVideoIdRef = useRef<string | null>(null)
   const { status: authStatus } = useSession()
@@ -493,7 +496,7 @@ export default function Player() {
   // ─── Stage management (US-037 / US-038 / US-039) ─────────────────────────
   function openStage() {
     // Fix stage + biblioteca: allow remote library videos (videoUrl set, videoFileRef null)
-    if (!videoFileRef.current && !videoUrl) return
+    if (!videoFileRef.current && !videoUrl && !storageUrl) return
     const v           = vidRef.current
     const currentTime  = v?.currentTime  ?? 0
     const playbackRate = v?.playbackRate ?? SPEEDS[speedIdx]
@@ -511,7 +514,7 @@ export default function Player() {
             ch.send({ type: 'load_blob', blob: videoFileRef.current, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
           } else {
             // Fix stage + biblioteca: library video — send storageUrl instead of blob
-            ch.send({ type: 'load_url', url: videoUrl, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
+            ch.send({ type: 'load_url', url: videoUrl || storageUrl, fileName: videoFileName, currentTime, playbackRate, ccOn: ccRef.current })
           }
           break
         case 'timeupdate': {
@@ -621,6 +624,10 @@ export default function Player() {
     const url = URL.createObjectURL(vf as File)
     panelVideoUrlRef.current = url
     setVideoUrl(url)
+    // Aviso no bloqueante (no rechaza): formatos que se transcriben pero el navegador no reproduce.
+    if (!PLAYABLE_VIDEO_RE.test((vf as File).name)) {
+      alert(`"${(vf as File).name}": este formato (AVI, MKV, etc.) se transcribe, pero el navegador no lo reproduce. Vas a poder generar y descargar el SRT; para reproducir el video, convertilo a MP4 antes de subirlo.`)
+    }
     const srtFile = sf as File | null
     if (srtFile) {
       const r = new FileReader()
@@ -640,105 +647,152 @@ export default function Player() {
       }
       r.readAsText(srtFile, 'UTF-8')
     } else {
-      const sizeMB = (vf as File).size / 1024 / 1024
-      if (sizeMB > SIZE_WARN_MB) {
-        setSizeWarn({ file: vf as File, sizeMB })
-      } else {
-        transcribe(vf as File)
+      // US-036: aviso por DURACIÓN (no por tamaño). El límite real es ~15 min por maxDuration=300s.
+      const probe = document.createElement('video')
+      probe.preload = 'metadata'
+      probe.onloadedmetadata = () => {
+        const durationMin = probe.duration / 60
+        if (isFinite(durationMin) && durationMin > DURATION_WARN_MIN) {
+          setSizeWarn({ file: vf as File, durationMin })
+        } else {
+          transcribe(vf as File)
+        }
       }
+      probe.onerror = () => transcribe(vf as File)  // si no se puede leer la duración, seguimos igual
+      probe.src = url
     }
   }
 
-  function transcribe(videoFile: File) {
+  async function transcribe(videoFile: File) {
     setStep('uploading')
-    setStepMsg(`Subiendo video (${(videoFile.size / 1024 / 1024).toFixed(0)} MB)...`)
-    setProgress(5)
+    setStepMsg('Subiendo video…')
+    setProgress(2)
     setErrorMsg('')
 
-    const fd = new FormData()
-    fd.append('file', videoFile, videoFile.name)
+    const ac = new AbortController()
+    abortRef.current = ac
+    let interval: ReturnType<typeof setInterval> | null = null
+    let createdVideoId: string | null = null
+    let succeeded = false
 
-    const xhr = new XMLHttpRequest()
-    xhrRef.current = xhr
+    try {
+      // 1) Crear la fila del video (valida cuota → 413 legítimo si no hay espacio)
+      const createRes = await fetch('/api/videos', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ originalName: videoFile.name, sizeBytes: videoFile.size, mimeType: videoFile.type }),
+        signal: ac.signal,
+      })
+      const createData = await createRes.json()
+      if (!createRes.ok) throw new Error(createData.error || 'No se pudo preparar el video.')
+      createdVideoId = createData.id as string
 
-    xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = Math.round(e.loaded / e.total * 100)
-        setStepMsg(`Subiendo al servidor — ${pct}%`)
-        setProgress(5 + pct * 0.3)
-      }
-    }
+      // 2) Subida DIRECTA a Vercel Blob (esquiva el 413 y el CORS de Gemini). Progreso real.
+      const blob = await upload(`videos/${createdVideoId}/${videoFile.name}`, videoFile, {
+        access: 'public',
+        handleUploadUrl: '/api/blob-upload',
+        clientPayload: JSON.stringify({ videoId: createdVideoId }),
+        abortSignal: ac.signal,
+        onUploadProgress: (e) => {
+          setStepMsg(`Subiendo video — ${Math.round(e.percentage)}%`)
+          setProgress(2 + e.percentage * 0.33)   // 2 → 35
+        },
+      })
 
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        try {
-          const data = JSON.parse(xhr.responseText)
-          if (data.error) {
-            setErrorMsg(data.error); setStep('idle'); setProgress(0)
-            return
-          }
-          const parsed = parseSRT(data.srt)
-          if (parsed.length === 0) {
-            setErrorMsg('No se generaron subtítulos. El video puede no tener audio detectable.')
-            setStep('idle'); setProgress(0)
-            return
-          }
-          const a = document.createElement('a')
-          a.href = URL.createObjectURL(new Blob([data.srt], { type: 'text/plain;charset=utf-8' }))
-          a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
-          document.body.appendChild(a); a.click(); document.body.removeChild(a)
+      // 3) Confirmar storageUrl. Idempotente con el webhook onUploadCompleted (misma URL por
+      //    addRandomSuffix:false). Necesario en localhost, donde el webhook de Blob no llega.
+      await fetch(`/api/videos/${createdVideoId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storageUrl: blob.url }),
+        signal: ac.signal,
+      })
 
-          // US-024: check for saved session before showing player
-          const sessKey = sessionKey(videoFile.name, videoFile.size)
-          const savedSess = loadSession(sessKey)
-          if (savedSess && savedSess.phrases.length === parsed.length) {
-            setRestorePrompt(savedSess)
-            capture('session_restore_prompted', { video_file_name: videoFile.name, saved_phrase_count: savedSess.phrases.length })
-          }
-          setIsDirty(false)
-          setPhrases(parsed)
-          setSrtSource(`Gemini AI · ${parsed.length} frases`)
-          setProgress(100); setStep('done')
-          setTimeout(() => setScreen('player'), 300)
-        } catch {
-          setErrorMsg('Error al procesar la respuesta del servidor')
-          setStep('idle'); setProgress(0)
-        }
-      } else {
-        try {
-          const data = JSON.parse(xhr.responseText)
-          setErrorMsg(data.error || `Error del servidor: ${xhr.status}`)
-        } catch {
-          setErrorMsg(`Error del servidor: ${xhr.status}`)
-        }
-        setStep('idle'); setProgress(0)
-      }
-    }
-
-    xhr.onerror = () => {
-      setErrorMsg('Error de red al subir el video al servidor. Verificá tu conexión.')
-      setStep('idle'); setProgress(0)
-    }
-
-    xhr.upload.onloadend = () => {
+      // 4) Transcribir desde la URL del Blob (la función baja el archivo y llama a Gemini)
       setStep('transcribing')
-      setStepMsg('Gemini transcribiendo el audio...')
+      setStepMsg('Transcribiendo con Gemini…')
       setProgress(40)
       let p = 40
-      const interval = setInterval(() => {
+      interval = setInterval(() => {
         p = Math.min(p + Math.random() * 2, 88)
         setProgress(p)
-        if (p >= 88) clearInterval(interval)
+        if (p >= 88 && interval) clearInterval(interval)
       }, 2000)
-      xhr.addEventListener('loadend', () => clearInterval(interval))
-    }
 
-    xhr.open('POST', '/api/transcribe')
-    xhr.send(fd)
+      const trRes = await fetch('/api/transcribe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blobUrl: blob.url, mimeType: videoFile.type || 'video/mp4' }),
+        signal: ac.signal,
+      })
+      if (interval) { clearInterval(interval); interval = null }
+      const trData = await trRes.json()
+      if (!trRes.ok || trData.error) throw new Error(trData.error || `Error del servidor: ${trRes.status}`)
+
+      const parsed = parseSRT(trData.srt)
+      if (parsed.length === 0) {
+        // Sin subtítulos = no sirve → que el finally borre el video (no dejar huérfano ni cuota).
+        throw new Error('No se generaron subtítulos. El video puede no tener audio detectable.')
+      }
+
+      // Transcripción válida: el video se queda en la biblioteca.
+      succeeded = true
+
+      // 5) Auto-descarga del SRT (idéntico a hoy)
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(new Blob([trData.srt], { type: 'text/plain;charset=utf-8' }))
+      a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
+      document.body.appendChild(a); a.click(); document.body.removeChild(a)
+
+      // 6) Guardar la sesión (phrases). NO se silencia: si falla, se avisa.
+      try {
+        const sessRes = await fetch(`/api/videos/${createdVideoId}/session`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phrases: parsed, delay: 0, speedIdx: 2, ccOn: true, filter: 'all', srtSource: 'gemini' }),
+        })
+        if (!sessRes.ok) throw new Error(`HTTP ${sessRes.status}`)
+      } catch (e) {
+        console.error('[transcribe] No se pudo guardar la sesión en la biblioteca:', e)
+        alert('El video se subió y transcribió bien, y el .srt ya se descargó. Pero no se pudo guardar la sesión en tu biblioteca: si abrís este video desde la biblioteca más tarde, puede aparecer sin subtítulos.')
+      }
+
+      // Guardamos la URL del Blob como fallback (reabrir/recargar). NO reemplaza el objectURL local:
+      // el recién-transcrito sigue reproduciéndose desde el File en memoria (instantáneo, sin re-descarga).
+      setStorageUrl(blob.url)
+      libraryVideoIdRef.current = createdVideoId
+      capture('video_saved_to_library', { video_id: createdVideoId, phrase_count: parsed.length })
+
+      // US-024: restaurar sesión local si existe
+      const sessKey = sessionKey(videoFile.name, videoFile.size)
+      const savedSess = loadSession(sessKey)
+      if (savedSess && savedSess.phrases.length === parsed.length) {
+        setRestorePrompt(savedSess)
+        capture('session_restore_prompted', { video_file_name: videoFile.name, saved_phrase_count: savedSess.phrases.length })
+      }
+      setIsDirty(false)
+      setPhrases(parsed)
+      setSrtSource(`Gemini AI · ${parsed.length} frases`)
+      setProgress(100); setStep('done')
+      setTimeout(() => setScreen('player'), 300)
+    } catch (err) {
+      if (interval) clearInterval(interval)
+      if (ac.signal.aborted) return   // cancelado: cancelTranscription ya reseteó el estado; el finally limpia
+      setErrorMsg(err instanceof Error ? err.message : 'Error al subir o transcribir el video.')
+      setStep('idle'); setProgress(0)
+    } finally {
+      if (interval) clearInterval(interval)
+      abortRef.current = null
+      // Sin transcripción válida (error/timeout/0 frases/cancelación) → borrar video + blob.
+      // keepalive:true para que el DELETE salga aunque se cierre la pestaña; sin await para no colgar la UI.
+      if (!succeeded && createdVideoId) {
+        fetch(`/api/videos/${createdVideoId}`, { method: 'DELETE', keepalive: true }).catch(() => {})
+      }
+    }
   }
 
   function cancelTranscription() {
-    if (xhrRef.current) { xhrRef.current.abort(); xhrRef.current = null }
+    if (abortRef.current) { abortRef.current.abort(); abortRef.current = null }
     setStep('idle'); setProgress(0); setErrorMsg('Cancelado.')
     if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setVideoUrl(''); setVideoFileName('')
@@ -747,7 +801,7 @@ export default function Player() {
 
   function handleSizeWarnDismiss() {
     if (sizeWarn) {
-      capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.sizeMB), duration_s: null, proceeded: false })
+      capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.file.size / 1024 / 1024), duration_s: Math.round(sizeWarn.durationMin * 60), proceeded: false })
     }
     setSizeWarn(null)
     setVideoUrl(''); setVideoFileName('')
@@ -761,7 +815,7 @@ export default function Player() {
     if (panelVideoUrlRef.current) { URL.revokeObjectURL(panelVideoUrlRef.current); panelVideoUrlRef.current = null }
     setScreen('load'); setStep('idle'); setProgress(0)
     setPhrases([]); setCurIdx(-1); setIsPlaying(false)
-    setVideoUrl(''); setErrorMsg(''); setSrtSource('')
+    setVideoUrl(''); setStorageUrl(''); setErrorMsg(''); setSrtSource('')
     setStageOpen(false); stageOpenRef.current = false
     videoFileRef.current = null
     setIsDirty(false); setRestorePrompt(null); setExitDialog(false)
@@ -796,7 +850,7 @@ export default function Player() {
       libraryVideoIdRef.current = id
       videoFileRef.current = null
       setVideoFileName(data.video.originalName)
-      setVideoUrl(data.video.storageUrl)
+      setStorageUrl(data.video.storageUrl); setVideoUrl('')
       const s = data.session
       const savedPhrases = s?.phrases ?? []
       setPhrases(savedPhrases)
@@ -1019,7 +1073,7 @@ export default function Player() {
 
   const STEP_ORDER: Step[] = ['uploading', 'transcribing', 'parsing', 'done']
   const STEP_LABELS: Record<string, string> = {
-    uploading:    'Subiendo video a Gemini',
+    uploading:    'Subiendo video a tu biblioteca',
     transcribing: 'Gemini transcribiendo el audio',
     parsing:      'Generando archivo SRT',
   }
@@ -1070,11 +1124,11 @@ export default function Player() {
               {sizeWarn && (
                 <div data-testid="size-warn" className={styles.restoreBanner}>
                   <span className={styles.restoreBannerText}>
-                    ⚠ {sizeWarn.file.name} pesa {Math.round(sizeWarn.sizeMB)} MB — la subida puede tardar varios minutos.
+                    ⚠ {sizeWarn.file.name} dura {Math.round(sizeWarn.durationMin)} min — los videos de más de {DURATION_WARN_MIN} min pueden no completar la transcripción (límite del servidor).
                   </span>
                   <button className={styles.tbBtn}
                     onClick={() => {
-                      capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.sizeMB), duration_s: null, proceeded: true })
+                      capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.file.size / 1024 / 1024), duration_s: Math.round(sizeWarn.durationMin * 60), proceeded: true })
                       setSizeWarn(null)
                       transcribe(sizeWarn.file)
                     }}>
@@ -1100,11 +1154,12 @@ export default function Player() {
                 <div className={styles.dzTitle}>Arrastrá el video aquí</div>
                 <div className={styles.dzSub}>
                   Gemini transcribe el audio automáticamente y genera el SRT.<br />
+                  Para reproducir en el navegador subí MP4 o WEBM — AVI/MKV se transcriben pero no se reproducen (convertilos a MP4).<br />
                   También podés arrastrar video + SRT juntos si ya lo tenés.
                 </div>
                 <div className={styles.dzFormats}>
-                  {['MP4', 'AVI', 'MKV', 'MOV', 'WEBM', 'SRT'].map(f => (
-                    <span key={f} className={`${styles.fmt} ${['MP4', 'AVI', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
+                  {['MP4', 'WEBM', 'MOV', 'SRT'].map(f => (
+                    <span key={f} className={`${styles.fmt} ${['MP4', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
                   ))}
                 </div>
               </label>
@@ -1114,7 +1169,7 @@ export default function Player() {
             <div className={styles.progressBox}>
               <div className={styles.progTitle}>{stepMsg || 'Procesando...'}</div>
               <div className={styles.progSub}>
-                {step === 'uploading'    && 'El video se sube directamente a Gemini desde tu navegador.'}
+                {step === 'uploading'    && 'El video se sube directo a tu biblioteca; no pasa por el servidor.'}
                 {step === 'transcribing' && 'Gemini está analizando el audio y generando timestamps precisos...'}
                 {step === 'parsing'      && 'Generando archivo SRT...'}
               </div>
@@ -1198,7 +1253,7 @@ export default function Player() {
                 onClick={exercisesOpen ? () => closeExercisesWindow(true) : openExercisesWindow}>
                 {exercisesOpen ? '✕ Cerrar generador' : '⊞ Abrir generador'}
               </button>
-              <button className={styles.tbBtn} disabled={!stageOpen && !videoUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
+              <button className={styles.tbBtn} disabled={!stageOpen && !videoUrl && !storageUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
                 {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
               </button>
               <button className={styles.tbBtn} onClick={handleExitAttempt}>← Cargar otro</button>
@@ -1222,7 +1277,7 @@ export default function Player() {
                 : <div className={styles.shareHint}><span className={styles.shareHintDot} />Compartir en Zoom — el alumno solo ve esto</div>
               }
               <div className={styles.videoWrap}>
-                <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || undefined)}
+                <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || storageUrl || undefined)}
                   style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
                 {ccOn && subText && !stageOpen && !hideTexts && (
                   <div className={styles.subOverlay}>

@@ -4,7 +4,7 @@ import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { NextRequest } from 'next/server'
 import { POST } from '@/app/api/transcribe/route'
-import { geminiHandlers, FAKE_SRT, FAKE_UPLOAD_URL } from '../mocks/gemini-handlers'
+import { geminiHandlers, FAKE_SRT, FAKE_UPLOAD_URL, FAKE_BLOB_URL } from '../mocks/gemini-handlers'
 
 const server = setupServer(...geminiHandlers)
 
@@ -19,14 +19,13 @@ beforeEach(() => {
   process.env.GEMINI_API_KEY = 'test-key-default'
 })
 
-function makeRequest(withFile = true): NextRequest {
-  const fd = new FormData()
-  if (withFile) {
-    fd.append('file', new Blob(['fake-video-bytes'], { type: 'video/mp4' }), 'test.mp4')
-  }
+function makeRequest(withBlobUrl = true): NextRequest {
+  const body: Record<string, string> = { mimeType: 'video/mp4' }
+  if (withBlobUrl) body.blobUrl = FAKE_BLOB_URL
   return new NextRequest('http://localhost/api/transcribe', {
     method: 'POST',
-    body: fd,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
   })
 }
 
@@ -39,11 +38,11 @@ describe('POST /api/transcribe', () => {
     expect(data.error).toBe('API key not configured')
   })
 
-  it('(b) sin file en el FormData → 400', async () => {
+  it('(b) sin blobUrl en el body → 400', async () => {
     const res = await POST(makeRequest(false))
     expect(res.status).toBe(400)
     const data = await res.json()
-    expect(data.error).toBe('No file provided')
+    expect(data.error).toBe('blobUrl requerido')
   })
 
   it('(c) happy path — upload + poll + generateContent → 200 { srt }', async () => {
