@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { auth } from '@/lib/auth'
+import { requireRole } from '@/lib/authz'
 import { db } from '@/lib/db'
 import { videoSessions } from '@/lib/db/schema'
 import { getOwnedVideo } from '@/lib/library'
 
 export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth()
-  if (!session?.user?.id) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  const gate = await requireRole('admin', 'profesor')
+  if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
+  const session = gate.session
 
   const { id } = await params
   const video = await getOwnedVideo(session.user.id, id)

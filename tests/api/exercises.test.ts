@@ -12,6 +12,9 @@ vi.mock('@anthropic-ai/sdk', () => ({
   }),
 }))
 
+// Fase 1 — la ruta ahora exige rol admin/profesor (requireRole → auth).
+vi.mock('@/lib/auth', () => ({ auth: vi.fn(async () => ({ user: { id: 'test-user', role: 'profesor' } })) }))
+
 // Import AFTER mock is set up
 import { POST } from '@/app/api/exercises/route'
 

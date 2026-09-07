@@ -3,6 +3,15 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } 
 import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { NextRequest } from 'next/server'
+
+// Fase 1 — la ruta ahora exige rol admin/profesor (requireRole → auth). Mockeamos auth.
+const authMock = vi.hoisted(() =>
+  vi.fn<() => Promise<{ user: { id: string; role: string } } | null>>(
+    async () => ({ user: { id: 'test-user', role: 'profesor' } })
+  )
+)
+vi.mock('@/lib/auth', () => ({ auth: authMock }))
+
 import { POST } from '@/app/api/transcribe/route'
 import { geminiHandlers, FAKE_SRT, FAKE_UPLOAD_URL, FAKE_BLOB_URL } from '../mocks/gemini-handlers'
 
@@ -17,6 +26,7 @@ afterAll(() => server.close())
 
 beforeEach(() => {
   process.env.GEMINI_API_KEY = 'test-key-default'
+  authMock.mockResolvedValue({ user: { id: 'test-user', role: 'profesor' } })
 })
 
 function makeRequest(withBlobUrl = true): NextRequest {
@@ -50,6 +60,18 @@ describe('POST /api/transcribe', () => {
     expect(res.status).toBe(200)
     const data = await res.json()
     expect(data.srt).toBe(FAKE_SRT)
+  })
+
+  it('(guard-401) sin sesión → 401, no toca Gemini', async () => {
+    authMock.mockResolvedValueOnce(null)
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(401)
+  })
+
+  it('(guard-403) rol alumno → 403, no toca Gemini', async () => {
+    authMock.mockResolvedValueOnce({ user: { id: 'al-1', role: 'alumno' } })
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(403)
   })
 
   it('(d) Gemini upload start devuelve 4xx → 500 con mensaje de error', async () => {

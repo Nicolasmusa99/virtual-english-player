@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { requireRole } from '@/lib/authz'
 
 // Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
@@ -33,9 +34,8 @@ async function uploadToGemini(file: Blob, mimeType: string, apiKey: string): Pro
       'X-Goog-Upload-Offset': '0',
       'X-Goog-Upload-Command': 'upload, finalize',
     },
-    // req.formData() ya bufferizó el video completo en RAM; esto evita una segunda copia.
-    // Peak ≈ videoSize — aceptable hasta ~1.5 GB en Vercel Pro. /api/upload-init existe
-    // como escape hatch cuando CORS de Gemini en browsers se resuelva.
+    // Blob passthrough: el video ya está en memoria (fetch(blobUrl).blob()); esto evita
+    // una segunda copia. Peak ≈ videoSize — aceptable hasta ~1.5 GB en Vercel.
     body: file,
   })
   if (!uploadRes.ok) {
@@ -62,6 +62,9 @@ async function waitForFile(name: string, apiKey: string): Promise<void> {
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireRole('admin', 'profesor')
+  if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
+
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
 

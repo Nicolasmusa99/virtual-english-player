@@ -37,21 +37,21 @@ describe('PUT /api/videos/[id]/session', () => {
   })
 
   it('(b) 404 si el video no pertenece al usuario', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = []
     const res = await PUT(req({ phrases: [] }), ctx())
     expect(res.status).toBe(404)
   })
 
   it('(c) 400 si phrases no es un array', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await PUT(req({ phrases: 'no-array' }), ctx())
     expect(res.status).toBe(400)
   })
 
   it('(d) 200 y guarda la sesión (upsert) cuando es dueño y el body es válido', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await PUT(req({
       phrases: [{ start: 0, end: 1, text: 'hi', sel: true }],

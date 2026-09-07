@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { desc, eq, sql } from 'drizzle-orm'
-import { auth } from '@/lib/auth'
+import { requireRole } from '@/lib/authz'
 import { db } from '@/lib/db'
 import { videos, videoSessions } from '@/lib/db/schema'
 import { getUsedBytes, QUOTA_BYTES } from '@/lib/library'
 
 export async function GET() {
-  const session = await auth()
-  if (!session?.user?.id) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  const gate = await requireRole('admin', 'profesor')
+  if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
+  const session = gate.session
 
   const rows = await db
     .select({
@@ -28,8 +29,9 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = await auth()
-  if (!session?.user?.id) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
+  const gate = await requireRole('admin', 'profesor')
+  if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
+  const session = gate.session
 
   const { originalName, sizeBytes, mimeType } = await req.json()
   if (!originalName || typeof sizeBytes !== 'number' || sizeBytes <= 0 || !mimeType) {

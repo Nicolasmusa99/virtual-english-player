@@ -47,7 +47,7 @@ describe('POST /api/blob-upload', () => {
   })
 
   it('(b) delega en handleUpload y responde 200 con su resultado', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     handleUploadMock.mockResolvedValue({ ok: true })
     const res = await POST(req())
     expect(res.status).toBe(200)
@@ -55,7 +55,7 @@ describe('POST /api/blob-upload', () => {
   })
 
   it('(c) si handleUpload rechaza (ej. token inválido), responde 400 con el mensaje', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     handleUploadMock.mockRejectedValue(new Error('boom'))
     const res = await POST(req())
     expect(res.status).toBe(400)
@@ -64,7 +64,7 @@ describe('POST /api/blob-upload', () => {
 
   describe('onBeforeGenerateToken (lógica de ownership + cuota)', () => {
     async function callOnBeforeGenerateToken(clientPayload: string) {
-      authMock.mockResolvedValue({ user: { id: 'user-1' } })
+      authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
       let captured: any
       handleUploadMock.mockImplementation(async ({ onBeforeGenerateToken }: any) => {
         captured = await onBeforeGenerateToken('videos/v1/a.mp4', clientPayload)
@@ -98,7 +98,7 @@ describe('POST /api/blob-upload', () => {
 
   describe('onUploadCompleted (actualiza storage_url + status)', () => {
     it('marca el video como ready con la url final del blob', async () => {
-      authMock.mockResolvedValue({ user: { id: 'user-1' } })
+      authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
       handleUploadMock.mockImplementation(async ({ onUploadCompleted }: any) => {
         await onUploadCompleted({
           blob: { url: 'https://blob/final.mp4' },
