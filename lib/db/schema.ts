@@ -18,6 +18,9 @@ import type { AdapterAccountType } from 'next-auth/adapters'
 // La columna es NULLABLE a propósito: NULL = "sin rol" = sin acceso (fail-closed).
 export const userRole = pgEnum('user_role', ['admin', 'profesor', 'alumno'])
 export type Role = (typeof userRole.enumValues)[number]
+export function isRole(x: unknown): x is Role {
+  return x === 'admin' || x === 'profesor' || x === 'alumno'
+}
 
 // --- Auth.js (NextAuth v5) adapter tables — schema shape required by @auth/drizzle-adapter ---
 
