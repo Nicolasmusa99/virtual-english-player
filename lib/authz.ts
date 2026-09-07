@@ -4,6 +4,18 @@ import type { Role } from '@/lib/db/schema'
 
 export type { Role }
 
+// Quién puede crear qué (Fase 2). Se evalúa siempre con el rol del CREADOR sacado
+// de la sesión, nunca de un valor del cliente.
+const CREATE_MATRIX: Record<Role, Role[]> = {
+  admin: ['admin', 'profesor', 'alumno'],
+  profesor: ['alumno'],
+  alumno: [],
+}
+
+export function canCreateRole(creator: Role, target: Role): boolean {
+  return CREATE_MATRIX[creator].includes(target)
+}
+
 /**
  * Guard de rol para route handlers. Fail-closed:
  *   - sin sesión               → { ok: false, status: 401 }
