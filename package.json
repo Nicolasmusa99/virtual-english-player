@@ -9,6 +9,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "db:push": "dotenv -e .env.development.local -- drizzle-kit push",
+    "seed:admins": "dotenv -e .env.development.local -e .env.local -- node scripts/seed-admins.mjs",
     "smoke:exercises": "dotenv -e .env.local -- node scripts/smoke-exercises.mjs",
     "typecheck": "tsc --noEmit"
   },
