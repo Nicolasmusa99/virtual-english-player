@@ -42,14 +42,14 @@ describe('GET /api/videos/[id]', () => {
   })
 
   it('(b) 404 si el video no pertenece al usuario (o no existe)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = []
     const res = await GET(req('GET'), ctx())
     expect(res.status).toBe(404)
   })
 
   it('(c) 200 con el video y su sesión guardada cuando es dueño', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await GET(req('GET'), ctx())
     expect(res.status).toBe(200)
@@ -65,7 +65,7 @@ describe('DELETE /api/videos/[id]', () => {
   })
 
   it('(b) 404 si no es dueño del video', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = []
     const res = await DELETE(req('DELETE'), ctx())
     expect(res.status).toBe(404)
@@ -73,7 +73,7 @@ describe('DELETE /api/videos/[id]', () => {
   })
 
   it('(c) borra el blob y la fila cuando es dueño', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await DELETE(req('DELETE'), ctx())
     expect(res.status).toBe(200)
@@ -81,7 +81,7 @@ describe('DELETE /api/videos/[id]', () => {
   })
 
   it('(d) si el borrado del blob falla, igual responde 200 (best-effort)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     delMock.mockRejectedValue(new Error('blob gone'))
     const res = await DELETE(req('DELETE'), ctx())
@@ -97,21 +97,21 @@ describe('PATCH /api/videos/[id]', () => {
   })
 
   it('(b) 404 si no es dueño del video', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = []
     const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/x' }), ctx())
     expect(res.status).toBe(404)
   })
 
   it('(c) 400 si falta storageUrl', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await PATCH(req('PATCH', {}), ctx())
     expect(res.status).toBe(400)
   })
 
   it('(d) 200 y confirma el storageUrl cuando es dueño', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/final.mp4' }), ctx())
     expect(res.status).toBe(200)

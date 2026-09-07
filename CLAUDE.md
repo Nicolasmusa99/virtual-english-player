@@ -19,8 +19,7 @@ Vitest v4 with `@vitejs/plugin-react`, jsdom environment (default), and `// @vit
 
 - `tests/lib/srt.test.ts` — 18 unit tests for `parseSRT`, `timeToSec`, `fmtTime`
 - `tests/lib/hl.test.tsx` — 11 tests for `hl()`: RTL-based behavior checks + XSS/DOM security checks
-- `tests/api/transcribe.test.ts` — 9 MSW-based tests + 1 todo for `POST /api/transcribe` (node environment)
-- `tests/api/upload-init.test.ts` — 7 MSW-based tests for `POST /api/upload-init` (node environment)
+- `tests/api/transcribe.test.ts` — MSW-based tests for `POST /api/transcribe` (node environment)
 - `tests/mocks/gemini-handlers.ts` — reusable MSW handlers for Gemini API endpoints
 - `tests/setup.ts` — global setup (`@testing-library/jest-dom`)
 
@@ -73,7 +72,7 @@ Single-page Next.js 15 (App Router) + React 19 + Tailwind v4 application. Core f
 
 - **`app/page.tsx`** — one client component (`'use client'`) holding the whole UI as a state machine with two screens (`'load'` and `'player'`). Owns the video element, keyboard shortcuts, phrase selection, and the upload flow. UI strings are in Spanish; product is aimed at teachers sharing a video over Zoom.
 - **`app/api/transcribe/route.ts`** — Node runtime route (`maxDuration = 300`). **[Corregida 2026-09-05]** Recibe `{ blobUrl, mimeType }` en **JSON** (ya no multipart FormData: el video de 5-8 MB rebotaba con HTTP 413 por el tope de ~4.5 MB de body de las funciones serverless de Vercel). Flow: `fetch(blobUrl)` baja el video de Vercel Blob → resumable upload to `generativelanguage.googleapis.com/upload/v1beta/files` → poll until `state === 'ACTIVE'` (up to 30 × 3s) → `gemini-2.5-flash:generateContent` con prompt SRT-only → return `{ srt }` y best-effort delete. El video lo sube el **browser directo a Blob** (ver `transcribe()` en page.tsx), reutilizando el flujo de la biblioteca; el video queda guardado en la biblioteca del profesor.
-- **`app/api/upload-init/route.ts`** — Node runtime, `maxDuration = 30`. **Ruta muerta a propósito.** Devuelve una upload URL reanudable de Gemini para que el browser haga PUT directo, pero eso está **bloqueado por el CORS de Google** (Gemini no manda `Access-Control-Allow-Origin` en el endpoint de upload). El 413 se resolvió con Vercel Blob (arriba), **no** con este endpoint. No reactivar.
+- **`app/api/upload-init/route.ts`** — **Eliminada (2026-09-07).** Era el intento de PUT browser→Gemini, muerto por el CORS de Google (Gemini no manda `Access-Control-Allow-Origin`). El 413 se resolvió con Vercel Blob. No reintroducir.
 - **`lib/srt.ts`** — pure functions extracted from page.tsx: `parseSRT`, `timeToSec`, `fmtTime`, `Phrase` type.
 - **`lib/hl.tsx`** — `hl(text): React.ReactNode[]` highlights content words (>3 chars, not in SKIP set) with `color:#E8C547`. Returns ReactNode[] so React escapes text automatically — safe against XSS via SRT files.
 

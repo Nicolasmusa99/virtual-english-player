@@ -2,6 +2,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import type { ExerciseMode } from '@/lib/exercises'
+import { requireRole } from '@/lib/authz'
 
 export const maxDuration = 60
 
@@ -65,6 +66,9 @@ TOPIC: ${topic}${transcriptSection}`
 }
 
 export async function POST(req: NextRequest) {
+  const gate = await requireRole('admin', 'profesor')
+  if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
+
   const apiKey = process.env.ANTHROPIC_API_KEY
   if (!apiKey) return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
 

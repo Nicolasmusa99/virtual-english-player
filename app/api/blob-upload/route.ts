@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server'
 import { handleUpload, type HandleUploadBody } from '@vercel/blob/client'
 import { eq } from 'drizzle-orm'
-import { auth } from '@/lib/auth'
+import { requireRole } from '@/lib/authz'
 import { db } from '@/lib/db'
 import { videos } from '@/lib/db/schema'
 import { getOwnedVideo, getUsedBytes, QUOTA_BYTES } from '@/lib/library'
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const session = await auth()
-  if (!session?.user?.id) return NextResponse.json({ error: 'No autenticado' }, { status: 401 })
-  const userId = session.user.id
+  const gate = await requireRole('admin', 'profesor')
+  if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
+  const userId = gate.session.user.id
 
   const body = (await request.json()) as HandleUploadBody
 
