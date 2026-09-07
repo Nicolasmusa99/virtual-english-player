@@ -3,13 +3,21 @@ import {
   integer,
   jsonb,
   numeric,
+  pgEnum,
   pgTable,
   primaryKey,
   text,
   timestamp,
   uuid,
+  type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
 import type { AdapterAccountType } from 'next-auth/adapters'
+
+// --- Roles (Fase 1) ---
+// Nadie se autoasigna rol: el registro es siempre por invitación desde arriba.
+// La columna es NULLABLE a propósito: NULL = "sin rol" = sin acceso (fail-closed).
+export const userRole = pgEnum('user_role', ['admin', 'profesor', 'alumno'])
+export type Role = (typeof userRole.enumValues)[number]
 
 // --- Auth.js (NextAuth v5) adapter tables — schema shape required by @auth/drizzle-adapter ---
 
@@ -19,6 +27,12 @@ export const users = pgTable('user', {
   email: text('email').unique(),
   emailVerified: timestamp('emailVerified', { mode: 'date' }),
   image: text('image'),
+  // Fase 1 — roles y permisos:
+  role: userRole('role'), // NULL = sin acceso hasta que un admin/profesor asigne rol
+  // Relación profesor→alumno (opción A): el alumno pertenece a UN profesor.
+  // NULL = sin profe asignado. El estado "sin profe activo" por impago se derivará
+  // de la flag de pago del profesor (Fase de pagos); no se borra teacherId.
+  teacherId: uuid('teacher_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
 })
 
 export const accounts = pgTable(
