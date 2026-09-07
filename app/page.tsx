@@ -99,6 +99,13 @@ export default function Player() {
   // Biblioteca (Bloque 13)
   const libraryVideoIdRef = useRef<string | null>(null)
   const { status: authStatus } = useSession()
+  // Fase 1 — allowlist: NextAuth redirige a /?error=AccessDenied cuando el email no está habilitado.
+  const [accessDenied, setAccessDenied] = useState(false)
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setAccessDenied(new URLSearchParams(window.location.search).get('error') === 'AccessDenied')
+    }
+  }, [])
   const [libraryVideos, setLibraryVideos]   = useState<LibraryVideoRow[]>([])
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [librarySaving, setLibrarySaving]   = useState(false)
@@ -1097,6 +1104,11 @@ export default function Player() {
               </svg>
               Iniciar sesión con Google
             </button>
+            {accessDenied && (
+              <div className={styles.wAccessDenied}>
+                Tu cuenta no está habilitada. Pedí acceso a tu profesor o administrador.
+              </div>
+            )}
           </div>
         </div>
       )}
