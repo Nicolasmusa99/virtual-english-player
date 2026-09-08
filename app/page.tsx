@@ -5,6 +5,7 @@ import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
+import UsersPanel from './UsersPanel'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
@@ -55,7 +56,7 @@ export default function Player() {
   const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users'>('load')
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -98,7 +99,8 @@ export default function Player() {
   const [sizeWarn, setSizeWarn]           = useState<{ file: File; durationMin: number } | null>(null)
   // Biblioteca (Bloque 13)
   const libraryVideoIdRef = useRef<string | null>(null)
-  const { status: authStatus } = useSession()
+  const { data: sessionData, status: authStatus } = useSession()
+  const userRole = sessionData?.user?.role ?? null
   // Fase 1 — allowlist: NextAuth redirige a /?error=AccessDenied cuando el email no está habilitado.
   const [accessDenied, setAccessDenied] = useState(false)
   useEffect(() => {
@@ -1123,6 +1125,9 @@ export default function Player() {
             {authStatus === 'authenticated' ? (
               <>
                 <button className={styles.tbBtn} onClick={() => { setScreen('library'); fetchLibrary() }}>📚 Mi biblioteca</button>
+                {(userRole === 'admin' || userRole === 'profesor') && (
+                  <button className={styles.tbBtn} onClick={() => setScreen('users')}>👥 Usuarios</button>
+                )}
                 <button className={styles.tbBtn} onClick={() => signOut()}>Salir</button>
               </>
             ) : (
@@ -1240,6 +1245,20 @@ export default function Player() {
             </div>
           )}
           <button className={styles.tbBtn} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir nuevo video</button>
+        </div>
+      )}
+
+      {screen === 'users' && (
+        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
+          <div style={{ position: 'absolute', top: 16, right: 16 }}>
+            <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
+          </div>
+          <div className={styles.logo}>
+            <span className={styles.logoDot} />Virtual English — {userRole === 'admin' ? 'Usuarios' : 'Mis alumnos'}
+          </div>
+          <div style={{ width: '100%', maxWidth: 680 }}>
+            {userRole && <UsersPanel role={userRole} />}
+          </div>
         </div>
       )}
 

@@ -249,3 +249,38 @@
   font-family: var(--font-public-sans, 'Public Sans', sans-serif);
   font-size: 13px; line-height: 1.4;
 }
+
+/* ── Fase 3a — gestión de usuarios (UsersPanel) ─────────────────────────── */
+.usersForm { background: var(--p2); border: 1px solid var(--ln); border-radius: 10px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.usersFormRow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.usersInput {
+  padding: 7px 10px; border-radius: 7px; border: 1px solid var(--ln2);
+  background: var(--p1); color: var(--tx); font-size: 13px;
+  font-family: var(--font-public-sans, 'Public Sans', sans-serif);
+}
+.usersInput:focus { outline: none; border-color: var(--ac3); }
+.usersInput[type="email"] { flex: 1; min-width: 200px; }
+
+.usersToolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; }
+.usersSearch {
+  flex: 1; min-width: 200px; padding: 7px 10px; border-radius: 7px;
+  border: 1px solid var(--ln2); background: var(--p1); color: var(--tx); font-size: 13px;
+  font-family: var(--font-public-sans, 'Public Sans', sans-serif);
+}
+.usersSearch:focus { outline: none; border-color: var(--ac3); }
+
+.usersFilters { display: flex; gap: 6px; }
+.usersFilterChip {
+  font-family: var(--font-mono); font-size: 10px; text-transform: capitalize;
+  padding: 3px 10px; border-radius: 20px; border: 1px solid var(--ln2);
+  background: transparent; color: var(--tx3); cursor: pointer; transition: all 0.12s;
+}
+.usersFilterChip:hover { color: var(--tx2); }
+.usersFilterChipOn { background: var(--ac2); border-color: var(--ac3); color: var(--ac); }
+
+.usersOk {
+  width: 520px; max-width: 94vw; padding: 8px 14px; border-radius: 8px;
+  background: var(--gr2); border: 1px solid var(--gr3); color: var(--gr);
+  font-size: 12px; line-height: 1.5;
+}
+.usersMeta { color: var(--tx3); font-size: 12px; }
