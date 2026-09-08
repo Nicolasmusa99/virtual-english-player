@@ -6,6 +6,8 @@ import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
 import UsersPanel from './UsersPanel'
+import LibraryList, { type LibraryVideoRow } from './LibraryList'
+import SharedLibrary from './SharedLibrary'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
@@ -13,13 +15,6 @@ import { sessionKey, saveSession, loadSession } from '@/lib/session'
 import type { SessionData } from '@/lib/session'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
-
-interface LibraryVideoRow {
-  id: string
-  originalName: string
-  status: string
-  phraseCount: number
-}
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
@@ -56,7 +51,7 @@ export default function Player() {
   const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared'>('load')
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -1126,6 +1121,9 @@ export default function Player() {
               <>
                 <button className={styles.tbBtn} onClick={() => { setScreen('library'); fetchLibrary() }}>📚 Mi biblioteca</button>
                 {(userRole === 'admin' || userRole === 'profesor') && (
+                  <button className={styles.tbBtn} onClick={() => setScreen('shared')}>🌐 Biblioteca compartida</button>
+                )}
+                {(userRole === 'admin' || userRole === 'profesor') && (
                   <button className={styles.tbBtn} onClick={() => setScreen('users')}>👥 Usuarios</button>
                 )}
                 <button className={styles.tbBtn} onClick={() => signOut()}>Salir</button>
@@ -1232,19 +1230,29 @@ export default function Player() {
           ) : libraryVideos.length === 0 ? (
             <div className={styles.progSub}>Todavía no guardaste ningún video.</div>
           ) : (
-            <div style={{ width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {libraryVideos.map(v => (
-                <div key={v.id} className={styles.restoreBanner}>
-                  <span className={styles.restoreBannerText}>
-                    {v.originalName} — {v.phraseCount} frases{v.status === 'expired' ? ' · expirado' : ''}
-                  </span>
-                  <button className={styles.restoreBtn} disabled={v.status === 'expired'} onClick={() => openFromLibrary(v.id)}>Abrir</button>
-                  <button className={styles.discardBtn} onClick={() => deleteFromLibrary(v.id)}>Eliminar</button>
-                </div>
-              ))}
-            </div>
+            <LibraryList
+              videos={libraryVideos}
+              role={userRole}
+              onOpen={openFromLibrary}
+              onDelete={deleteFromLibrary}
+              onChanged={fetchLibrary}
+            />
           )}
           <button className={styles.tbBtn} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir nuevo video</button>
+        </div>
+      )}
+
+      {screen === 'shared' && (
+        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
+          <div style={{ position: 'absolute', top: 16, right: 16 }}>
+            <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
+          </div>
+          <div className={styles.logo}>
+            <span className={styles.logoDot} />Virtual English — Biblioteca compartida
+          </div>
+          <div style={{ width: '100%', maxWidth: 760 }}>
+            <SharedLibrary onOpen={openFromLibrary} />
+          </div>
         </div>
       )}
 

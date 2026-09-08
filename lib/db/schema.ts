@@ -22,6 +22,21 @@ export function isRole(x: unknown): x is Role {
   return x === 'admin' || x === 'profesor' || x === 'alumno'
 }
 
+// --- Biblioteca compartida ---
+// Un video publicado tiene UN tipo y UN nivel (listas fijas). NULL en las tres
+// columnas de `videos` = no publicado (el discriminador real es publishedAt).
+export const sharedType = pgEnum('shared_type', ['pelicula', 'cancion'])
+export type SharedType = (typeof sharedType.enumValues)[number]
+export function isSharedType(x: unknown): x is SharedType {
+  return x === 'pelicula' || x === 'cancion'
+}
+
+export const sharedLevel = pgEnum('shared_level', ['beginner', 'medium', 'advance'])
+export type SharedLevel = (typeof sharedLevel.enumValues)[number]
+export function isSharedLevel(x: unknown): x is SharedLevel {
+  return x === 'beginner' || x === 'medium' || x === 'advance'
+}
+
 // --- Auth.js (NextAuth v5) adapter tables — schema shape required by @auth/drizzle-adapter ---
 
 export const users = pgTable('user', {
@@ -91,19 +106,37 @@ export const videos = pgTable('videos', {
   mimeType: text('mime_type').notNull(),
   storageUrl: text('storage_url'),
   status: text('status').notNull().default('uploading'), // 'uploading' | 'ready' | 'failed' | 'expired'
+  // Biblioteca compartida: NULL = privado (comportamiento actual intacto).
+  // Publicar = setear los tres; despublicar = publishedAt→NULL (tipo/nivel se
+  // conservan para recordar la clasificación si se republica).
+  sharedType: sharedType('shared_type'),
+  sharedLevel: sharedLevel('shared_level'),
+  publishedAt: timestamp('published_at', { mode: 'date' }),
   createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
 })
 
-export const videoSessions = pgTable('video_sessions', {
-  videoId: uuid('video_id')
-    .primaryKey()
-    .references(() => videos.id, { onDelete: 'cascade' }),
-  srtSource: text('srt_source'), // 'gemini' | 'srt-upload'
-  phrases: jsonb('phrases').notNull(), // Phrase[] from lib/srt.ts
-  delay: numeric('delay', { mode: 'number' }).notNull().default(0),
-  speedIdx: integer('speed_idx').notNull().default(2),
-  ccOn: boolean('cc_on').notNull().default(true),
-  filter: text('filter').notNull().default('all'), // 'all' | 'sel'
-  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
-})
+// PK compuesto (video_id, user_id): una fila de sesión por (video, usuario).
+// La fila del DUEÑO es la sesión original; cada profe que edita un video
+// compartido obtiene SU propia fila (copy-on-write). El user_id sale SIEMPRE
+// de la sesión del server en las rutas, nunca del body: por eso la fila del
+// dueño es inalcanzable para un profe. Ver /api/videos/[id]/session.
+export const videoSessions = pgTable(
+  'video_sessions',
+  {
+    videoId: uuid('video_id')
+      .notNull()
+      .references(() => videos.id, { onDelete: 'cascade' }),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    srtSource: text('srt_source'), // 'gemini' | 'srt-upload'
+    phrases: jsonb('phrases').notNull(), // Phrase[] from lib/srt.ts
+    delay: numeric('delay', { mode: 'number' }).notNull().default(0),
+    speedIdx: integer('speed_idx').notNull().default(2),
+    ccOn: boolean('cc_on').notNull().default(true),
+    filter: text('filter').notNull().default('all'), // 'all' | 'sel'
+    updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.videoId, t.userId] })]
+)

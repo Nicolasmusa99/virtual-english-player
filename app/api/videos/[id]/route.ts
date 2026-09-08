@@ -4,7 +4,7 @@ import { and, eq } from 'drizzle-orm'
 import { requireRole } from '@/lib/authz'
 import { db } from '@/lib/db'
 import { videos, videoSessions } from '@/lib/db/schema'
-import { getOwnedVideo } from '@/lib/library'
+import { getAccessibleVideo, getOwnedVideo } from '@/lib/library'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRole('admin', 'profesor')
@@ -12,10 +12,24 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   const session = gate.session
 
   const { id } = await params
-  const video = await getOwnedVideo(session.user.id, id)
+  const video = await getAccessibleVideo(session.user.id, id)
   if (!video) return NextResponse.json({ error: 'Video no encontrado' }, { status: 404 })
 
-  const [videoSession] = await db.select().from(videoSessions).where(eq(videoSessions.videoId, id))
+  // Sesión PROPIA del que pide. Si no tiene (profe que aún no editó un video
+  // compartido), sembramos con la del DUEÑO como lectura — sin crear su fila:
+  // su copia nace recién en el primer PUT (copy-on-write).
+  const [ownSession] = await db
+    .select()
+    .from(videoSessions)
+    .where(and(eq(videoSessions.videoId, id), eq(videoSessions.userId, session.user.id)))
+  let videoSession = ownSession ?? null
+  if (!videoSession) {
+    const [ownerSession] = await db
+      .select()
+      .from(videoSessions)
+      .where(and(eq(videoSessions.videoId, id), eq(videoSessions.userId, video.userId)))
+    videoSession = ownerSession ?? null
+  }
   return NextResponse.json({ video, session: videoSession ?? null })
 }
 

@@ -1,10 +1,12 @@
 .env.local
 .env*.local
+
+# artefacto local de verificación de migración (regenerable)
+drizzle/.verify-snapshot.json
 node_modules/
 .next/
 out/
 .vercel/
 
-.vercel
-
 tsconfig.tsbuildinfo
+.env*

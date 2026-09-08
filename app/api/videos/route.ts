@@ -18,6 +18,9 @@ export async function GET() {
       durationSec: videos.durationSec,
       status: videos.status,
       createdAt: videos.createdAt,
+      sharedType: videos.sharedType,
+      sharedLevel: videos.sharedLevel,
+      publishedAt: videos.publishedAt,
       phraseCount: sql<number>`coalesce(jsonb_array_length(${videoSessions.phrases}), 0)`,
     })
     .from(videos)
