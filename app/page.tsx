@@ -6,6 +6,7 @@ import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
 import UsersPanel from './UsersPanel'
+import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
@@ -13,13 +14,6 @@ import { sessionKey, saveSession, loadSession } from '@/lib/session'
 import type { SessionData } from '@/lib/session'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
-
-interface LibraryVideoRow {
-  id: string
-  originalName: string
-  status: string
-  phraseCount: number
-}
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
@@ -1232,17 +1226,13 @@ export default function Player() {
           ) : libraryVideos.length === 0 ? (
             <div className={styles.progSub}>Todavía no guardaste ningún video.</div>
           ) : (
-            <div style={{ width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {libraryVideos.map(v => (
-                <div key={v.id} className={styles.restoreBanner}>
-                  <span className={styles.restoreBannerText}>
-                    {v.originalName} — {v.phraseCount} frases{v.status === 'expired' ? ' · expirado' : ''}
-                  </span>
-                  <button className={styles.restoreBtn} disabled={v.status === 'expired'} onClick={() => openFromLibrary(v.id)}>Abrir</button>
-                  <button className={styles.discardBtn} onClick={() => deleteFromLibrary(v.id)}>Eliminar</button>
-                </div>
-              ))}
-            </div>
+            <LibraryList
+              videos={libraryVideos}
+              role={userRole}
+              onOpen={openFromLibrary}
+              onDelete={deleteFromLibrary}
+              onChanged={fetchLibrary}
+            />
           )}
           <button className={styles.tbBtn} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir nuevo video</button>
         </div>
