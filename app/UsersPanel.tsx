@@ -126,6 +126,20 @@ export default function UsersPanel({ role }: { role: Role }) {
         </form>
       )}
 
+      {/* CREAR — vista profesor (solo alumno; el backend lo asigna a este profe) */}
+      {role === 'profesor' && (
+        <form className={styles.usersForm} onSubmit={submit}>
+          <div className={styles.usersFormRow}>
+            <input className={styles.usersInput} type="email" placeholder="email del alumno"
+              value={email} onChange={e => setEmail(e.target.value)} />
+            <button className={styles.tbBtn} type="submit" disabled={submitting}>{submitting ? 'Creando…' : 'Crear alumno'}</button>
+          </div>
+          <div className={styles.progSub}>El alumno queda asignado a vos automáticamente.</div>
+          {formError && <div className={styles.errorBox}>{formError}</div>}
+          {okMsg && <div className={styles.usersOk}>{okMsg}</div>}
+        </form>
+      )}
+
       {/* BÚSQUEDA + FILTRO */}
       <div className={styles.usersToolbar}>
         <input className={styles.usersSearch} placeholder="Buscar por email…" value={q} onChange={e => setQ(e.target.value)} />
