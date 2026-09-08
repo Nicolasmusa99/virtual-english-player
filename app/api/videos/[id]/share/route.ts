@@ -8,18 +8,25 @@ import { getOwnedVideo } from '@/lib/library'
 // Publicar / despublicar / editar-clasificación. SOLO admin y SOLO sobre videos
 // propios (getOwnedVideo): un profe nunca llega acá (requireRole('admin')) y un
 // admin no puede publicar videos de otro.
-async function gate(id: string) {
+// El discriminante `ok` es explícito (patrón requireRole): con retornos de forma
+// distinta TS agrega props opcionales-undefined a la unión y `'res' in g` deja
+// de discriminar, colando `undefined` en el tipo de retorno de los handlers.
+type Gate =
+  | { ok: false; res: NextResponse }
+  | { ok: true; video: NonNullable<Awaited<ReturnType<typeof getOwnedVideo>>> }
+
+async function gate(id: string): Promise<Gate> {
   const g = await requireRole('admin')
-  if (!g.ok) return { res: NextResponse.json({ error: g.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: g.status }) }
+  if (!g.ok) return { ok: false, res: NextResponse.json({ error: g.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: g.status }) }
   const video = await getOwnedVideo(g.session.user.id, id)
-  if (!video) return { res: NextResponse.json({ error: 'Video no encontrado' }, { status: 404 }) }
-  return { video }
+  if (!video) return { ok: false, res: NextResponse.json({ error: 'Video no encontrado' }, { status: 404 }) }
+  return { ok: true, video }
 }
 
 // POST = publicar (tipo + nivel + publishedAt=now)
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const g = await gate(id); if ('res' in g) return g.res
+  const g = await gate(id); if (!g.ok) return g.res
   if (g.video.status !== 'ready') return NextResponse.json({ error: 'Solo se puede publicar un video listo' }, { status: 400 })
   const { sharedType, sharedLevel } = await req.json()
   if (!isSharedType(sharedType) || !isSharedLevel(sharedLevel)) return NextResponse.json({ error: 'tipo/nivel inválidos' }, { status: 400 })
@@ -30,7 +37,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
 // PATCH = editar clasificación de un YA publicado
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const g = await gate(id); if ('res' in g) return g.res
+  const g = await gate(id); if (!g.ok) return g.res
   if (!g.video.publishedAt) return NextResponse.json({ error: 'El video no está publicado' }, { status: 400 })
   const { sharedType, sharedLevel } = await req.json()
   const set: { updatedAt: Date; sharedType?: SharedType; sharedLevel?: SharedLevel } = { updatedAt: new Date() }
@@ -44,7 +51,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
 // DELETE = despublicar (publishedAt -> null; conserva tipo/nivel)
 export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  const g = await gate(id); if ('res' in g) return g.res
+  const g = await gate(id); if (!g.ok) return g.res
   await db.update(videos).set({ publishedAt: null, updatedAt: new Date() }).where(eq(videos.id, id))
   return NextResponse.json({ ok: true })
 }
