@@ -7,6 +7,7 @@ import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
 import UsersPanel from './UsersPanel'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
+import SharedLibrary from './SharedLibrary'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
@@ -50,7 +51,7 @@ export default function Player() {
   const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared'>('load')
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -1120,6 +1121,9 @@ export default function Player() {
               <>
                 <button className={styles.tbBtn} onClick={() => { setScreen('library'); fetchLibrary() }}>📚 Mi biblioteca</button>
                 {(userRole === 'admin' || userRole === 'profesor') && (
+                  <button className={styles.tbBtn} onClick={() => setScreen('shared')}>🌐 Biblioteca compartida</button>
+                )}
+                {(userRole === 'admin' || userRole === 'profesor') && (
                   <button className={styles.tbBtn} onClick={() => setScreen('users')}>👥 Usuarios</button>
                 )}
                 <button className={styles.tbBtn} onClick={() => signOut()}>Salir</button>
@@ -1235,6 +1239,20 @@ export default function Player() {
             />
           )}
           <button className={styles.tbBtn} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir nuevo video</button>
+        </div>
+      )}
+
+      {screen === 'shared' && (
+        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
+          <div style={{ position: 'absolute', top: 16, right: 16 }}>
+            <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
+          </div>
+          <div className={styles.logo}>
+            <span className={styles.logoDot} />Virtual English — Biblioteca compartida
+          </div>
+          <div style={{ width: '100%', maxWidth: 760 }}>
+            <SharedLibrary onOpen={openFromLibrary} />
+          </div>
         </div>
       )}
 
