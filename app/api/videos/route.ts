@@ -32,7 +32,7 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const gate = await requireRole('admin', 'profesor')
+  const gate = await requireRole('admin')
   if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
   const session = gate.session
 

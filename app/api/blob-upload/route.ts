@@ -7,7 +7,7 @@ import { videos } from '@/lib/db/schema'
 import { getOwnedVideo, getUsedBytes, QUOTA_BYTES } from '@/lib/library'
 
 export async function POST(request: Request): Promise<NextResponse> {
-  const gate = await requireRole('admin', 'profesor')
+  const gate = await requireRole('admin')
   if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
   const userId = gate.session.user.id
 
