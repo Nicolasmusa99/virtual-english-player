@@ -8,7 +8,15 @@ controlando la reproducción frase por frase.
 
 #### **US-001 — Carga de video**
 
-COMO profesor\
+> **\[Corregida 2026-09-08\] Subir/transcribir es SOLO admin.** Desde la fase
+> "el profe no sube", cargar y transcribir videos nuevos es exclusivo del rol
+> `admin` (rutas `POST /api/videos`, `POST /api/blob-upload`, `POST
+> /api/transcribe`, `PATCH /api/videos/[id]` → `requireRole('admin')`; el
+> dropzone se oculta para el profesor). El profesor ya no sube: toma material
+> de la Biblioteca compartida (US de biblioteca compartida). US-001/US-002/US-003
+> describen el flujo tal como lo usa hoy el **admin**.
+
+COMO admin\
 QUIERO arrastrar un archivo de video al área de carga o seleccionarlo
 desde el explorador\
 PARA prepararlo para la reproducción en clase
