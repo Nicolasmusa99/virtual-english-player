@@ -4,10 +4,10 @@ import { setupServer } from 'msw/node'
 import { http, HttpResponse } from 'msw'
 import { NextRequest } from 'next/server'
 
-// Fase 1 — la ruta ahora exige rol admin/profesor (requireRole → auth). Mockeamos auth.
+// Transcribir es admin-only desde "el profe no sube" (requireRole('admin')). Mockeamos auth.
 const authMock = vi.hoisted(() =>
   vi.fn<() => Promise<{ user: { id: string; role: string } } | null>>(
-    async () => ({ user: { id: 'test-user', role: 'profesor' } })
+    async () => ({ user: { id: 'test-user', role: 'admin' } })
   )
 )
 vi.mock('@/lib/auth', () => ({ auth: authMock }))
@@ -26,7 +26,7 @@ afterAll(() => server.close())
 
 beforeEach(() => {
   process.env.GEMINI_API_KEY = 'test-key-default'
-  authMock.mockResolvedValue({ user: { id: 'test-user', role: 'profesor' } })
+  authMock.mockResolvedValue({ user: { id: 'test-user', role: 'admin' } })
 })
 
 function makeRequest(withBlobUrl = true): NextRequest {
@@ -70,6 +70,12 @@ describe('POST /api/transcribe', () => {
 
   it('(guard-403) rol alumno → 403, no toca Gemini', async () => {
     authMock.mockResolvedValueOnce({ user: { id: 'al-1', role: 'alumno' } })
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(403)
+  })
+
+  it('(guard-403b) rol profesor → 403, no toca Gemini (subir es solo admin)', async () => {
+    authMock.mockResolvedValueOnce({ user: { id: 'pf-1', role: 'profesor' } })
     const res = await POST(makeRequest())
     expect(res.status).toBe(403)
   })

@@ -11,9 +11,10 @@ if (typeof window !== 'undefined') {
 // app/page.tsx calls useSession() unconditionally (Bloque 13 — biblioteca).
 // Component tests render <Player /> in isolation, without app/layout.tsx's
 // <SessionProvider>, so next-auth/react throws unless it's mocked globally here.
-// Default is authenticated because the load screen now requires login (gate de login).
-// Tests that specifically verify unauthenticated behavior must set status explicitly.
-export const useSessionMock = vi.fn((): { data: unknown; status: string } => ({ data: { user: { email: 'test@example.com' } }, status: 'authenticated' }))
+// Default is authenticated AS ADMIN: la mayoría de los tests ejercitan el flujo
+// de subida/player, que desde "el profe no sube" es admin-only (el dropzone solo
+// renderiza para admin). Tests de rol específico setean su propio valor.
+export const useSessionMock = vi.fn((): { data: unknown; status: string } => ({ data: { user: { email: 'test@example.com', role: 'admin' } }, status: 'authenticated' }))
 export const signInMock = vi.fn()
 export const signOutMock = vi.fn()
 
