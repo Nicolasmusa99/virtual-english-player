@@ -47,15 +47,22 @@ describe('POST /api/blob-upload', () => {
   })
 
   it('(b) delega en handleUpload y responde 200 con su resultado', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     handleUploadMock.mockResolvedValue({ ok: true })
     const res = await POST(req())
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ ok: true })
   })
 
-  it('(c) si handleUpload rechaza (ej. token inválido), responde 400 con el mensaje', async () => {
+  it('(b-403) 403 si es profesor — subir es solo admin, no toca handleUpload', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    const res = await POST(req())
+    expect(res.status).toBe(403)
+    expect(handleUploadMock).not.toHaveBeenCalled()
+  })
+
+  it('(c) si handleUpload rechaza (ej. token inválido), responde 400 con el mensaje', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     handleUploadMock.mockRejectedValue(new Error('boom'))
     const res = await POST(req())
     expect(res.status).toBe(400)
@@ -64,7 +71,7 @@ describe('POST /api/blob-upload', () => {
 
   describe('onBeforeGenerateToken (lógica de ownership + cuota)', () => {
     async function callOnBeforeGenerateToken(clientPayload: string) {
-      authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+      authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
       let captured: any
       handleUploadMock.mockImplementation(async ({ onBeforeGenerateToken }: any) => {
         captured = await onBeforeGenerateToken('videos/v1/a.mp4', clientPayload)
@@ -98,7 +105,7 @@ describe('POST /api/blob-upload', () => {
 
   describe('onUploadCompleted (actualiza storage_url + status)', () => {
     it('marca el video como ready con la url final del blob', async () => {
-      authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+      authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
       handleUploadMock.mockImplementation(async ({ onUploadCompleted }: any) => {
         await onUploadCompleted({
           blob: { url: 'https://blob/final.mp4' },

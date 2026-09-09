@@ -1152,32 +1152,52 @@ export default function Player() {
                   <button className={styles.discardBtn} onClick={handleSizeWarnDismiss}>Cancelar</button>
                 </div>
               )}
-              <label
-                className={styles.dropzone}
-                onDragOver={e => { e.preventDefault(); e.currentTarget.setAttribute('data-drag', 'true') }}
-                onDragLeave={e => e.currentTarget.removeAttribute('data-drag')}
-                onDrop={e => { e.preventDefault(); e.currentTarget.removeAttribute('data-drag'); handleFiles(Array.from(e.dataTransfer.files)) }}
-              >
-                <input type="file" accept="video/*,.avi,.mp4,.mkv,.mov,.webm,.srt" multiple
-                  onChange={e => handleFiles(Array.from(e.target.files || []))} style={{ display: 'none' }} />
-                <div className={styles.dzIcon}>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-                  </svg>
+              {userRole === 'admin' ? (
+                <label
+                  className={styles.dropzone}
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.setAttribute('data-drag', 'true') }}
+                  onDragLeave={e => e.currentTarget.removeAttribute('data-drag')}
+                  onDrop={e => { e.preventDefault(); e.currentTarget.removeAttribute('data-drag'); handleFiles(Array.from(e.dataTransfer.files)) }}
+                >
+                  <input type="file" accept="video/*,.avi,.mp4,.mkv,.mov,.webm,.srt" multiple
+                    onChange={e => handleFiles(Array.from(e.target.files || []))} style={{ display: 'none' }} />
+                  <div className={styles.dzIcon}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                      <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                    </svg>
+                  </div>
+                  <div className={styles.dzTitle}>Arrastrá el video aquí</div>
+                  <div className={styles.dzSub}>
+                    Gemini transcribe el audio automáticamente y genera el SRT.<br />
+                    Para reproducir en el navegador subí MP4 o WEBM — AVI/MKV se transcriben pero no se reproducen (convertilos a MP4).<br />
+                    También podés arrastrar video + SRT juntos si ya lo tenés.
+                  </div>
+                  <div className={styles.dzFormats}>
+                    {['MP4', 'WEBM', 'MOV', 'SRT'].map(f => (
+                      <span key={f} className={`${styles.fmt} ${['MP4', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
+                    ))}
+                  </div>
+                </label>
+              ) : (
+                <div className={styles.dropzone} style={{ cursor: 'default' }}>
+                  <div className={styles.dzIcon}>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <circle cx="12" cy="12" r="9" /><path d="M3 12h18" />
+                      <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" />
+                    </svg>
+                  </div>
+                  <div className={styles.dzTitle}>Tomá material de la Biblioteca compartida</div>
+                  <div className={styles.dzSub}>
+                    El administrador publica los videos para tus clases. Explorá los disponibles,
+                    filtralos por tipo y nivel, y abrilos en el player.<br />
+                    Si editás las captions, se guarda tu propia copia — el original queda intacto.
+                  </div>
+                  <button className={styles.restoreBtn} onClick={() => setScreen('shared')}>
+                    Ir a la Biblioteca compartida
+                  </button>
                 </div>
-                <div className={styles.dzTitle}>Arrastrá el video aquí</div>
-                <div className={styles.dzSub}>
-                  Gemini transcribe el audio automáticamente y genera el SRT.<br />
-                  Para reproducir en el navegador subí MP4 o WEBM — AVI/MKV se transcriben pero no se reproducen (convertilos a MP4).<br />
-                  También podés arrastrar video + SRT juntos si ya lo tenés.
-                </div>
-                <div className={styles.dzFormats}>
-                  {['MP4', 'WEBM', 'MOV', 'SRT'].map(f => (
-                    <span key={f} className={`${styles.fmt} ${['MP4', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
-                  ))}
-                </div>
-              </label>
+              )}
               {errorMsg && <div className={styles.errorBox}>{errorMsg}</div>}
             </>
           ) : (
@@ -1282,7 +1302,7 @@ export default function Player() {
               <span className={`${styles.chip} ${styles.chipZoom}`}><span className={styles.liveDot} />Zoom</span>
               <button className={styles.tbBtn} onClick={downloadSRT}>↓ SRT</button>
               <button className={styles.tbBtn} onClick={() => srtReloadRef.current?.click()}>↑ Cargar SRT</button>
-              {authStatus === 'authenticated' && !libraryVideoIdRef.current && videoFileRef.current && (
+              {userRole === 'admin' && !libraryVideoIdRef.current && videoFileRef.current && (
                 <button className={styles.tbBtn} disabled={librarySaving} onClick={saveToLibrary}>
                   {librarySaving ? 'Guardando...' : '📚 Guardar en biblioteca'}
                 </button>

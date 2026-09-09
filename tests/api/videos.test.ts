@@ -60,7 +60,7 @@ describe('POST /api/videos', () => {
   })
 
   it('(b) 400 con datos inválidos (falta originalName / sizeBytes inválido / falta mimeType)', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     const invalidBodies = [
       { sizeBytes: 100, mimeType: 'video/mp4' },
       { originalName: 'a.mp4', sizeBytes: 0, mimeType: 'video/mp4' },
@@ -74,17 +74,24 @@ describe('POST /api/videos', () => {
   })
 
   it('(c) 413 si el video excede la cuota disponible', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     getUsedBytesMock.mockResolvedValue(8 * 1024 ** 3)
     const res = await POST(makeRequest({ originalName: 'a.mp4', sizeBytes: 100, mimeType: 'video/mp4' }))
     expect(res.status).toBe(413)
   })
 
   it('(d) 200 y crea el video cuando hay espacio disponible', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     getUsedBytesMock.mockResolvedValue(0)
     const res = await POST(makeRequest({ originalName: 'a.mp4', sizeBytes: 100, mimeType: 'video/mp4' }))
     expect(res.status).toBe(200)
     expect((await res.json()).id).toBe('video-1')
+  })
+
+  it('(e) 403 si es profesor — subir es solo admin (el profe toma de la compartida)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    getUsedBytesMock.mockResolvedValue(0)
+    const res = await POST(makeRequest({ originalName: 'a.mp4', sizeBytes: 100, mimeType: 'video/mp4' }))
+    expect(res.status).toBe(403)
   })
 })

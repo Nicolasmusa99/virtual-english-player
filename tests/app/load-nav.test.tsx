@@ -7,7 +7,7 @@ import { useSessionMock } from '../setup'
 
 function tick(ms = 100) { return new Promise<void>(r => setTimeout(r, ms)) }
 
-const SESSION_AUTH = { data: { user: { email: 'x@x.com' } }, status: 'authenticated' as const }
+const SESSION_AUTH = { data: { user: { email: 'x@x.com', role: 'admin' } }, status: 'authenticated' as const }
 
 describe('Player — TC-089: load screen navigation con auth', () => {
   beforeEach(() => {
@@ -60,5 +60,22 @@ describe('Player — TC-089: load screen navigation con auth', () => {
     expect(btn).toBeTruthy()
     await act(async () => { fireEvent.click(btn!); await tick(150) })
     expect(global.fetch).toHaveBeenCalledWith('/api/videos')
+  })
+
+  // TC-089e: el PROFE no ve el dropzone de subir; ve el CTA a la Biblioteca compartida
+  it('TC-089e: profesor no ve dropzone de subir, ve CTA a la Biblioteca compartida', async () => {
+    useSessionMock.mockReturnValue({ data: { user: { email: 'p@x.com', role: 'profesor' } }, status: 'authenticated' as const })
+    const { container, getByText } = render(<Player />)
+    await act(async () => { await tick(150) })
+    expect(container.querySelector('input[type="file"]')).toBeNull()
+    expect(getByText(/tomá material de la biblioteca compartida/i)).toBeTruthy()
+  })
+
+  // TC-089f: el ADMIN sí ve el dropzone de subir
+  it('TC-089f: admin ve el dropzone de subir', async () => {
+    useSessionMock.mockReturnValue(SESSION_AUTH)
+    const { container } = render(<Player />)
+    await act(async () => { await tick(150) })
+    expect(container.querySelector('input[type="file"]')).not.toBeNull()
   })
 })

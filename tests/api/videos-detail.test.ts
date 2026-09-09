@@ -97,23 +97,30 @@ describe('PATCH /api/videos/[id]', () => {
   })
 
   it('(b) 404 si no es dueño del video', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     ;(db as any).__rows = []
     const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/x' }), ctx())
     expect(res.status).toBe(404)
   })
 
   it('(c) 400 si falta storageUrl', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await PATCH(req('PATCH', {}), ctx())
     expect(res.status).toBe(400)
   })
 
   it('(d) 200 y confirma el storageUrl cuando es dueño', async () => {
-    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     ;(db as any).__rows = [OWNED_VIDEO]
     const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/final.mp4' }), ctx())
     expect(res.status).toBe(200)
+  })
+
+  it('(e) 403 si es profesor — confirmar storageUrl es parte de subir (solo admin)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    ;(db as any).__rows = [OWNED_VIDEO]
+    const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/x' }), ctx())
+    expect(res.status).toBe(403)
   })
 })

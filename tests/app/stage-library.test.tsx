@@ -9,8 +9,9 @@ import Player from '@/app/page'
 import { StageChannel } from '@/lib/stageChannel'
 
 // Mock next-auth so useSession returns authenticated — needed to expose the library button.
+// role admin: TC-lib-03 usa el dropzone (drag-drop local), que desde "el profe no sube" es admin-only.
 vi.mock('next-auth/react', () => ({
-  useSession: () => ({ status: 'authenticated', data: { user: { email: 'test@test.com' } } }),
+  useSession: () => ({ status: 'authenticated', data: { user: { email: 'test@test.com', role: 'admin' } } }),
   signIn:  vi.fn(),
   signOut: vi.fn(),
 }))
