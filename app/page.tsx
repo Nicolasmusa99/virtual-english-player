@@ -8,6 +8,7 @@ import ExercisesPanel from './ExercisesPanel'
 import UsersPanel from './UsersPanel'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
+import StudentView from './StudentView'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
@@ -51,7 +52,8 @@ export default function Player() {
   const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student'>('load')
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; email: string } | null>(null)
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -1179,6 +1181,33 @@ export default function Player() {
                     ))}
                   </div>
                 </label>
+              ) : userRole === 'profesor' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 520 }}>
+                  {/* ① Mis alumnos (flujo principal) */}
+                  <div className={styles.dropzone} style={{ cursor: 'default' }}>
+                    <div className={styles.dzIcon}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    </div>
+                    <div className={styles.dzTitle}>Mis alumnos</div>
+                    <div className={styles.dzSub}>Abrí un alumno para ver y asignarle material de la biblioteca.</div>
+                    <button className={styles.restoreBtn} onClick={() => setScreen('users')}>Ver mis alumnos</button>
+                  </div>
+                  {/* ② Biblioteca compartida */}
+                  <div className={styles.dropzone} style={{ cursor: 'default' }}>
+                    <div className={styles.dzIcon}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <circle cx="12" cy="12" r="9" /><path d="M3 12h18" />
+                        <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" />
+                      </svg>
+                    </div>
+                    <div className={styles.dzTitle}>Biblioteca compartida</div>
+                    <div className={styles.dzSub}>Explorá el material publicado, reproducilo y editá tus captions (se guarda tu copia; el original queda intacto).</div>
+                    <button className={styles.restoreBtn} onClick={() => setScreen('shared')}>Ir a la biblioteca</button>
+                  </div>
+                </div>
               ) : (
                 <div className={styles.dropzone} style={{ cursor: 'default' }}>
                   <div className={styles.dzIcon}>
@@ -1285,7 +1314,28 @@ export default function Player() {
             <span className={styles.logoDot} />Virtual English — {userRole === 'admin' ? 'Usuarios' : 'Mis alumnos'}
           </div>
           <div style={{ width: '100%', maxWidth: 680 }}>
-            {userRole && <UsersPanel role={userRole} />}
+            {userRole && (
+              <UsersPanel
+                role={userRole}
+                onOpenStudent={(id, email) => { setSelectedStudent({ id, email }); setScreen('student') }}
+              />
+            )}
+          </div>
+        </div>
+      )}
+
+      {screen === 'student' && selectedStudent && (
+        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
+          <div style={{ position: 'absolute', top: 16, right: 16 }}>
+            <button className={styles.tbBtn} onClick={() => setScreen('users')}>← Volver a alumnos</button>
+          </div>
+          <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Alumno</div>
+          <div style={{ width: '100%', maxWidth: 760 }}>
+            <StudentView
+              studentId={selectedStudent.id}
+              studentEmail={selectedStudent.email}
+              onOpenVideo={openFromLibrary}
+            />
           </div>
         </div>
       )}
