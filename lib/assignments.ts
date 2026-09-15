@@ -1,6 +1,6 @@
 import { and, desc, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { assignments, videos } from '@/lib/db/schema'
+import { assignments, users, videos } from '@/lib/db/schema'
 import type { SharedType, SharedLevel } from '@/lib/db/schema'
 
 // Capa de datos de `assignments`. Igual que lib/users.ts: helpers finos de DB,
@@ -63,6 +63,43 @@ export async function listAssignmentsForStudent(studentId: string): Promise<Assi
     .from(assignments)
     .innerJoin(videos, eq(videos.id, assignments.videoId))
     .where(eq(assignments.studentId, studentId))
+    .orderBy(desc(assignments.assignedAt))
+  return rows.map((r) => ({ ...r, active: r.publishedAt !== null }))
+}
+
+const teacherAssignmentCols = {
+  studentId: assignments.studentId,
+  videoId: assignments.videoId,
+  assignedAt: assignments.assignedAt,
+  assignedBy: assignments.assignedBy,
+  originalName: videos.originalName,
+  sharedType: videos.sharedType,
+  sharedLevel: videos.sharedLevel,
+  durationSec: videos.durationSec,
+  publishedAt: videos.publishedAt,
+}
+
+// Todas las asignaciones de los alumnos de UN profe (para el home del profe).
+// El filtro va por users.teacher_id = teacherId, no por parámetro del cliente.
+export async function listAssignmentsForTeacher(
+  teacherId: string
+): Promise<(AssignmentVideo & { studentId: string })[]> {
+  const rows = await db
+    .select(teacherAssignmentCols)
+    .from(assignments)
+    .innerJoin(videos, eq(videos.id, assignments.videoId))
+    .innerJoin(users, eq(users.id, assignments.studentId))
+    .where(eq(users.teacherId, teacherId))
+    .orderBy(desc(assignments.assignedAt))
+  return rows.map((r) => ({ ...r, active: r.publishedAt !== null }))
+}
+
+// Todas las asignaciones (solo admin).
+export async function listAllAssignments(): Promise<(AssignmentVideo & { studentId: string })[]> {
+  const rows = await db
+    .select(teacherAssignmentCols)
+    .from(assignments)
+    .innerJoin(videos, eq(videos.id, assignments.videoId))
     .orderBy(desc(assignments.assignedAt))
   return rows.map((r) => ({ ...r, active: r.publishedAt !== null }))
 }

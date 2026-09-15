@@ -28,6 +28,16 @@ export async function getUserById(id: string) {
   return row ?? null
 }
 
+// Para el guard de asignaciones: necesita el teacherId además del rol, para
+// verificar server-side que un alumno es de ESTE profe. Nunca se confía en el body.
+export async function getStudentById(id: string): Promise<{ id: string; role: Role | null; teacherId: string | null } | null> {
+  const [row] = await db
+    .select({ id: users.id, role: users.role, teacherId: users.teacherId })
+    .from(users)
+    .where(eq(users.id, id))
+  return row ?? null
+}
+
 export async function insertUser(data: { email: string; role: Role; teacherId: string | null }): Promise<PublicUser> {
   const [row] = await db.insert(users).values(data).returning(PUBLIC_COLS)
   return row
