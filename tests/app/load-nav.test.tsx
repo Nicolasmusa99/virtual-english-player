@@ -62,13 +62,16 @@ describe('Player — TC-089: load screen navigation con auth', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/videos')
   })
 
-  // TC-089e: el PROFE no ve el dropzone de subir; ve el CTA a la Biblioteca compartida
-  it('TC-089e: profesor no ve dropzone de subir, ve CTA a la Biblioteca compartida', async () => {
+  // TC-089e: el PROFE no ve el dropzone de subir; su home reorganizado muestra
+  // "Mis alumnos" (flujo principal) y "Biblioteca compartida" (asignar-material).
+  it('TC-089e: profesor no ve dropzone de subir, ve home con Mis alumnos + Biblioteca', async () => {
     useSessionMock.mockReturnValue({ data: { user: { email: 'p@x.com', role: 'profesor' } }, status: 'authenticated' as const })
     const { container, getByText } = render(<Player />)
     await act(async () => { await tick(150) })
     expect(container.querySelector('input[type="file"]')).toBeNull()
-    expect(getByText(/tomá material de la biblioteca compartida/i)).toBeTruthy()
+    expect(getByText('Mis alumnos')).toBeTruthy()
+    expect(getByText('Ver mis alumnos')).toBeTruthy()
+    expect(getByText('Ir a la biblioteca')).toBeTruthy()
   })
 
   // TC-089f: el ADMIN sí ve el dropzone de subir
