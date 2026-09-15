@@ -1300,7 +1300,7 @@ export default function Player() {
             <span className={styles.logoDot} />Virtual English — Biblioteca compartida
           </div>
           <div style={{ width: '100%', maxWidth: 760 }}>
-            <SharedLibrary onOpen={openFromLibrary} />
+            <SharedLibrary onOpen={openFromLibrary} assignable={userRole === 'admin' || userRole === 'profesor'} />
           </div>
         </div>
       )}
