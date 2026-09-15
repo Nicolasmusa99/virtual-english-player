@@ -6,6 +6,7 @@
 // si no existe → INSERT (email, role='admin') para poder auto-invitarse aunque nunca haya logueado.
 // Al final imprime las filas resultantes para confirmar que quedaron como admin.
 import { neon } from '@neondatabase/serverless'
+import { assertDbHostAllowed } from '../lib/db/guard.mjs'
 
 // Podés sobreescribir con SEED_ADMIN_EMAILS="a@x.com,b@y.com". Si no, usa esta lista.
 const ADMIN_EMAILS = (process.env.SEED_ADMIN_EMAILS
@@ -28,6 +29,9 @@ if (!url) {
   console.error('✗ Falta DATABASE_URL (o DATABASE_URL_UNPOOLED) en el entorno.')
   process.exit(1)
 }
+
+// Cinturón de seguridad: nunca seedear prod desde un entorno no-prod (ver lib/db/guard.mjs).
+assertDbHostAllowed(url, 'seed')
 
 const sql = neon(url)
 
