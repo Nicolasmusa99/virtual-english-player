@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import styles from './page.module.css'
 import type { SharedType, SharedLevel } from '@/lib/db/schema'
 import { TIPO_LABEL, NIVEL_LABEL } from './LibraryList'
+import AssignToStudents from './AssignToStudents'
 
 interface SharedVideoRow {
   id: string
@@ -20,12 +21,13 @@ interface SharedVideoRow {
 // "Mi biblioteca" (y el backend lo rechaza igual para un profe). Se trae el
 // listado completo y se filtra client-side, para poder distinguir "no hay nada
 // publicado todavía" de "no hay resultados con estos filtros".
-export default function SharedLibrary({ onOpen }: { onOpen: (id: string) => void }) {
+export default function SharedLibrary({ onOpen, assignable }: { onOpen: (id: string) => void; assignable?: boolean }) {
   const [videos, setVideos] = useState<SharedVideoRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
   const [tipo, setTipo] = useState<'all' | SharedType>('all')
   const [nivel, setNivel] = useState<'all' | SharedLevel>('all')
+  const [assignTarget, setAssignTarget] = useState<{ id: string; name: string } | null>(null)
 
   async function load() {
     setLoading(true); setLoadError('')
@@ -100,12 +102,22 @@ export default function SharedLibrary({ onOpen }: { onOpen: (id: string) => void
                 {v.sharedType && <span className={`${styles.chip} ${styles.chipTipo}`}>{TIPO_LABEL[v.sharedType]}</span>}
                 {v.sharedLevel && <span className={`${styles.chip} ${styles.chipNivel}`}>{NIVEL_LABEL[v.sharedLevel]}</span>}
               </div>
-              <div>
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 <button className={styles.restoreBtn} onClick={() => onOpen(v.id)}>Abrir en el player</button>
+                {assignable && (
+                  <button className={styles.tbBtn} onClick={() => setAssignTarget({ id: v.id, name: v.originalName })}>Asignar a…</button>
+                )}
               </div>
             </div>
           ))}
         </div>
+      )}
+      {assignTarget && (
+        <AssignToStudents
+          videoId={assignTarget.id}
+          videoName={assignTarget.name}
+          onClose={() => setAssignTarget(null)}
+        />
       )}
     </div>
   )

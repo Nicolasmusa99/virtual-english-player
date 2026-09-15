@@ -14,7 +14,7 @@ const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 
 // Fase 3a — cara visible de /api/users (Fase 2). Solo consume GET/POST existentes;
 // la seguridad real vive en el backend. El `role` decide qué vista mostrar.
-export default function UsersPanel({ role }: { role: Role }) {
+export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpenStudent?: (id: string, email: string) => void }) {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
@@ -181,6 +181,9 @@ export default function UsersPanel({ role }: { role: Role }) {
                   )}
                 </span>
                 <span className={`${styles.chip} ${styles.chipSrt}`}>{u.role}</span>
+                {u.role === 'alumno' && onOpenStudent && (
+                  <button className={styles.tbBtn} onClick={() => onOpenStudent(u.id, u.email ?? '')}>Abrir</button>
+                )}
               </div>
             ))}
           </div>

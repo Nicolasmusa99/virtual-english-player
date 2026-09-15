@@ -140,3 +140,28 @@ export const videoSessions = pgTable(
   },
   (t) => [primaryKey({ columns: [t.videoId, t.userId] })]
 )
+
+// --- Asignar material a alumnos (lado profe) ---
+// Una fila = "el alumno tiene acceso a este video de la biblioteca compartida".
+// NO guarda captions: es un PUNTERO. La versión que ve el alumno se resuelve en
+// read-time por el teacher_id del ALUMNO contra video_sessions (con fallback al
+// dueño), NO por assigned_by → así la reasignación de profe (impago) reapunta sola
+// a la copia del profe nuevo y el invariante de captions queda intacto.
+//   · student_id / video_id  → cascade: si se borra el alumno o el video, la fila se va.
+//   · assigned_by            → set null: auditoría (profe o admin); si ese usuario se
+//                              borra no arrastra la asignación (acceso ≠ quién asignó).
+//   · PK (student_id, video_id): una asignación por par; re-asignar es idempotente.
+export const assignments = pgTable(
+  'assignments',
+  {
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    videoId: uuid('video_id')
+      .notNull()
+      .references(() => videos.id, { onDelete: 'cascade' }),
+    assignedBy: uuid('assigned_by').references(() => users.id, { onDelete: 'set null' }),
+    assignedAt: timestamp('assigned_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.studentId, t.videoId] })]
+)
