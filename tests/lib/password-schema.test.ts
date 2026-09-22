@@ -94,6 +94,14 @@ describe('tabla password_tokens', () => {
     expect(passwordTokenPurpose.enumValues).toEqual(['invite', 'reset'])
   })
 
+  it('INVARIANTE: índice ÚNICO parcial (user_id, purpose) WHERE used_at IS NULL → nunca dos links vivos del mismo tipo', () => {
+    const live = tokens.indexes.find((i) => i.config.name === 'password_tokens_live_uq')
+    expect(live).toBeDefined()
+    expect(live!.config.unique).toBe(true)
+    expect(live!.config.columns.map((c: any) => c.name)).toEqual(['user_id', 'purpose'])
+    expect(JSON.stringify(live!.config.where?.queryChunks)).toContain('used_at IS NULL')
+  })
+
   it('hay índice por user_id (para listar/invalidar los tokens de una persona)', () => {
     const byUser = tokens.indexes.some((i) => i.config.columns.some((c) => 'name' in c && c.name === 'user_id'))
     expect(byUser).toBe(true)

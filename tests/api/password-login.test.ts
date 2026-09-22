@@ -8,10 +8,10 @@ import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest'
 import { NextRequest } from 'next/server'
 import bcrypt from 'bcryptjs'
 
-const { getUserMock, lockedMock, failMock, clearMock, createSessionMock, verifySpy } = vi.hoisted(() => ({
+const { getUserMock, hitMock, releaseMock, clearMock, createSessionMock, verifySpy } = vi.hoisted(() => ({
   getUserMock: vi.fn(),
-  lockedMock: vi.fn(),
-  failMock: vi.fn(),
+  hitMock: vi.fn(),
+  releaseMock: vi.fn(),
   clearMock: vi.fn(),
   createSessionMock: vi.fn(),
   verifySpy: vi.fn(),
@@ -21,8 +21,8 @@ vi.mock('@/lib/db', () => ({ db: {} }))
 vi.mock('@/lib/users', () => ({ getUserForLogin: getUserMock }))
 vi.mock('@/lib/loginThrottle', async (orig) => ({
   ...(await orig<typeof import('@/lib/loginThrottle')>()),
-  lockedUntil: lockedMock,
-  registerFailure: failMock,
+  hit: hitMock,
+  release: releaseMock,
   clearFailures: clearMock,
 }))
 vi.mock('@/lib/authCookie', async (orig) => ({
@@ -72,8 +72,8 @@ const OK_USER = { id: 'u-1', role: 'alumno', passwordHash: '' }
 beforeEach(() => {
   OK_USER.passwordHash = HASH
   getUserMock.mockReset().mockResolvedValue(OK_USER)
-  lockedMock.mockReset().mockResolvedValue(null)
-  failMock.mockReset().mockResolvedValue(undefined)
+  hitMock.mockReset().mockResolvedValue(true) // true = entra dentro del límite
+  releaseMock.mockReset().mockResolvedValue(undefined)
   clearMock.mockReset().mockResolvedValue(undefined)
   createSessionMock.mockReset().mockResolvedValue({ sessionToken: SESSION_TOKEN, expires: EXPIRES })
   verifySpy.mockReset()
@@ -107,13 +107,15 @@ describe('login correcto', { timeout: 30000 }, () => {
   it('normaliza el email (trim + minúsculas) para buscar y para el contador', async () => {
     await POST(login({ email: '  Ana@Mail.COM ', password: PASSWORD }))
     expect(getUserMock).toHaveBeenCalledWith('ana@mail.com')
-    expect(lockedMock).toHaveBeenCalledWith(['email:ana@mail.com', 'ip:9.9.9.9'])
+    expect(hitMock).toHaveBeenCalledWith('email:ana@mail.com', 5)
   })
 
-  it('limpia el contador del EMAIL pero NO el de la IP', async () => {
+  it('éxito: borra el contador del EMAIL y DEVUELVE el lugar de la IP (no la borra)', async () => {
     await POST(login({ email: 'ana@mail.com', password: PASSWORD }))
     expect(clearMock).toHaveBeenCalledTimes(1)
     expect(clearMock).toHaveBeenCalledWith('email:ana@mail.com')
+    expect(releaseMock).toHaveBeenCalledTimes(1)
+    expect(releaseMock).toHaveBeenCalledWith('ip:9.9.9.9')
   })
 
   it('funciona para los tres roles', async () => {
@@ -144,16 +146,17 @@ describe('los 4 rechazos son INDISTINGUIBLES', { timeout: 60000 }, () => {
   ]
 
   for (const [name, setup, pw] of cases) {
-    it(`${name} → 401 genérico, sin sesión ni cookie, suma fallo a email e IP`, async () => {
+    it(`${name} → 401 genérico, sin sesión ni cookie; el intento quedó contado ANTES (email e IP)`, async () => {
       setup()
       const res = await POST(login({ email: 'ana@mail.com', password: pw }))
       expect(res.status).toBe(401)
       expect(await res.json()).toEqual({ error: 'Email o contraseña incorrectos' })
       expect(res.headers.get('set-cookie')).toBeNull()
       expect(createSessionMock).not.toHaveBeenCalled()
-      expect(failMock).toHaveBeenCalledWith('email:ana@mail.com', 5)
-      expect(failMock).toHaveBeenCalledWith('ip:9.9.9.9', 20)
+      expect(hitMock).toHaveBeenCalledWith('ip:9.9.9.9', 20)
+      expect(hitMock).toHaveBeenCalledWith('email:ana@mail.com', 5)
       expect(clearMock).not.toHaveBeenCalled()
+      expect(releaseMock).not.toHaveBeenCalled() // un fallo NO devuelve el lugar
     })
   }
 
@@ -196,9 +199,9 @@ describe('los 4 rechazos son INDISTINGUIBLES', { timeout: 60000 }, () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('fuerza bruta', () => {
-  it('bloqueado → 429, sin buscar al usuario ni correr bcrypt', async () => {
-    lockedMock.mockResolvedValue(new Date(Date.now() + 60_000))
+describe('fuerza bruta (conteo atómico ANTES de evaluar)', () => {
+  it('email frenado → 429, sin buscar al usuario ni correr bcrypt', async () => {
+    hitMock.mockImplementation(async (key: string) => !key.startsWith('email:'))
     const res = await POST(login({ email: 'ana@mail.com', password: PASSWORD }))
     expect(res.status).toBe(429)
     expect(await res.json()).toEqual({ error: 'Demasiados intentos. Probá de nuevo en unos minutos.' })
@@ -207,23 +210,38 @@ describe('fuerza bruta', () => {
     expect(createSessionMock).not.toHaveBeenCalled()
   })
 
-  it('bloqueado + contraseña CORRECTA → igual 429 (el bloqueo no se saltea)', async () => {
-    lockedMock.mockResolvedValue(new Date(Date.now() + 60_000))
+  it('frenado + contraseña CORRECTA → igual 429 (el bloqueo no se saltea)', async () => {
+    hitMock.mockResolvedValue(false)
     const res = await POST(login({ email: 'ana@mail.com', password: PASSWORD }))
     expect(res.status).toBe(429)
     expect(res.headers.get('set-cookie')).toBeNull()
   })
 
-  it('ANTI-ENUMERACIÓN: el bloqueo se consulta y el fallo se suma AUNQUE la cuenta no exista', async () => {
+  it('IP frenada → 429 y NO se gasta el cupo del email (nadie bloquea una cuenta ajena desde una IP ya frenada)', async () => {
+    hitMock.mockImplementation(async (key: string) => !key.startsWith('ip:'))
+    const res = await POST(login({ email: 'ana@mail.com', password: PASSWORD }))
+    expect(res.status).toBe(429)
+    expect(hitMock).toHaveBeenCalledTimes(1)
+    expect(hitMock).toHaveBeenCalledWith('ip:9.9.9.9', 20)
+  })
+
+  it('el intento se cuenta ANTES de correr bcrypt (una ráfaga no puede colarse)', async () => {
+    getUserMock.mockResolvedValue(null)
+    await POST(login({ email: 'ana@mail.com', password: 'mal-mal-mal-mal' }))
+    const lastHit = Math.max(...hitMock.mock.invocationCallOrder)
+    const bcryptAt = verifySpy.mock.invocationCallOrder[0]
+    expect(lastHit).toBeLessThan(bcryptAt)
+  })
+
+  it('ANTI-ENUMERACIÓN: el intento se cuenta AUNQUE la cuenta no exista', async () => {
     getUserMock.mockResolvedValue(null)
     await POST(login({ email: 'inventado@mail.com', password: PASSWORD }))
-    expect(lockedMock).toHaveBeenCalledWith(['email:inventado@mail.com', 'ip:9.9.9.9'])
-    expect(failMock).toHaveBeenCalledWith('email:inventado@mail.com', 5)
+    expect(hitMock).toHaveBeenCalledWith('email:inventado@mail.com', 5)
   })
 
   it('la IP sale del primer salto de x-forwarded-for', async () => {
     await POST(login({ email: 'ana@mail.com', password: 'mal-mal-mal-mal' }, { ip: '1.2.3.4, 10.0.0.1' }))
-    expect(failMock).toHaveBeenCalledWith('ip:1.2.3.4', 20)
+    expect(hitMock).toHaveBeenCalledWith('ip:1.2.3.4', 20)
   })
 })
 
@@ -233,7 +251,7 @@ describe('CSRF (Origin)', () => {
     const res = await POST(login({ email: 'ana@mail.com', password: PASSWORD }, { origin: null }))
     expect(res.status).toBe(403)
     expect(getUserMock).not.toHaveBeenCalled()
-    expect(lockedMock).not.toHaveBeenCalled()
+    expect(hitMock).not.toHaveBeenCalled()
   })
 
   it('Origin de OTRO sitio → 403', async () => {
@@ -281,7 +299,7 @@ describe('body', () => {
     const res2 = await POST(login({ email: 'a@b.com', password: 'x'.repeat(2000) }))
     expect(res1.status).toBe(400)
     expect(res2.status).toBe(400)
-    expect(lockedMock).not.toHaveBeenCalled()
+    expect(hitMock).not.toHaveBeenCalled()
     expect(verifySpy).not.toHaveBeenCalled()
   })
 })

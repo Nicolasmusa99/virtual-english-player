@@ -184,3 +184,35 @@ describe('GET — ¿muestro el formulario?', () => {
     expect((await res.json()).valid).toBe(false)
   })
 })
+
+describe('F4 — reset exitoso (token de propósito "reset")', { timeout: 30000 }, () => {
+  beforeEach(() => {
+    peekMock.mockResolvedValue({ userId: 'u-1', purpose: 'reset' })
+    consumeMock.mockResolvedValue({ userId: 'u-1', purpose: 'reset' })
+  })
+
+  it('INVARIANTE: EXPULSA a quien esté dentro — borra TODAS las sesiones vivas de la cuenta', async () => {
+    deleteSessionsMock.mockResolvedValue(3) // p. ej. un atacante con la contraseña vieja + 2 dispositivos
+    const res = await POST(post({ token: 'tok', password: GOOD }))
+    expect(res.status).toBe(200)
+    expect(deleteSessionsMock).toHaveBeenCalledTimes(1)
+    expect(deleteSessionsMock).toHaveBeenCalledWith('u-1')
+  })
+
+  it('y quema los demás links vivos (otro reset pedido antes, una invitación vieja)', async () => {
+    await POST(post({ token: 'tok', password: GOOD }))
+    expect(invalidateMock).toHaveBeenCalledWith('u-1') // sin propósito = TODOS
+  })
+
+  it('las sesiones se borran DESPUÉS de guardar la contraseña nueva (nunca queda la cuenta sin salida)', async () => {
+    await POST(post({ token: 'tok', password: GOOD }))
+    const saved = setPasswordMock.mock.invocationCallOrder[0]
+    const killed = deleteSessionsMock.mock.invocationCallOrder[0]
+    expect(saved).toBeLessThan(killed)
+  })
+
+  it('GET informa purpose "reset" (para que la pantalla diga "elegí una NUEVA")', async () => {
+    const body = await (await GET(get('?token=tok'))).json()
+    expect(body).toEqual({ valid: true, purpose: 'reset' })
+  })
+})

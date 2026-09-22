@@ -91,11 +91,21 @@ describe('createPasswordToken', () => {
     expect(inserted.expiresAt).toEqual(expiresAt)
   })
 
-  it('antes de emitir limpia lo viejo y quema los vivos del mismo propósito', async () => {
-    await createPasswordToken('u-1', 'invite')
+  it('limpia lo viejo y EMITE CON UPSERT sobre el índice de "un solo link vivo"', async () => {
+    const { raw } = await createPasswordToken('u-1', 'invite')
     expect(chain.current.delete).toHaveBeenCalled() // pruneTokens
-    expect(chain.current.update).toHaveBeenCalled() // invalidateTokens
-    expect(chain.current.set.mock.calls[0][0].usedAt).toBeInstanceOf(Date)
+    const conflict = chain.current.onConflictDoUpdate.mock.calls[0][0]
+    // El conflicto es sobre (user_id, purpose) SOLO entre los vivos:
+    expect(conflict.target.map((c: any) => c.name)).toEqual(['user_id', 'purpose'])
+    expect(JSON.stringify(conflict.targetWhere.queryChunks)).toContain('used_at IS NULL')
+    // …y si choca, se REEMPLAZA el hash del vivo: el link anterior muere en el acto.
+    expect(conflict.set.tokenHash).toBe(hashToken(raw))
+    expect(conflict.set.expiresAt).toBeInstanceOf(Date)
+  })
+
+  it('ya no hay "quemar y después insertar" en dos pasos (era la carrera de F4)', async () => {
+    await createPasswordToken('u-1', 'invite')
+    expect(chain.current.update).not.toHaveBeenCalled()
   })
 })
 

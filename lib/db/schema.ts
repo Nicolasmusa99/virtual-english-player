@@ -9,9 +9,11 @@ import {
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
+import { sql } from 'drizzle-orm'
 import type { AdapterAccountType } from 'next-auth/adapters'
 
 // --- Roles (Fase 1) ---
@@ -218,7 +220,14 @@ export const passwordTokens = pgTable(
     usedAt: timestamp('used_at', { mode: 'date' }),
     createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
   },
-  (t) => [index('password_tokens_user_id_idx').on(t.userId)]
+  (t) => [
+    index('password_tokens_user_id_idx').on(t.userId),
+    // UN solo link vivo por (persona, propósito), impuesto por la BASE (F4): la
+    // verificación en vivo mostró que "quemar el vivo y después insertar" en dos
+    // pasos dejaba 3 links vivos con 3 pedidos simultáneos. Con este índice es
+    // físicamente imposible, y emitir es un upsert sobre él (ver createPasswordToken).
+    uniqueIndex('password_tokens_live_uq').on(t.userId, t.purpose).where(sql`used_at IS NULL`),
+  ]
 )
 
 // --- Login con contraseña: freno a la fuerza bruta (F3) ---

@@ -10,7 +10,7 @@
 //     dos requests simultáneos con el mismo token → solo uno gana.
 //   · Vencimiento en la fila y en el WHERE: un token vencido no se puede consumir.
 import { createHash, randomBytes } from 'node:crypto'
-import { and, eq, gt, isNotNull, isNull, lt, or } from 'drizzle-orm'
+import { and, eq, gt, isNotNull, isNull, lt, or, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { passwordTokens } from '@/lib/db/schema'
 import type { PasswordTokenPurpose } from '@/lib/db/schema'
@@ -67,20 +67,31 @@ export async function pruneTokens(userId: string): Promise<void> {
 
 /**
  * Emite un token nuevo y devuelve el CRUDO (única vez que existe fuera del mail).
- * Antes limpia lo viejo y quema los vivos del mismo propósito: un solo link
- * vigente por propósito → reenviar una invitación mata la anterior, y pedir un
- * reset nuevo mata el anterior.
+ *
+ * UN solo link vigente por propósito, garantizado por la base: el índice único
+ * parcial `(user_id, purpose) WHERE used_at IS NULL` no admite dos vivos, y la
+ * emisión es un UPSERT sobre él — si ya hay uno vivo, se le REEMPLAZA el hash en la
+ * misma sentencia atómica, así el link anterior muere en el acto (reenviar una
+ * invitación mata la anterior; pedir otro reset mata el anterior), incluso con
+ * pedidos simultáneos. Antes limpia lo usado/vencido (limpieza perezosa).
  */
 export async function createPasswordToken(
   userId: string,
   purpose: PasswordTokenPurpose
 ): Promise<{ raw: string; expiresAt: Date }> {
   await pruneTokens(userId)
-  await invalidateTokens(userId, purpose)
 
   const raw = randomBytes(TOKEN_BYTES).toString('base64url')
+  const tokenHash = hashToken(raw)
   const expiresAt = expiryFor(purpose)
-  await db.insert(passwordTokens).values({ userId, tokenHash: hashToken(raw), purpose, expiresAt })
+  await db
+    .insert(passwordTokens)
+    .values({ userId, tokenHash, purpose, expiresAt })
+    .onConflictDoUpdate({
+      target: [passwordTokens.userId, passwordTokens.purpose],
+      targetWhere: sql`used_at IS NULL`,
+      set: { tokenHash, expiresAt, createdAt: new Date() },
+    })
   return { raw, expiresAt }
 }
 

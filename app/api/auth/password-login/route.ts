@@ -10,11 +10,12 @@ import {
   IP_MAX_FAILS,
   clearFailures,
   emailKey,
+  hit,
   ipKey,
-  lockedUntil,
-  registerFailure,
+  release,
 } from '@/lib/loginThrottle'
 import { verifyPassword } from '@/lib/password'
+import { clientIp, isSameOrigin } from '@/lib/requestGuards'
 import { getUserForLogin } from '@/lib/users'
 
 // ─── POST /api/auth/password-login — entrar con email + contraseña ───────────
@@ -28,7 +29,8 @@ import { getUserForLogin } from '@/lib/users'
 //   · Allowlist de Fase 1: sin fila o sin rol → no entra. Esta ruta NUNCA crea usuarios.
 //   · Una sola respuesta de error para no-existe / sin-contraseña / contraseña-mal /
 //     rol NULL: mismo status, mismo cuerpo y (vía DUMMY_HASH) mismo tiempo.
-//   · Fuerza bruta: 5 fallos por email y 20 por IP en 15 min → bloqueo 15 min.
+//   · Fuerza bruta: 5 intentos fallidos por email y 20 por IP en 15 min → bloqueo
+//     15 min. Contados de forma ATÓMICA y antes de evaluar (resiste ráfagas paralelas).
 //   · CSRF: el Origin tiene que ser este mismo sitio; la cookie va SameSite=Lax.
 
 const INVALID = 'Email o contraseña incorrectos'
@@ -41,31 +43,6 @@ const MAX_PASSWORD = 1024
 
 const noStore = { 'Cache-Control': 'no-store' }
 const json = (body: unknown, status: number) => NextResponse.json(body, { status, headers: noStore })
-
-/**
- * CSRF: el navegador manda `Origin` en todo POST y una página ajena no lo puede
- * falsificar. Se compara contra el host que ve Auth.js (x-forwarded-host ?? host),
- * así funciona igual en local, preview y producción sin configurar nada.
- * Sin Origin → se rechaza (ningún cliente legítimo nuestro llega sin él).
- */
-function isSameOrigin(req: NextRequest): boolean {
-  const origin = req.headers.get('origin')
-  if (!origin) return false
-  let o: URL
-  try {
-    o = new URL(origin)
-  } catch {
-    return false
-  }
-  const host = req.headers.get('x-forwarded-host') ?? req.headers.get('host')
-  return !!host && o.host === host
-}
-
-/** IP del cliente. En Vercel `x-forwarded-for` lo pone la plataforma (primer salto). */
-function clientIp(req: NextRequest): string {
-  const xff = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim()
-  return xff || req.headers.get('x-real-ip')?.trim() || 'unknown'
-}
 
 export async function POST(req: NextRequest) {
   // 1. CSRF, antes que nada.
@@ -83,10 +60,13 @@ export async function POST(req: NextRequest) {
   }
   const email = emailRaw.trim().toLowerCase()
 
-  // 3. ¿Bloqueado? Se chequea el email EXISTA O NO: el bloqueo no delata cuentas.
+  // 3. Se CUENTA el intento ANTES de evaluarlo, de forma atómica (ver hit): una
+  //    ráfaga en paralelo no puede colarse. Primero la IP (si ya está frenada no se
+  //    gasta el cupo del email de nadie); después el email, EXISTA O NO la cuenta.
   const eKey = emailKey(email)
   const iKey = ipKey(clientIp(req))
-  if (await lockedUntil([eKey, iKey])) return json({ error: LOCKED }, 429)
+  if (!(await hit(iKey, IP_MAX_FAILS))) return json({ error: LOCKED }, 429)
+  if (!(await hit(eKey, EMAIL_MAX_FAILS))) return json({ error: LOCKED }, 429)
 
   // 4. Verificación. verifyPassword SIEMPRE corre bcrypt: si no hay usuario o no
   //    tiene contraseña, compara contra DUMMY_HASH → el tiempo no delata nada.
@@ -97,13 +77,12 @@ export async function POST(req: NextRequest) {
   //    que tener rol. Se evalúa DESPUÉS de bcrypt a propósito, para que "contraseña
   //    bien pero sin rol" tarde y responda igual que "contraseña mal".
   if (!user || !passwordOk || !user.role) {
-    await registerFailure(eKey, EMAIL_MAX_FAILS)
-    await registerFailure(iKey, IP_MAX_FAILS)
-    return json({ error: INVALID }, 401)
+    return json({ error: INVALID }, 401) // el intento ya quedó contado en el paso 3
   }
 
-  // 6. Adentro. Se limpia el contador del email (el de la IP no: ver loginThrottle).
+  // 6. Adentro. Se borra el contador del email y se devuelve el lugar de la IP.
   await clearFailures(eKey)
+  await release(iKey)
   const { sessionToken, expires } = await createDbSession(user.id)
   const secure = shouldUseSecureCookies(req.headers)
 

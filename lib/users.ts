@@ -116,3 +116,14 @@ export async function getUserForLogin(
     .where(sql`lower(${users.email}) = ${normalizedEmail}`)
   return row ?? null
 }
+
+// ─── Olvidé mi contraseña (F4) ───────────────────────────────────────────────
+
+/** Por email, en minúsculas (mismo criterio que el login). Solo columnas públicas. */
+export async function findUserByEmail(normalizedEmail: string): Promise<PublicUser | null> {
+  const [row] = await db
+    .select(PUBLIC_COLS)
+    .from(users)
+    .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+  return row ?? null
+}
