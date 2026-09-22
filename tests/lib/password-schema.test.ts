@@ -9,24 +9,54 @@ import { getTableConfig } from 'drizzle-orm/pg-core'
 // mockeamos la conexión para no necesitar DATABASE_URL en la suite.
 vi.mock('@/lib/db', () => ({ db: {} }))
 
-const { passwordTokenPurpose, passwordTokens, users } = await import('@/lib/db/schema')
+const { passwordTokenPurpose, passwordTokens, userCredentials, users } = await import('@/lib/db/schema')
 const { PUBLIC_COLS } = await import('@/lib/users')
 
 const tokens = getTableConfig(passwordTokens)
 const col = (name: string) => tokens.columns.find((c) => c.name === name)
 
-describe('user.password_hash', () => {
-  const userCols = getTableConfig(users).columns
-  const hash = userCols.find((c) => c.name === 'password_hash')
+describe('INVARIANTE: la tabla `user` NO guarda credenciales (F3)', () => {
+  // El adapter de Auth.js lee TODAS las columnas de `user` (getSessionAndUser,
+  // getUser, getUserByEmail…). En F0 el hash vivía acá y la verificación en vivo
+  // de F3 lo encontró en /api/auth/session. Estos tests impiden que vuelva.
+  const userCols = getTableConfig(users).columns.map((c) => c.name)
 
-  it('existe y es NULLABLE (NULL = todavía sin contraseña, entra solo con Google)', () => {
-    expect(hash).toBeDefined()
-    expect(hash!.notNull).toBe(false)
+  it('no hay columna password_hash en `user`', () => {
+    expect(userCols).not.toContain('password_hash')
   })
 
-  it('INVARIANTE anti-fuga: passwordHash NO está en las columnas públicas de /api/users', () => {
+  it('ninguna columna de `user` tiene nombre de credencial', () => {
+    for (const name of userCols) {
+      expect(name, name).not.toMatch(/pass|hash|secret|credential|salt/i)
+    }
+  })
+
+  it('passwordHash tampoco está en las columnas públicas de /api/users', () => {
     expect(Object.keys(PUBLIC_COLS)).not.toContain('passwordHash')
     expect(Object.values(PUBLIC_COLS).map((c) => c.name)).not.toContain('password_hash')
+  })
+})
+
+describe('tabla user_credentials', () => {
+  const creds = getTableConfig(userCredentials)
+  const ccol = (name: string) => creds.columns.find((c) => c.name === name)
+
+  it('existe como tabla aparte', () => {
+    expect(creds.name).toBe('user_credentials')
+  })
+
+  it('user_id es la PK → exactamente una credencial por usuario', () => {
+    expect(ccol('user_id')!.primary).toBe(true)
+  })
+
+  it('INVARIANTE cascade: user_id → user ON DELETE CASCADE (se borra el usuario, se va su hash)', () => {
+    const fk = creds.foreignKeys.find((f) => f.reference().columns.some((c) => c.name === 'user_id'))
+    expect(fk).toBeDefined()
+    expect(fk!.onDelete).toBe('cascade')
+  })
+
+  it('password_hash es NOT NULL: sin contraseña = sin fila (no una fila con NULL)', () => {
+    expect(ccol('password_hash')!.notNull).toBe(true)
   })
 })
 

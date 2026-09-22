@@ -1,11 +1,12 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { sessions, users } from '@/lib/db/schema'
+import { sessions, userCredentials, users } from '@/lib/db/schema'
 import type { Role } from '@/lib/db/schema'
 
 // Solo campos públicos — nunca exponemos tokens/sesiones ni datos internos.
-// ⚠️ INVARIANTE: `passwordHash` NO va acá (ni ningún dato de credenciales). Se
-// exporta para que un test pueda afirmarlo: ver tests/lib/password-schema.test.ts.
+// ⚠️ INVARIANTE: ningún dato de credenciales va acá (el hash ni siquiera vive en
+// `user`: está en `user_credentials`). Se exporta para que un test pueda afirmarlo:
+// ver tests/lib/password-schema.test.ts.
 export const PUBLIC_COLS = {
   id: users.id,
   email: users.email,
@@ -65,12 +66,21 @@ export async function getPublicUserById(id: string): Promise<PublicUser | null> 
 }
 
 /**
- * Guarda el hash de la contraseña. Marca `emailVerified` a la vez y a propósito:
- * para llegar acá la persona tuvo que abrir un link que le llegó a SU casilla,
- * o sea que el mail quedó probado en el mismo acto.
+ * Guarda el hash de la contraseña en `user_credentials` (NUNCA en `user`: ver el
+ * comentario de la tabla en schema.ts). Marca `emailVerified` a la vez y a propósito:
+ * para llegar acá la persona tuvo que abrir un link que le llegó a SU casilla, o sea
+ * que el mail quedó probado en el mismo acto.
+ * `db.batch` = una sola transacción: o se guardan las dos cosas, o ninguna.
  */
 export async function setUserPassword(userId: string, passwordHash: string): Promise<void> {
-  await db.update(users).set({ passwordHash, emailVerified: new Date() }).where(eq(users.id, userId))
+  const now = new Date()
+  await db.batch([
+    db
+      .insert(userCredentials)
+      .values({ userId, passwordHash, updatedAt: now })
+      .onConflictDoUpdate({ target: userCredentials.userId, set: { passwordHash, updatedAt: now } }),
+    db.update(users).set({ emailVerified: now }).where(eq(users.id, userId)),
+  ])
 }
 
 /**
@@ -84,4 +94,25 @@ export async function deleteAuthSessions(userId: string): Promise<number> {
     .where(eq(sessions.userId, userId))
     .returning({ token: sessions.sessionToken })
   return rows.length
+}
+
+// ─── Login con contraseña (F3) ───────────────────────────────────────────────
+
+/**
+ * ÚNICA función del proyecto que lee `user_credentials.password_hash`. Solo la usa
+ * la ruta de login, y el hash nunca sale de ahí (se compara y se descarta).
+ * LEFT JOIN: un usuario sin fila de credenciales (solo Google) vuelve con
+ * passwordHash null, y la ruta lo trata igual que una contraseña incorrecta.
+ * El email se compara en minúsculas: las altas lo normalizan, pero así un email
+ * sembrado con mayúsculas no deja a nadie afuera.
+ */
+export async function getUserForLogin(
+  normalizedEmail: string
+): Promise<{ id: string; role: Role | null; passwordHash: string | null } | null> {
+  const [row] = await db
+    .select({ id: users.id, role: users.role, passwordHash: userCredentials.passwordHash })
+    .from(users)
+    .leftJoin(userCredentials, eq(userCredentials.userId, users.id))
+    .where(sql`lower(${users.email}) = ${normalizedEmail}`)
+  return row ?? null
 }

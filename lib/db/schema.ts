@@ -52,11 +52,8 @@ export const users = pgTable('user', {
   // NULL = sin profe asignado. El estado "sin profe activo" por impago se derivará
   // de la flag de pago del profesor (Fase de pagos); no se borra teacherId.
   teacherId: uuid('teacher_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
-  // Login con email+contraseña (F0). Hash bcrypt cost 12 — la contraseña en claro
-  // no se guarda ni se loguea NUNCA, y no es recuperable (solo reemplazable por link).
-  // NULL = esta persona todavía no puso contraseña → entra solo con Google.
-  // ⚠️ NO agregar esta columna a `PUBLIC_COLS` en lib/users.ts (ver test de fuga).
-  passwordHash: text('password_hash'),
+  // ⚠️ NINGUNA credencial vive en esta tabla (ver `userCredentials` más abajo): el
+  // adapter de Auth.js y cualquier lectura genérica traen TODAS sus columnas.
 })
 
 export const accounts = pgTable(
@@ -172,6 +169,25 @@ export const assignments = pgTable(
   (t) => [primaryKey({ columns: [t.studentId, t.videoId] })]
 )
 
+// --- Login con email+contraseña: la contraseña (F3, reemplaza user.password_hash de F0) ---
+// Tabla APARTE a propósito. En F0 el hash vivía en `user`, y la verificación en vivo
+// de F3 mostró que eso lo filtraba: el adapter de Auth.js hace SELECT de todas las
+// columnas de `user` (getSessionAndUser, getUser, getUserByEmail…) y esa fila
+// terminaba en /api/auth/session. Separada, ninguna lectura genérica del usuario
+// puede volver a arrastrar el hash: para leerlo hay que ir a buscarlo explícitamente
+// (lib/users.ts → getUserForLogin, el único lugar que lo hace).
+//   · user_id PK → 1 a 1 con `user`; CASCADE: se borra el usuario, se va su credencial.
+//   · SIN fila = la persona todavía no puso contraseña → entra solo con Google.
+//   · password_hash: bcrypt cost 12. La contraseña en claro no se guarda ni se loguea
+//     NUNCA, y no es recuperable (solo reemplazable por link).
+export const userCredentials = pgTable('user_credentials', {
+  userId: uuid('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  passwordHash: text('password_hash').notNull(),
+  updatedAt: timestamp('updated_at', { mode: 'date' }).notNull().defaultNow(),
+})
+
 // --- Login con email+contraseña: tokens de los links por mail (F0) ---
 // 'invite'  = "poné tu primera contraseña" (alta por invitación), vence en 7 días.
 // 'reset'   = "olvidé mi contraseña", vence en 1 HORA (corto a propósito).
@@ -204,3 +220,17 @@ export const passwordTokens = pgTable(
   },
   (t) => [index('password_tokens_user_id_idx').on(t.userId)]
 )
+
+// --- Login con contraseña: freno a la fuerza bruta (F3) ---
+// Una fila por "clave" que se está frenando: 'email:<normalizado>' o 'ip:<dirección>'.
+// Serverless = sin memoria compartida entre instancias, por eso el contador vive acá.
+// La tabla queda acotada por diseño: una fila por email/IP que FALLÓ, y el login
+// exitoso borra la del email.
+//   · fails / first_fail_at: ventana deslizante (se reinicia si la ventana venció).
+//   · locked_until: mientras esté en el futuro, esa clave no puede intentar.
+export const loginThrottle = pgTable('login_throttle', {
+  key: text('key').primaryKey(),
+  fails: integer('fails').notNull().default(0),
+  firstFailAt: timestamp('first_fail_at', { mode: 'date' }).notNull().defaultNow(),
+  lockedUntil: timestamp('locked_until', { mode: 'date' }),
+})
