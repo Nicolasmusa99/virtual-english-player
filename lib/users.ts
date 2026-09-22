@@ -4,7 +4,9 @@ import { users } from '@/lib/db/schema'
 import type { Role } from '@/lib/db/schema'
 
 // Solo campos públicos — nunca exponemos tokens/sesiones ni datos internos.
-const PUBLIC_COLS = {
+// ⚠️ INVARIANTE: `passwordHash` NO va acá (ni ningún dato de credenciales). Se
+// exporta para que un test pueda afirmarlo: ver tests/lib/password-schema.test.ts.
+export const PUBLIC_COLS = {
   id: users.id,
   email: users.email,
   role: users.role,

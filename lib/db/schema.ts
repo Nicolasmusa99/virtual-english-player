@@ -1,5 +1,6 @@
 import {
   boolean,
+  index,
   integer,
   jsonb,
   numeric,
@@ -51,6 +52,11 @@ export const users = pgTable('user', {
   // NULL = sin profe asignado. El estado "sin profe activo" por impago se derivará
   // de la flag de pago del profesor (Fase de pagos); no se borra teacherId.
   teacherId: uuid('teacher_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  // Login con email+contraseña (F0). Hash bcrypt cost 12 — la contraseña en claro
+  // no se guarda ni se loguea NUNCA, y no es recuperable (solo reemplazable por link).
+  // NULL = esta persona todavía no puso contraseña → entra solo con Google.
+  // ⚠️ NO agregar esta columna a `PUBLIC_COLS` en lib/users.ts (ver test de fuga).
+  passwordHash: text('password_hash'),
 })
 
 export const accounts = pgTable(
@@ -164,4 +170,37 @@ export const assignments = pgTable(
     assignedAt: timestamp('assigned_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.studentId, t.videoId] })]
+)
+
+// --- Login con email+contraseña: tokens de los links por mail (F0) ---
+// 'invite'  = "poné tu primera contraseña" (alta por invitación), vence en 7 días.
+// 'reset'   = "olvidé mi contraseña", vence en 1 HORA (corto a propósito).
+export const passwordTokenPurpose = pgEnum('password_token_purpose', ['invite', 'reset'])
+export type PasswordTokenPurpose = (typeof passwordTokenPurpose.enumValues)[number]
+
+// Tabla PROPIA, deliberadamente separada de `verificationToken` (la del adapter de
+// Auth.js): aquella pertenece al Email provider, cuyo link LOGUEA directo. Acá el
+// link NO es una puerta de entrada, solo habilita el formulario de poner contraseña
+// — si no, un link de invitación robado (7 días) sería un bypass de login.
+//   · token_hash: sha256 del token; el token CRUDO nunca se guarda ni se loguea.
+//     Hash rápido (no bcrypt) a propósito: son 256 bits aleatorios, no adivinables
+//     por diccionario, y así el lookup es por índice único en O(1).
+//   · used_at: NULL = sin usar. El consumo es un UPDATE atómico
+//     (SET used_at=now() WHERE token_hash=$1 AND used_at IS NULL RETURNING *)
+//     → un solo uso garantizado incluso con dos requests simultáneos.
+//   · user_id → cascade: si se borra el usuario, sus tokens se van con él.
+export const passwordTokens = pgTable(
+  'password_tokens',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    tokenHash: text('token_hash').notNull().unique(),
+    purpose: passwordTokenPurpose('purpose').notNull(),
+    expiresAt: timestamp('expires_at', { mode: 'date' }).notNull(),
+    usedAt: timestamp('used_at', { mode: 'date' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [index('password_tokens_user_id_idx').on(t.userId)]
 )
