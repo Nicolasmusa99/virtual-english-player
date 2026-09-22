@@ -216,3 +216,52 @@ describe('F4 — reset exitoso (token de propósito "reset")', { timeout: 30000 
     expect(body).toEqual({ valid: true, purpose: 'reset' })
   })
 })
+
+describe('F5/D5 — cada 400 lleva un `code` (la pantalla decide sin comparar textos)', { timeout: 30000 }, () => {
+  it('link inválido por CUALQUIER causa → code invalid_link (y la respuesta completa idéntica)', async () => {
+    const bodies: string[] = []
+    // no existe / usado / vencido
+    peekMock.mockResolvedValue(null)
+    bodies.push(await (await POST(post({ token: 'x', password: GOOD }))).text())
+    // usuario borrado
+    peekMock.mockResolvedValue({ userId: 'u-1', purpose: 'invite' })
+    getUserMock.mockResolvedValue(null)
+    bodies.push(await (await POST(post({ token: 'x', password: GOOD }))).text())
+    // sin rol
+    getUserMock.mockResolvedValue({ ...ALUMNO, role: null })
+    bodies.push(await (await POST(post({ token: 'x', password: GOOD }))).text())
+    // carrera: consumido en el medio
+    getUserMock.mockResolvedValue(ALUMNO)
+    consumeMock.mockResolvedValue(null)
+    bodies.push(await (await POST(post({ token: 'x', password: GOOD }))).text())
+
+    expect(new Set(bodies).size).toBe(1)
+    expect(JSON.parse(bodies[0])).toEqual({ error: 'El link no es válido o ya venció. Pedí uno nuevo.', code: 'invalid_link' })
+  })
+
+  it('contraseña que no cumple la política → code invalid_password + el motivo fijo', async () => {
+    const res = await POST(post({ token: 'tok', password: 'password123' }))
+    expect(res.status).toBe(400)
+    const body = await res.json()
+    expect(body.code).toBe('invalid_password')
+    expect(body.error).toMatch(/común/)
+  })
+
+  it('contraseña ausente → code invalid_password', async () => {
+    const body = await (await POST(post({ token: 'tok' }))).json()
+    expect(body).toEqual({ error: 'La contraseña es obligatoria.', code: 'invalid_password' })
+  })
+
+  it('body roto → code bad_request', async () => {
+    const body = await (await POST(post('no-soy-json'))).json()
+    expect(body.code).toBe('bad_request')
+  })
+
+  it('GET con link inválido → valid:false + code invalid_link', async () => {
+    peekMock.mockResolvedValue(null)
+    expect(await (await GET(get('?token=x'))).json()).toMatchObject({ valid: false, code: 'invalid_link' })
+    peekMock.mockResolvedValue({ userId: 'u-1', purpose: 'invite' })
+    getUserMock.mockResolvedValue({ ...ALUMNO, role: null })
+    expect(await (await GET(get('?token=x'))).json()).toMatchObject({ valid: false, code: 'invalid_link' })
+  })
+})

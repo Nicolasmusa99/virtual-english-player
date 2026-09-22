@@ -1,0 +1,114 @@
+/* ─── Pantallas de acceso: bienvenida, olvidé mi contraseña, poner contraseña ───
+   Fase login-password (F5). Heredan la bienvenida blanca (SCR-025), que vive
+   FUERA del tema oscuro: por eso la paleta se declara acá, una sola vez, como
+   variables del contenedor, y el resto del archivo solo usa var(--a-*).
+   Mismos valores que la bienvenida actual (page.module.css: .wSignInBtn,
+   .wAccessDenied). Contraste verificado AA sobre blanco.
+   El botón de Google NO se estiliza acá: sigue usando .wSignInBtn tal cual. */
+
+.authScreen {
+  --a-bg: #FFFFFF;
+  --a-ink: #1B2B3F;        /* texto principal (≈14:1) */
+  --a-ink2: #55687E;       /* texto secundario (≈5.6:1) */
+  --a-line: #CBD6E2;       /* bordes de campos */
+  --a-navy: #1F3556;       /* botón principal = .wSignInBtn */
+  --a-navyHover: #2F5A94;
+  --a-link: #2F5A94;       /* links (≈6.8:1) */
+  --a-focus: #3D6FB6;      /* anillo de foco = --acDeep */
+  --a-errInk: #B23B3B; --a-errBg: #FBEAEA; --a-errLine: #E8C4C4;  /* = .wAccessDenied */
+  --a-okInk: #1E6B48;  --a-okBg: #E8F5EE;  --a-okLine: #BFE0CD;
+
+  /* Scrolleable a propósito: en un celular con el teclado abierto el formulario
+     no entra, y con overflow:hidden (como .welcomeScreen) el botón quedaría
+     inalcanzable. El hijo se centra con margin:auto → si no entra, no se corta. */
+  position: fixed; inset: 0;
+  overflow-y: auto;
+  display: flex;
+  background: var(--a-bg);
+  color: var(--a-ink);
+  font-family: var(--font-public-sans, 'Public Sans', sans-serif);
+}
+
+.authCenter {
+  margin: auto;
+  width: 100%; max-width: 340px;
+  padding: 32px 16px;            /* 16px de margen lateral en celular */
+  box-sizing: content-box;
+  display: flex; flex-direction: column; align-items: stretch; gap: 20px;
+}
+
+.authLogo {
+  display: block; align-self: center;
+  width: min(280px, 64vw); height: auto;
+  user-select: none; -webkit-user-drag: none;
+}
+
+.authTitle { margin: 0; font-size: 20px; font-weight: 600; line-height: 1.3; text-align: center; }
+.authText  { margin: 0; font-size: 15px; line-height: 1.5; color: var(--a-ink2); text-align: center; }
+
+/* "──── o con tu email ────" */
+.authDivider {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 13px; color: var(--a-ink2);
+}
+.authDivider::before, .authDivider::after { content: ''; flex: 1; height: 1px; background: var(--a-line); }
+
+.authForm  { display: flex; flex-direction: column; gap: 14px; }
+.authField { display: flex; flex-direction: column; gap: 6px; }
+.authLabel { font-size: 14px; font-weight: 600; }
+.authHint  { font-size: 13px; line-height: 1.4; color: var(--a-ink2); }
+
+/* 16px: con menos, iOS hace zoom automático al enfocar el campo. */
+.authInput {
+  width: 100%; box-sizing: border-box;
+  min-height: 48px; padding: 12px 14px;
+  font: inherit; font-size: 16px; color: var(--a-ink);
+  background: #fff; border: 1px solid var(--a-line); border-radius: 10px;
+}
+.authInput:focus-visible { outline: 3px solid var(--a-focus); outline-offset: 1px; border-color: var(--a-focus); }
+
+/* Campo de contraseña + botón "Mostrar/Ocultar" adentro, a la derecha. */
+.authInputWrap { position: relative; }
+.authInputWrap .authInput { padding-right: 92px; }
+.authToggle {
+  position: absolute; top: 0; right: 0; bottom: 0;
+  min-width: 84px; padding: 0 14px;          /* área táctil ≥ 44px */
+  background: none; border: none; border-radius: 0 10px 10px 0;
+  font: inherit; font-size: 14px; font-weight: 600; color: var(--a-link);
+  cursor: pointer;
+}
+.authToggle:focus-visible { outline: 3px solid var(--a-focus); outline-offset: -3px; }
+
+.authPrimary {
+  min-height: 48px; padding: 12px 20px;
+  border: none; border-radius: 12px;
+  background: var(--a-navy); color: #fff;
+  font: inherit; font-size: 15px; font-weight: 600;
+  cursor: pointer; transition: background 0.15s;
+}
+.authPrimary:hover:not(:disabled) { background: var(--a-navyHover); }
+.authPrimary:focus-visible { outline: 3px solid var(--a-focus); outline-offset: 2px; }
+.authPrimary:disabled { opacity: 0.6; cursor: default; }
+
+/* Links de texto ("¿Olvidaste tu contraseña?", "Volver"): botones o <a> que se ven como link. */
+.authLink {
+  align-self: center;
+  min-height: 44px; padding: 10px 8px;
+  background: none; border: none;
+  font: inherit; font-size: 14px; color: var(--a-link);
+  text-decoration: underline; text-underline-offset: 3px;
+  cursor: pointer;
+}
+.authLink:focus-visible { outline: 3px solid var(--a-focus); outline-offset: 2px; border-radius: 6px; }
+
+/* Mensajes. Los componentes les ponen role="alert" / role="status". */
+.authError, .authOk {
+  margin: 0; padding: 12px 14px; border-radius: 10px;
+  font-size: 14px; line-height: 1.5;
+}
+.authError { color: var(--a-errInk); background: var(--a-errBg); border: 1px solid var(--a-errLine); }
+.authOk    { color: var(--a-okInk);  background: var(--a-okBg);  border: 1px solid var(--a-okLine); }
+
+@media (prefers-reduced-motion: reduce) {
+  .authPrimary { transition: none; }
+}

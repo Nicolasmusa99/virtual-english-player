@@ -21,10 +21,21 @@ import { deleteAuthSessions, getPublicUserById, setUserPassword } from '@/lib/us
 // evita que alguien use esta ruta para sondear tokens o cuentas.
 const INVALID_LINK = 'El link no es válido o ya venció. Pedí uno nuevo.'
 
+// Cada 400 lleva un `code` legible por máquina, para que la pantalla decida qué
+// mostrar SIN comparar textos:
+//   · invalid_link     → el link no sirve. MISMO código para TODAS las causas
+//                        (no existe, usado, vencido, usuario borrado, sin rol).
+//   · invalid_password → la contraseña no cumple la política; `error` es uno de
+//                        los mensajes fijos de lib/password.ts.
+//   · bad_request      → el pedido vino mal armado.
+// No agrega información: quien tiene un token ya puede saber si sirve con el GET.
+type FailCode = 'bad_request' | 'invalid_link' | 'invalid_password'
+const fail = (code: FailCode, error: string) => NextResponse.json({ error, code }, { status: 400 })
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body || typeof body !== 'object') {
-    return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
+    return fail('bad_request', 'Body inválido')
   }
   // Mass-assignment cerrado: SOLO se leen estos dos campos.
   const { token, password } = body as Record<string, unknown>
@@ -32,29 +43,29 @@ export async function POST(req: NextRequest) {
   // 1. ¿El token sirve? Se MIRA sin gastarlo: si después la contraseña no cumple
   //    la política, el link tiene que seguir vivo para que pueda reintentar.
   const ref = await peekPasswordToken(token)
-  if (!ref) return NextResponse.json({ error: INVALID_LINK }, { status: 400 })
+  if (!ref) return fail('invalid_link', INVALID_LINK)
 
   // 2. FAIL-CLOSED: el usuario tiene que seguir existiendo y tener rol. Un token
   //    emitido antes de que le sacaran el rol no vale (misma regla que la allowlist).
   const user = await getPublicUserById(ref.userId)
   if (!user || !user.role) {
     await invalidateTokens(ref.userId) // que no quede nada vivo apuntando ahí
-    return NextResponse.json({ error: INVALID_LINK }, { status: 400 })
+    return fail('invalid_link', INVALID_LINK)
   }
 
   // 3. Política de contraseña, server-side. Acá sí se dice qué está mal (es la
   //    persona dueña de la cuenta eligiendo su contraseña), pero el mensaje nunca
   //    incluye la contraseña ni revela nada de la cuenta.
   if (typeof password !== 'string') {
-    return NextResponse.json({ error: 'La contraseña es obligatoria.' }, { status: 400 })
+    return fail('invalid_password', 'La contraseña es obligatoria.')
   }
   const policy = validatePassword(password, { email: user.email })
-  if (!policy.ok) return NextResponse.json({ error: policy.error }, { status: 400 })
+  if (!policy.ok) return fail('invalid_password', policy.error)
 
   // 4. Recién ahora se GASTA el token, con el UPDATE atómico. Si dos requests
   //    llegan juntos con el mismo link, solo uno pasa de acá.
   const consumed = await consumePasswordToken(token)
-  if (!consumed) return NextResponse.json({ error: INVALID_LINK }, { status: 400 })
+  if (!consumed) return fail('invalid_link', INVALID_LINK)
 
   // 5. Guardar. hashPassword revalida y tira si algo no cumple (doble red).
   const passwordHash = await hashPassword(password)
@@ -73,11 +84,11 @@ export async function POST(req: NextRequest) {
 // o "elegí una nueva" (reset). No devuelve el email ni ningún dato de la cuenta.
 export async function GET(req: NextRequest) {
   const ref = await peekPasswordToken(req.nextUrl.searchParams.get('token'))
-  if (!ref) return NextResponse.json({ valid: false, error: INVALID_LINK }, { status: 400 })
+  if (!ref) return NextResponse.json({ valid: false, error: INVALID_LINK, code: 'invalid_link' }, { status: 400 })
 
   const user = await getPublicUserById(ref.userId)
   if (!user || !user.role) {
-    return NextResponse.json({ valid: false, error: INVALID_LINK }, { status: 400 })
+    return NextResponse.json({ valid: false, error: INVALID_LINK, code: 'invalid_link' }, { status: 400 })
   }
   return NextResponse.json({ valid: true, purpose: ref.purpose })
 }

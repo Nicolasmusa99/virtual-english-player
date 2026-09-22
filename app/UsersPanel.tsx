@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import styles from './page.module.css'
 import type { Role } from '@/lib/db/schema'
+import { INVITE_TTL_DAYS } from '@/lib/emailTemplates'
 
 interface UserRow {
   id: string
@@ -11,6 +12,43 @@ interface UserRow {
 }
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+
+// ─── Invitación (fase login-password, F5) ───────────────────────────────────
+// Botón explícito por fila + confirmación que muestra A QUIÉN va, para no
+// mandarle al alumno equivocado. Todos los textos son fijos: el texto que venga
+// del server no se muestra nunca; el status y el `reason` se TRADUCEN acá.
+// (Acá sí se informa el motivo de un envío fallido: quien mira es admin/profe,
+// que ya ve a esa persona en su lista; no hay nada que enumerar.)
+type InviteStatus = { phase: 'sending' } | { phase: 'sent' } | { phase: 'error'; message: string }
+
+export const INVITE_MESSAGES = {
+  failed: 'No se pudo enviar la invitación. Probá de nuevo.',
+  forbidden: 'No tenés permiso para invitar a este usuario.',
+  notFound: 'Ese usuario ya no existe. Recargá la lista.',
+  notInvitable: 'Este usuario no se puede invitar todavía (le falta rol o email).',
+  expired: 'Tu sesión venció. Volvé a entrar.',
+  blockedByTestBarrier: 'Frenado por la barrera de pruebas: este entorno no manda mails a esa casilla.',
+  mailNotConfigured: 'El envío de mails no está configurado.',
+  mailOff: 'El envío de mails está desactivado.',
+  mailFailed: 'No se pudo mandar el mail. Probá de nuevo en un rato.',
+} as const
+
+/** Status HTTP de /api/users/[id]/invite → texto fijo. */
+export function inviteErrorFor(status: number): string {
+  if (status === 401) return INVITE_MESSAGES.expired
+  if (status === 403) return INVITE_MESSAGES.forbidden
+  if (status === 404) return INVITE_MESSAGES.notFound
+  if (status === 400) return INVITE_MESSAGES.notInvitable
+  return INVITE_MESSAGES.failed
+}
+
+/** 200 pero el mail no salió: `reason` → texto fijo. */
+export function deliveryErrorFor(reason: unknown): string {
+  if (reason === 'allowlist') return INVITE_MESSAGES.blockedByTestBarrier
+  if (reason === 'no-api-key') return INVITE_MESSAGES.mailNotConfigured
+  if (reason === 'off') return INVITE_MESSAGES.mailOff
+  return INVITE_MESSAGES.mailFailed
+}
 
 // Fase 3a — cara visible de /api/users (Fase 2). Solo consume GET/POST existentes;
 // la seguridad real vive en el backend. El `role` decide qué vista mostrar.
@@ -30,6 +68,31 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
   // búsqueda / filtro (front-only)
   const [q, setQ] = useState('')
   const [roleFilter, setRoleFilter] = useState<'all' | Role>('all')
+
+  // invitación: qué fila está confirmando (una a la vez) y el resultado por fila
+  const [confirmId, setConfirmId] = useState<string | null>(null)
+  const [invites, setInvites] = useState<Record<string, InviteStatus>>({})
+
+  async function sendInvite(u: UserRow) {
+    if (invites[u.id]?.phase === 'sending') return // sin doble envío
+    setConfirmId(null)
+    setInvites((s) => ({ ...s, [u.id]: { phase: 'sending' } }))
+    let result: InviteStatus
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(u.id)}/invite`, { method: 'POST' })
+      if (res.ok) {
+        const data = await res.json().catch(() => null)
+        result = data?.delivered === true
+          ? { phase: 'sent' }
+          : { phase: 'error', message: deliveryErrorFor(data?.reason) }
+      } else {
+        result = { phase: 'error', message: inviteErrorFor(res.status) }
+      }
+    } catch {
+      result = { phase: 'error', message: INVITE_MESSAGES.failed }
+    }
+    setInvites((s) => ({ ...s, [u.id]: result }))
+  }
 
   async function load() {
     setLoading(true); setLoadError('')
@@ -172,8 +235,12 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
         <>
           <div className={styles.progSub}>{filtered.length} {filtered.length === 1 ? 'usuario' : 'usuarios'}</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {filtered.map(u => (
-              <div key={u.id} className={styles.restoreBanner}>
+            {filtered.map(u => {
+              const inv = invites[u.id]
+              const canInvite = !!u.email && !!u.role
+              return (
+              <div key={u.id} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className={styles.restoreBanner}>
                 <span className={styles.restoreBannerText}>
                   {u.email}
                   {u.role === 'alumno' && role === 'admin' && (
@@ -184,8 +251,40 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
                 {u.role === 'alumno' && onOpenStudent && (
                   <button className={styles.tbBtn} onClick={() => onOpenStudent(u.id, u.email ?? '')}>Abrir</button>
                 )}
+                {canInvite && (
+                  <button
+                    className={styles.tbBtn}
+                    disabled={inv?.phase === 'sending'}
+                    aria-expanded={confirmId === u.id}
+                    onClick={() => setConfirmId(confirmId === u.id ? null : u.id)}
+                  >
+                    {inv?.phase === 'sending' ? 'Enviando…' : inv?.phase === 'sent' ? 'Reenviar' : 'Enviar invitación'}
+                  </button>
+                )}
               </div>
-            ))}
+
+              {confirmId === u.id && (
+                <div className={styles.usersForm} role="group" aria-label={`Confirmar invitación a ${u.email}`}>
+                  <span>¿Enviar invitación a <strong>{u.email}</strong>?</span>
+                  <span className={styles.progSub}>
+                    Le llega un mail con un link para elegir su contraseña. El link vence en {INVITE_TTL_DAYS} días.
+                    Si ya le habías mandado una, el link anterior deja de funcionar.
+                  </span>
+                  <div className={styles.usersFormRow}>
+                    <button className={styles.tbBtn} onClick={() => sendInvite(u)}>Enviar</button>
+                    <button className={styles.tbBtn} onClick={() => setConfirmId(null)}>Cancelar</button>
+                  </div>
+                </div>
+              )}
+              {inv?.phase === 'sent' && (
+                <div className={styles.usersOk} role="status">✓ Invitación enviada a {u.email}</div>
+              )}
+              {inv?.phase === 'error' && (
+                <div className={styles.errorBox} role="alert">{inv.message}</div>
+              )}
+              </div>
+              )
+            })}
           </div>
         </>
       )}
