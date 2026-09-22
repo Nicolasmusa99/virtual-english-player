@@ -265,7 +265,7 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
 
               {confirmId === u.id && (
                 <div className={styles.usersForm} role="group" aria-label={`Confirmar invitación a ${u.email}`}>
-                  <span>¿Enviar invitación a <strong>{u.email}</strong>?</span>
+                  <span style={{ color: 'var(--tx)' }}>¿Enviar invitación a <strong>{u.email}</strong>?</span>
                   <span className={styles.progSub}>
                     Le llega un mail con un link para elegir su contraseña. El link vence en {INVITE_TTL_DAYS} días.
                     Si ya le habías mandado una, el link anterior deja de funcionar.
