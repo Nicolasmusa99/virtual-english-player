@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { users } from '@/lib/db/schema'
+import { sessions, users } from '@/lib/db/schema'
 import type { Role } from '@/lib/db/schema'
 
 // Solo campos públicos — nunca exponemos tokens/sesiones ni datos internos.
@@ -53,4 +53,35 @@ export async function listAllUsers(): Promise<PublicUser[]> {
 // no depende de ningún parámetro del cliente.
 export async function listStudentsOf(teacherId: string): Promise<PublicUser[]> {
   return db.select(PUBLIC_COLS).from(users).where(eq(users.teacherId, teacherId))
+}
+
+// ─── Login con contraseña (F2) ───────────────────────────────────────────────
+
+// Igual que getStudentById pero con el EMAIL: lo necesita el flujo de invitación
+// (a dónde mandar el mail) y el de poner contraseña (para la política).
+export async function getPublicUserById(id: string): Promise<PublicUser | null> {
+  const [row] = await db.select(PUBLIC_COLS).from(users).where(eq(users.id, id))
+  return row ?? null
+}
+
+/**
+ * Guarda el hash de la contraseña. Marca `emailVerified` a la vez y a propósito:
+ * para llegar acá la persona tuvo que abrir un link que le llegó a SU casilla,
+ * o sea que el mail quedó probado en el mismo acto.
+ */
+export async function setUserPassword(userId: string, passwordHash: string): Promise<void> {
+  await db.update(users).set({ passwordHash, emailVerified: new Date() }).where(eq(users.id, userId))
+}
+
+/**
+ * Borra las sesiones vivas de un usuario. Se llama al fijar una contraseña nueva:
+ * si alguien había entrado con la contraseña vieja, un reset lo echa. Es lo que
+ * hace que "olvidé mi contraseña" sirva de verdad para recuperar una cuenta.
+ */
+export async function deleteAuthSessions(userId: string): Promise<number> {
+  const rows = await db
+    .delete(sessions)
+    .where(eq(sessions.userId, userId))
+    .returning({ token: sessions.sessionToken })
+  return rows.length
 }
