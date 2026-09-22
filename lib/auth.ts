@@ -4,6 +4,7 @@ import { DrizzleAdapter } from '@auth/drizzle-adapter'
 import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { accounts, sessions, users, verificationTokens } from '@/lib/db/schema'
+import { toPublicSession } from '@/lib/sessionPayload'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -34,12 +35,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       return !!row?.role // deny si no existe fila o si la fila no tiene rol (fail-closed)
     },
     // Exponer el rol en la sesión (estrategia database → `user` es la fila del adapter).
+    // Forma EXPLÍCITA (lista blanca): lo que devuelve este callback viaja al navegador
+    // tal cual, y Auth.js le pasa la fila de `session` completa (con el sessionToken)
+    // + la de `user` completa. Ver lib/sessionPayload.ts.
     async session({ session, user }) {
-      if (session.user) {
-        session.user.id = user.id
-        session.user.role = user.role ?? null
-      }
-      return session
+      return toPublicSession(user, session.expires)
     },
   },
 })
