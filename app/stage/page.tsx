@@ -2,6 +2,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { hl } from '@/lib/hl'
 import { StageChannel } from '@/lib/stageChannel'
+import { sharedVoiceBoost } from '@/lib/voiceBoost'
 
 // US-037 / US-038: Stage view — video + subtitle overlay only. No controls.
 // Receives PanelCmd via BroadcastChannel; emits timeupdate back to panel.
@@ -17,6 +18,18 @@ export default function Stage() {
   useEffect(() => {
     const ch = new StageChannel()
     channelRef.current = ch
+
+    // "Voces más claras": con el stage abierto el audio sale de ACÁ, así que el
+    // ecualizador se aplica sobre este <video> y se le contesta al panel si se pudo.
+    // Si el navegador no dejó arrancar el audio sin gesto, un clic en esta ventana
+    // reintenta (lib/voiceBoost.ts: nunca engancha con el audio dormido).
+    let alive = true
+    const vb = sharedVoiceBoost()
+    const applyVoice = (amount: number) =>
+      vb.set(amount).then(status => { if (alive) ch.send({ type: 'voice_boost_status', status }) })
+    vb.attach(vidRef.current)
+    const retryVoice = () => { if (vb.amount > 0) applyVoice(vb.amount) }
+    window.addEventListener('pointerdown', retryVoice)
 
     const unsub = ch.onMessage(msg => {
       const v = vidRef.current
@@ -51,6 +64,7 @@ export default function Stage() {
           setSubText(msg.text)
           setSubVisible(msg.visible)
           break
+        case 'voice_boost': applyVoice(msg.amount); break
         case 'close':   window.close(); break
       }
     })
@@ -65,6 +79,8 @@ export default function Stage() {
     ch.send({ type: 'ready' })   // FIX 3: signal panel to send load_blob (no setTimeout race)
 
     return () => {
+      alive = false
+      window.removeEventListener('pointerdown', retryVoice)
       unsub()
       v?.removeEventListener('timeupdate', onTU)
       ch.send({ type: 'closed' })
@@ -77,6 +93,7 @@ export default function Stage() {
     <div style={{ width: '100vw', height: '100vh', background: '#000', position: 'relative', overflow: 'hidden' }}>
       <video
         ref={vidRef}
+        crossOrigin="anonymous"
         style={{ width: '100%', height: '100%', objectFit: 'contain' }}
       />
       {subVisible && subText && (

@@ -9,6 +9,7 @@ import UsersPanel from './UsersPanel'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
+import VoiceBoostControl from './VoiceBoostControl'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
@@ -1386,7 +1387,7 @@ export default function Player() {
                 : <div className={styles.shareHint}><span className={styles.shareHintDot} />Compartir en Zoom — el alumno solo ve esto</div>
               }
               <div className={styles.videoWrap}>
-                <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || storageUrl || undefined)}
+                <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || storageUrl || undefined)} crossOrigin="anonymous"
                   style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
                 {ccOn && subText && !stageOpen && !hideTexts && (
                   <div className={styles.subOverlay}>
@@ -1545,6 +1546,8 @@ export default function Player() {
                     <span className={styles.volVal}>{vol}%</span>
                   </div>
                 </div>
+
+                <VoiceBoostControl videoRef={vidRef} stageOpen={stageOpen} />
 
                 <div className={styles.plWrap}>
                   <div className={styles.plHd}>
