@@ -1,0 +1,40 @@
+/* "Voces más claras" — tarjeta propia, separada de la barra de Volumen.
+   Todo sale de los tokens de app/globals.css. */
+
+.section { padding: 14px; border-top: 1px solid var(--ln); border-bottom: 1px solid var(--ln); margin-top: 6px; flex-shrink: 0; }
+
+.card { border: 1px solid var(--ln2); border-radius: 9px; background: var(--p2); padding: 10px 12px 12px; transition: border-color 0.15s, background 0.15s; }
+.card:hover { border-color: rgba(255, 255, 255, 0.18); }
+.cardOn { border-color: var(--ac3); background: linear-gradient(180deg, var(--ac2), transparent 70%), var(--p2); }
+.cardOn:hover { border-color: var(--ac3); }
+
+/* [ícono] [nombre]      [apagar]
+   [ícono] [descripción ··········] */
+.head { display: grid; grid-template-columns: 26px 1fr auto; column-gap: 8px; align-items: center; }
+.icon { grid-row: 1 / 3; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--p3); color: var(--tx2); transition: all 0.15s; }
+.cardOn .icon { background: var(--ac2); color: var(--ac); box-shadow: 0 0 0 1px var(--ac3) inset; }
+.title { grid-column: 2; grid-row: 1; font-size: 12.5px; font-weight: 600; color: var(--tx); line-height: 1.2; }
+.desc { grid-column: 2 / 4; grid-row: 2; font-size: 10.5px; color: var(--tx3); line-height: 1.3; margin-top: 1px; white-space: nowrap; }
+
+/* "apagar": ocupa su lugar siempre (visibility), así la tarjeta no cambia de alto. */
+.off { grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: 9px; padding: 3px 8px; border-radius: 10px; border: 1px solid var(--ac3); background: var(--ac2); color: var(--ac); cursor: pointer; transition: all 0.12s; }
+.off:hover { background: var(--ac); color: var(--p1); border-color: var(--ac); }
+.offHidden { visibility: hidden; }
+
+/* Barra grande: 28px de zona para agarrar, pista de 6px, perilla de 18px.
+   El relleno sale de --pct (lo pone el componente). */
+.range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 28px; margin: 8px 0 0; padding: 0; background: transparent; cursor: pointer; }
+.range:focus { outline: none; }
+.range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--ac) var(--pct, 0%), var(--p4) var(--pct, 0%)); }
+.range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: var(--tx); border: 3px solid var(--ac); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); transition: transform 0.1s; }
+.range:hover::-webkit-slider-thumb { transform: scale(1.12); }
+.range:active::-webkit-slider-thumb { transform: scale(1.18); }
+.range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--ac3); }
+.rangeZero::-webkit-slider-thumb { border-color: var(--tx3); }
+.range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--p4); }
+.range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--ac); }
+.range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--tx); border: 3px solid var(--ac); }
+.rangeZero::-moz-range-thumb { border-color: var(--tx3); }
+.range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--ac3); }
+
+.hint { font-size: 11px; color: var(--tx2); margin-top: 6px; line-height: 1.35; }

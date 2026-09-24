@@ -142,3 +142,21 @@ describe('StageChannel', () => {
     a.close()
   })
 })
+
+describe('StageChannel — "Voces más claras"', () => {
+  it('el panel manda voice_boost y el stage contesta voice_boost_status', async () => {
+    const { a: panel, b: stage, cleanup } = pair()
+    const atStage: unknown[] = []
+    const atPanel: unknown[] = []
+    const u1 = stage.onMessage(m => atStage.push(m))
+    const u2 = panel.onMessage(m => atPanel.push(m))
+
+    panel.send({ type: 'voice_boost', amount: 60 })
+    stage.send({ type: 'voice_boost_status', status: 'unavailable' })
+    await tick()
+
+    expect(atStage).toEqual([{ type: 'voice_boost', amount: 60 }])
+    expect(atPanel).toEqual([{ type: 'voice_boost_status', status: 'unavailable' }])
+    u1(); u2(); cleanup()
+  })
+})
