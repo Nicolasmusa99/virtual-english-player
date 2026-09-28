@@ -20,22 +20,37 @@
 
 export const VOICE_BOOST_MAX = 100
 
-// Frecuencias de los tres filtros.
+// ═══════════════════════════════════════════════════════════════════════════
+//  TABLA DEL EFECTO — acá se afina de oído. Son los ÚNICOS números a tocar.
+//  Los tests (tests/lib/voiceBoost.test.ts) calculan la curva real de estos
+//  filtros y FALLAN si algún punto queda por encima de 0 dB (riesgo de saturar).
+//
+//  Tabla "A" (2026-09-28), medida en Chrome con audio real mezclado fuerte
+//  (picos originales a −0,5 dBFS): 0 muestras saturadas al máximo. Respuesta al
+//  máximo: 100 Hz −17,8 · 500 Hz −2,6 · 1 kHz −1,6 · 2 kHz −0,6 · 8 kHz −11,1
+//  · 12 kHz −15,4 dB → contraste voz/fondo ~15–16 dB (la tabla anterior: ~9–10).
+//  Por qué NO se sube más la voz: con videos mezclados fuerte, cualquier
+//  realce pasa de 0 dBFS y cruje (medido: +7 dB de voz → 281 muestras
+//  saturadas). Para subirla sin saturar haría falta un limitador (otra fase).
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Dónde actúa cada filtro. Los cortes están corridos hacia afuera (150 Hz y
+// 7 kHz) para que un recorte fuerte no se coma la base de la voz (300 Hz–1 kHz):
+// con el corte en 250 Hz, −20 dB dejaba 300 Hz en −11 dB (voz "de teléfono").
 export const VOICE_BOOST_FREQS = {
-  lowShelfHz: 250,  // debajo: graves de la música / ruido
-  voiceHz: 2000,    // centro de la zona de inteligibilidad de la voz (~1–4 kHz)
-  voiceQ: 0.8,
-  highShelfHz: 6000, // arriba: platillos, siseo
+  lowShelfHz: 150,   // debajo: graves de la música / ruido
+  voiceHz: 2000,     // centro de la zona de inteligibilidad de la voz (~1–4 kHz)
+  voiceQ: 0.7,       // ancho del realce de voz (más chico = más ancho)
+  highShelfHz: 7000, // arriba: platillos, siseo
 } as const
 
-// Cuánto hace cada banda con la barra al MÁXIMO (dB). En el medio, proporcional:
-// los dB ya son una escala de oído, así que lineal en dB se siente parejo.
-// Valores de arranque, a afinar de oído.
+// Cuánto hace cada filtro con la barra al MÁXIMO (dB). En el medio, proporcional
+// (lineal en dB, que ya es una escala de oído).
 export const VOICE_BOOST_MAX_DB = {
-  low: -10,
-  voice: 6,
-  high: -6,
-  trim: -3, // compensación: que el volumen total no suba ni sature
+  low: -20,   // graves: cuánto baja la música de abajo
+  voice: 2,   // voz: realce chico en ~2 kHz (más = riesgo de saturar)
+  high: -14,  // agudos: cuánto baja lo de arriba
+  trim: -2.5, // compensación: margen para que nada pase de 0 dB
 } as const
 
 export type VoiceBoostBands = { lowDb: number; voiceDb: number; highDb: number; trimDb: number }
