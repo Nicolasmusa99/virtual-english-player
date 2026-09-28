@@ -9,6 +9,7 @@ import UsersPanel from './UsersPanel'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
+import StudentApp from './StudentApp'
 import VoiceBoostControl from './VoiceBoostControl'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
@@ -1083,6 +1084,13 @@ export default function Player() {
     uploading:    'Subiendo video a tu biblioteca',
     transcribing: 'Gemini transcribiendo el audio',
     parsing:      'Generando archivo SRT',
+  }
+
+  // Vista del ALUMNO (fase vista-alumno): camino propio. Se muestra EN LUGAR de todo
+  // lo demás, así el alumno nunca ve una pantalla del profe (y las rutas del profe le
+  // responden 403). Va después de todos los hooks, que quedan inertes para el alumno.
+  if (authStatus === 'authenticated' && userRole === 'alumno') {
+    return <StudentApp name={sessionData?.user?.name ?? null} email={sessionData?.user?.email ?? null} />
   }
 
   // ─── JSX ─────────────────────────────────────────────────────────────────
