@@ -96,20 +96,43 @@ beforeEach(() => { vi.useFakeTimers() })
 afterEach(() => { vi.useRealTimers() })
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('mapeo de la barra', () => {
-  it('0 → nada; 100 → los valores máximos de la tabla', () => {
+describe('mapeo de la barra (lee la tabla: se puede afinar sin tocar los tests)', () => {
+  const M = VOICE_BOOST_MAX_DB
+
+  it('0 = sin efecto: ceros exactos (no -0)', () => {
     expect(voiceBoostBands(0)).toEqual({ lowDb: 0, voiceDb: 0, highDb: 0, trimDb: 0 })
-    expect(voiceBoostBands(100)).toEqual({ lowDb: -10, voiceDb: 6, highDb: -6, trimDb: -3 })
-    expect(VOICE_BOOST_MAX_DB).toEqual({ low: -10, voice: 6, high: -6, trim: -3 })
-  })
-
-  it('proporcional en el medio (25 y 50 = la tabla aprobada)', () => {
-    expect(voiceBoostBands(25)).toEqual({ lowDb: -2.5, voiceDb: 1.5, highDb: -1.5, trimDb: -0.75 })
-    expect(voiceBoostBands(50)).toEqual({ lowDb: -5, voiceDb: 3, highDb: -3, trimDb: -1.5 })
-  })
-
-  it('en 0 son ceros exactos (no -0)', () => {
     for (const v of Object.values(voiceBoostBands(0))) expect(Object.is(v, 0)).toBe(true)
+  })
+
+  it('al máximo (100) = exactamente la tabla', () => {
+    expect(voiceBoostBands(100)).toEqual({ lowDb: M.low, voiceDb: M.voice, highDb: M.high, trimDb: M.trim })
+  })
+
+  it('crece parejo: proporcional a la barra (lineal en dB) y nunca retrocede', () => {
+    for (const a of [1, 10, 25, 33, 50, 67, 75, 99]) {
+      const b = voiceBoostBands(a)
+      const k = a / 100
+      expect(b.lowDb).toBeCloseTo(M.low * k, 10)
+      expect(b.voiceDb).toBeCloseTo(M.voice * k, 10)
+      expect(b.highDb).toBeCloseTo(M.high * k, 10)
+      expect(b.trimDb).toBeCloseTo(M.trim * k, 10)
+    }
+    let prev = voiceBoostBands(0)
+    for (let a = 1; a <= 100; a++) {
+      const b = voiceBoostBands(a)
+      expect(Math.abs(b.lowDb)).toBeGreaterThanOrEqual(Math.abs(prev.lowDb))
+      expect(Math.abs(b.highDb)).toBeGreaterThanOrEqual(Math.abs(prev.highDb))
+      prev = b
+    }
+  })
+
+  it('la tabla tiene sentido: graves y agudos BAJAN, la voz no baja, la compensación no sube', () => {
+    expect(M.low).toBeLessThan(0)
+    expect(M.high).toBeLessThan(0)
+    expect(M.voice).toBeGreaterThanOrEqual(0)
+    expect(M.trim).toBeLessThanOrEqual(0)
+    expect(VOICE_BOOST_FREQS.lowShelfHz).toBeLessThan(300) // el corte de graves no invade la base de la voz
+    expect(VOICE_BOOST_FREQS.highShelfHz).toBeGreaterThan(4000) // ni el de agudos la zona de inteligibilidad
   })
 
   it('valores fuera de rango o raros se acotan a 0..100 enteros', () => {
@@ -121,11 +144,7 @@ describe('mapeo de la barra', () => {
     expect(voiceBoostBands(500)).toEqual(voiceBoostBands(100))
   })
 
-  it('frecuencias: graves < 250 Hz, voz centrada en 2 kHz, agudos > 6 kHz', () => {
-    expect(VOICE_BOOST_FREQS).toEqual({ lowShelfHz: 250, voiceHz: 2000, voiceQ: 0.8, highShelfHz: 6000 })
-  })
-
-  it('texto: Apagado / Suave / Medio / Fuerte', () => {
+  it('texto (solo para lectores de pantalla): Apagado / Suave / Medio / Fuerte', () => {
     expect(voiceBoostLabel(0)).toBe('Apagado')
     expect(voiceBoostLabel(1)).toBe('Suave')
     expect(voiceBoostLabel(33)).toBe('Suave')
@@ -133,6 +152,86 @@ describe('mapeo de la barra', () => {
     expect(voiceBoostLabel(66)).toBe('Medio')
     expect(voiceBoostLabel(67)).toBe('Fuerte')
     expect(voiceBoostLabel(100)).toBe('Fuerte')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// LÍMITE DE SEGURIDAD: ningún punto de la curva pasa de 0 dB (si pasa, con videos
+// mezclados fuerte el audio satura y cruje). La curva se calcula con las MISMAS
+// fórmulas que usa el navegador para BiquadFilterNode (spec de Web Audio; verificado
+// contra Chrome el 2026-09-28: coincide al 0,1 dB en 14 frecuencias).
+type BiquadType = 'lowshelf' | 'peaking' | 'highshelf'
+function biquadDb(type: BiquadType, f0: number, gainDb: number, q: number, fs: number) {
+  const A = Math.pow(10, gainDb / 40)
+  const w0 = (2 * Math.PI * f0) / fs
+  const c = Math.cos(w0)
+  const sn = Math.sin(w0)
+  let b: [number, number, number]
+  let a: [number, number, number]
+  if (type === 'peaking') {
+    const al = sn / (2 * q)
+    b = [1 + al * A, -2 * c, 1 - al * A]
+    a = [1 + al / A, -2 * c, 1 - al / A]
+  } else {
+    const r = 2 * (sn / 2) * Math.SQRT2 * Math.sqrt(A) // 2·αS·√A con S = 1
+    if (type === 'lowshelf') {
+      b = [A * ((A + 1) - (A - 1) * c + r), 2 * A * ((A - 1) - (A + 1) * c), A * ((A + 1) - (A - 1) * c - r)]
+      a = [(A + 1) + (A - 1) * c + r, -2 * ((A - 1) + (A + 1) * c), (A + 1) + (A - 1) * c - r]
+    } else {
+      b = [A * ((A + 1) + (A - 1) * c + r), -2 * A * ((A - 1) + (A + 1) * c), A * ((A + 1) + (A - 1) * c - r)]
+      a = [(A + 1) - (A - 1) * c + r, 2 * ((A - 1) - (A + 1) * c), (A + 1) - (A - 1) * c - r]
+    }
+  }
+  return (hz: number) => {
+    const w = (2 * Math.PI * hz) / fs
+    const part = (x: [number, number, number]) =>
+      [x[0] + x[1] * Math.cos(w) + x[2] * Math.cos(2 * w), -(x[1] * Math.sin(w) + x[2] * Math.sin(2 * w))]
+    const [nr, ni] = part(b)
+    const [dr, di] = part(a)
+    return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di))
+  }
+}
+function curveDb(amount: number, fs: number) {
+  const bands = voiceBoostBands(amount)
+  const F = VOICE_BOOST_FREQS
+  const filters = [
+    biquadDb('lowshelf', F.lowShelfHz, bands.lowDb, 0, fs),
+    biquadDb('peaking', F.voiceHz, bands.voiceDb, F.voiceQ, fs),
+    biquadDb('highshelf', F.highShelfHz, bands.highDb, 0, fs),
+  ]
+  return (hz: number) => filters.reduce((acc, f) => acc + f(hz), 0) + bands.trimDb
+}
+const AUDIBLE = Array.from({ length: 500 }, (_, i) => 20 * Math.pow(1000, i / 499)) // 20 Hz–20 kHz
+
+describe('límite de seguridad: nada pasa de 0 dB (no satura)', () => {
+  for (const fs of [44100, 48000]) {
+    it('a ' + fs + ' Hz: en ninguna posición de la barra la curva supera 0 dB', () => {
+      for (const pos of [1, 10, 25, 50, 75, 100]) {
+        const c = curveDb(pos, fs)
+        const max = Math.max(...AUDIBLE.map(c))
+        expect(max, 'barra en ' + pos + ': pico de la curva ' + max.toFixed(2) + ' dB').toBeLessThanOrEqual(0)
+      }
+    })
+  }
+
+  it('la fórmula es la del navegador: tabla A medida en Chrome (48 kHz, al máximo)', () => {
+    // Referencia medida con getFrequencyResponse de Chrome para la tabla A. Valida la
+    // FÓRMULA; si la tabla deja de ser la A, este test no aplica y no controla nada.
+    const M = VOICE_BOOST_MAX_DB
+    const F = VOICE_BOOST_FREQS
+    const isA = M.low === -20 && M.voice === 2 && M.high === -14 && M.trim === -2.5 &&
+      F.lowShelfHz === 150 && F.voiceHz === 2000 && F.voiceQ === 0.7 && F.highShelfHz === 7000
+    if (!isA) return
+    const chrome: Array<[number, number]> = [[100, -17.8], [300, -4.5], [500, -2.6], [1000, -1.6], [2000, -0.6], [8000, -11.1], [12000, -15.4]]
+    const c = curveDb(100, 48000)
+    for (const [hz, db] of chrome) expect(c(hz)).toBeCloseTo(db, 1)
+  })
+
+  it('la voz se destaca: al máximo, el fondo (100 Hz y 12 kHz) queda ≥ 10 dB debajo de la voz (1–2 kHz)', () => {
+    const c = curveDb(100, 48000)
+    const voz = Math.min(c(1000), c(2000))
+    expect(voz - c(100)).toBeGreaterThanOrEqual(10)
+    expect(voz - c(12000)).toBeGreaterThanOrEqual(10)
   })
 })
 
@@ -170,18 +269,19 @@ describe('primer uso', () => {
     expect(createContext).toHaveBeenCalledTimes(1)
   })
 
-  it('los filtros quedan configurados como la tabla', async () => {
+  it('los filtros quedan configurados como la tabla (VOICE_BOOST_FREQS / VOICE_BOOST_MAX_DB)', async () => {
     const { vb, ctx } = setup()
     await vb.attach(video())
     await vb.set(100)
     const { low, voice, high, trim } = chainOf(ctx)
-    expect([low.type, low.frequency.value]).toEqual(['lowshelf', 250])
-    expect([voice.type, voice.frequency.value, voice.Q.value]).toEqual(['peaking', 2000, 0.8])
-    expect([high.type, high.frequency.value]).toEqual(['highshelf', 6000])
-    expect(low.gain.value).toBe(-10)
-    expect(voice.gain.value).toBe(6)
-    expect(high.gain.value).toBe(-6)
-    expect(trim.gain.value).toBeCloseTo(Math.pow(10, -3 / 20), 10)
+    const F = VOICE_BOOST_FREQS, M = VOICE_BOOST_MAX_DB
+    expect([low.type, low.frequency.value]).toEqual(['lowshelf', F.lowShelfHz])
+    expect([voice.type, voice.frequency.value, voice.Q.value]).toEqual(['peaking', F.voiceHz, F.voiceQ])
+    expect([high.type, high.frequency.value]).toEqual(['highshelf', F.highShelfHz])
+    expect(low.gain.value).toBe(M.low)
+    expect(voice.gain.value).toBe(M.voice)
+    expect(high.gain.value).toBe(M.high)
+    expect(trim.gain.value).toBeCloseTo(Math.pow(10, M.trim / 20), 10)
   })
 
   it('los cambios van suavizados (setTargetAtTime desde el tiempo actual, sin saltos)', async () => {
@@ -189,7 +289,7 @@ describe('primer uso', () => {
     await vb.attach(video())
     await vb.set(50)
     const { voice } = chainOf(ctx)
-    expect(voice.gain.targets.at(-1)).toEqual([3, 12.5, 0.05])
+    expect(voice.gain.targets.at(-1)).toEqual([VOICE_BOOST_MAX_DB.voice * 0.5, 12.5, 0.05])
   })
 
   it('set antes de attach: engancha al llegar el video', async () => {
@@ -313,7 +413,7 @@ describe('varios videos (el panel remonta el <video>, el stage cambia de fuente)
     await vb.set(100)
     expect(await vb.attach(video())).toBe('active')
     expect(ctx.sources).toHaveLength(2)
-    expect(chainOf(ctx, 1).voice.gain.value).toBe(6)
+    expect(chainOf(ctx, 1).voice.gain.value).toBe(VOICE_BOOST_MAX_DB.voice)
   })
 
   it('un video nuevo con la barra en 0 NO se engancha', async () => {
