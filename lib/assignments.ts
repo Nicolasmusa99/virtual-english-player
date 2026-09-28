@@ -1,6 +1,6 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, desc, eq, inArray, isNotNull } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { assignments, users, videos } from '@/lib/db/schema'
+import { assignments, users, videos, videoSessions } from '@/lib/db/schema'
 import type { SharedType, SharedLevel } from '@/lib/db/schema'
 
 // Capa de datos de `assignments`. Igual que lib/users.ts: helpers finos de DB,
@@ -102,4 +102,95 @@ export async function listAllAssignments(): Promise<(AssignmentVideo & { student
     .innerJoin(videos, eq(videos.id, assignments.videoId))
     .orderBy(desc(assignments.assignedAt))
   return rows.map((r) => ({ ...r, active: r.publishedAt !== null }))
+}
+
+// ─── Vista del ALUMNO (fase vista-alumno, E1) ──────────────────────────────────
+// Lo que el alumno puede abrir: SOLO un video que tiene asignado, publicado y listo.
+// Las captions son la "versión viva" de SU profe actual (student.teacher_id) y, si
+// ese profe nunca editó el video, las del DUEÑO. Todo read-only: esta función NUNCA
+// escribe video_sessions (el alumno no tiene copia propia).
+
+export type StudentPhrase = { start: number; end: number; text: string }
+export type StudentVideo = {
+  videoId: string
+  originalName: string
+  storageUrl: string
+  durationSec: number | null
+  phrases: StudentPhrase[]
+  delay: number
+}
+
+type CaptionRow = { userId: string; phrases: unknown; delay: number }
+
+// Elige de qué copia salen las captions. Pura (sin DB) para poder testear la regla:
+//   1) la del profe actual del alumno  2) la del dueño del video  3) ninguna.
+// Solo acepta coincidencias EXACTAS de usuario: una fila de cualquier otro (otro
+// profe, otro alumno) nunca se elige, aunque llegue en `rows`.
+export function pickCaptionsRow(
+  rows: CaptionRow[],
+  teacherId: string | null,
+  ownerId: string
+): { row: CaptionRow; source: 'teacher' | 'owner' } | null {
+  const byTeacher = teacherId ? rows.find((r) => r.userId === teacherId) : undefined
+  if (byTeacher) return { row: byTeacher, source: 'teacher' }
+  const byOwner = rows.find((r) => r.userId === ownerId)
+  if (byOwner) return { row: byOwner, source: 'owner' }
+  return null
+}
+
+// Deja solo lo que el player del alumno necesita de cada frase ({start,end,text}),
+// descartando cualquier otro campo de la copia del profe (p. ej. su selección `sel`).
+export function toStudentPhrases(raw: unknown): StudentPhrase[] {
+  if (!Array.isArray(raw)) return []
+  const out: StudentPhrase[] = []
+  for (const p of raw) {
+    if (!p || typeof p !== 'object') continue
+    const { start, end, text } = p as Record<string, unknown>
+    if (typeof start !== 'number' || typeof end !== 'number' || typeof text !== 'string') continue
+    out.push({ start, end, text })
+  }
+  return out
+}
+
+// null = "no existe" o "no es tuyo" (la ruta responde lo mismo a ambos: 404).
+export async function getStudentMaterial(studentId: string, videoId: string): Promise<StudentVideo | null> {
+  const [hit] = await db
+    .select({
+      videoId: videos.id,
+      originalName: videos.originalName,
+      storageUrl: videos.storageUrl,
+      durationSec: videos.durationSec,
+      ownerId: videos.userId,
+      teacherId: users.teacherId,
+    })
+    .from(assignments)
+    .innerJoin(videos, eq(videos.id, assignments.videoId))
+    .innerJoin(users, eq(users.id, assignments.studentId))
+    .where(
+      and(
+        eq(assignments.studentId, studentId),
+        eq(assignments.videoId, videoId),
+        eq(users.role, 'alumno'),
+        isNotNull(videos.publishedAt), // despublicado → no existe para el alumno
+        eq(videos.status, 'ready'),
+        isNotNull(videos.storageUrl)
+      )
+    )
+  if (!hit || !hit.storageUrl) return null
+
+  const candidates = [hit.teacherId, hit.ownerId].filter((id): id is string => !!id)
+  const rows = await db
+    .select({ userId: videoSessions.userId, phrases: videoSessions.phrases, delay: videoSessions.delay })
+    .from(videoSessions)
+    .where(and(eq(videoSessions.videoId, videoId), inArray(videoSessions.userId, candidates)))
+  const picked = pickCaptionsRow(rows, hit.teacherId, hit.ownerId)
+
+  return {
+    videoId: hit.videoId,
+    originalName: hit.originalName,
+    storageUrl: hit.storageUrl,
+    durationSec: hit.durationSec,
+    phrases: picked ? toStudentPhrases(picked.row.phrases) : [],
+    delay: picked ? Number(picked.row.delay) || 0 : 0,
+  }
 }
