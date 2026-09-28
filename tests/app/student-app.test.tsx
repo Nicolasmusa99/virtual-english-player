@@ -153,6 +153,38 @@ describe('StudentApp — abrir un video', () => {
     expect(screen.queryByRole('button', { name: /Frozen/ })).toBeNull()
   })
 
+  it('tras el 404, la lista se refresca SIN parpadear "Cargando…" (la actual queda hasta que llega la nueva)', async () => {
+    detailResponse = () => json(404, { error: 'Material no encontrado' })
+    render(<StudentApp name="Martina" email={null} />)
+    await flush()
+    let release!: () => void
+    const pending = new Promise<Response>((r) => { release = () => r(json(200, { material: [MATERIAL[1]] })) })
+    fetchMock.mockImplementation((url: string) => {
+      if (url === '/api/student/material') return pending
+      return Promise.resolve(detailResponse())
+    })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Frozen/ })) })
+    await flush()
+    // refresco en curso: la lista de antes sigue en pantalla, sin "Cargando…"
+    expect(screen.queryByText(STUDENT_TEXTS.loading)).toBeNull()
+    expect(screen.getByRole('button', { name: /Let it Go/ })).toBeInTheDocument()
+    await act(async () => { release() })
+    await flush()
+    expect(screen.queryByRole('button', { name: /Frozen/ })).toBeNull()
+  })
+
+  it('si ese refresco silencioso falla, se conserva la lista (sin pantalla de error)', async () => {
+    detailResponse = () => json(404, { error: 'Material no encontrado' })
+    render(<StudentApp name="Martina" email={null} />)
+    await flush()
+    listResponse = () => json(500, {})
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Frozen/ })) })
+    await flush()
+    expect(screen.queryByText(STUDENT_TEXTS.listErrorTitle)).toBeNull()
+    expect(screen.getByRole('button', { name: /Let it Go/ })).toBeInTheDocument()
+    expect(screen.getByRole('alert')).toHaveTextContent(STUDENT_TEXTS.videoGone)
+  })
+
   it('respuesta con forma inválida o error → aviso genérico, no abre nada', async () => {
     detailResponse = () => json(200, { video: { id: VID_A } }) // sin storageUrl
     render(<StudentApp name="Martina" email={null} />)

@@ -64,15 +64,18 @@ export default function StudentApp({ name, email }: { name: string | null; email
   const [playing, setPlaying] = useState<StudentVideoData | null>(null)
   const [notice, setNotice] = useState('')
 
-  const loadList = useCallback(async () => {
-    setList({ kind: 'loading' })
+  // silent: refresco "por detrás" (tras un 404): la lista actual queda en pantalla
+  // hasta que llega la nueva, sin el parpadeo de "Cargando…". Si ese refresco falla,
+  // se conserva la lista que había (el aviso del 404 ya explica lo que pasó).
+  const loadList = useCallback(async (opts?: { silent?: boolean }) => {
+    if (!opts?.silent) setList({ kind: 'loading' })
     try {
       const res = await fetch('/api/student/material')
       if (!res.ok) throw new Error(String(res.status))
       const data = await res.json()
       setList({ kind: 'ok', items: Array.isArray(data?.material) ? data.material : [] })
     } catch {
-      setList({ kind: 'error' })
+      if (!opts?.silent) setList({ kind: 'error' })
     }
   }, [])
 
@@ -86,7 +89,7 @@ export default function StudentApp({ name, email }: { name: string | null; email
       const res = await fetch(`/api/student/material/${encodeURIComponent(videoId)}`)
       if (res.status === 404) {
         setNotice(STUDENT_TEXTS.videoGone)
-        loadList() // ya no está: se refresca la lista para que desaparezca
+        loadList({ silent: true }) // ya no está: se refresca la lista para que desaparezca
         return
       }
       const data = res.ok ? toVideoData(await res.json()) : null
@@ -130,7 +133,7 @@ export default function StudentApp({ name, email }: { name: string | null; email
           <div className={styles.state}>
             <div className={styles.stateTitle}>{STUDENT_TEXTS.listErrorTitle}</div>
             <div className={styles.stateSub}>{STUDENT_TEXTS.listErrorSub}</div>
-            <button type="button" className={styles.stateBtn} onClick={loadList}>{STUDENT_TEXTS.retry}</button>
+            <button type="button" className={styles.stateBtn} onClick={() => loadList()}>{STUDENT_TEXTS.retry}</button>
           </div>
         )}
 

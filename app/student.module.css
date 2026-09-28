@@ -51,7 +51,10 @@
 .fill { height: 100%; background: var(--ac); border-radius: 2px; }
 
 .ctrls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 22px; padding: 12px 18px 16px; }
-.grp { display: flex; flex-direction: column; align-items: center; }
+/* Cada control en una grilla: arriba un lugar FIJO de 60 px (el alto del botón más
+   grande, Play) con el botón centrado; abajo la etiqueta. Así Play (60), Stop (48) y
+   el volumen (44) quedan centrados entre sí y las etiquetas, a la misma altura. */
+.grp { display: grid; grid-template-rows: 60px auto; justify-items: center; align-items: center; }
 .lbl { font: 9.5px var(--font-mono); color: var(--tx3); margin-top: 5px; letter-spacing: 0.5px; text-transform: uppercase; }
 .cBtn { width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--ln2); background: var(--p3); color: var(--tx); display: grid; place-items: center; cursor: pointer; transition: background 0.12s, transform 0.08s; }
 .cBtn:hover { background: var(--p4); }
