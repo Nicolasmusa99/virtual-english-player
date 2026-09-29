@@ -50,8 +50,21 @@ describe('GET /api/student/classes', () => {
     as(ST, 'alumno')
     const body = await (await GET(req())).json()
     expect(body).toEqual({ classes: [{
-      key: ITEM.key, startsAt: '2026-09-29T21:00:00.000Z', durationMin: 60, meetUrl: ITEM.meetUrl, status: 'scheduled',
+      key: ITEM.key, startsAt: '2026-09-29T21:00:00.000Z', durationMin: 60, meetUrl: ITEM.meetUrl, status: 'scheduled', moved: false,
     }] })
+  })
+
+  it('"moved": solo una clase fija que el profe pasó a otro momento (no la cancelada ni la suelta)', async () => {
+    as(ST, 'alumno')
+    const orig = new Date('2026-10-13T21:00:00Z')
+    m.getSchedule.mockResolvedValue([
+      { ...ITEM, key: 'mv', eventId: 'e1', startsAt: new Date('2026-10-15T20:00:00Z'), originalStartsAt: orig },
+      { ...ITEM, key: 'cn', eventId: 'e2', startsAt: orig, originalStartsAt: orig, status: 'cancelled' },
+      { ...ITEM, key: 'su', seriesId: null, eventId: 'e3' },
+    ])
+    const body = await (await GET(req())).json()
+    expect(body.classes.map((c: { key: string; moved: boolean }) => [c.key, c.moved])).toEqual([['mv', true], ['cn', false], ['su', false]])
+    expect(JSON.stringify(body.classes[0])).not.toContain('2026-10-13') // la movida no manda su día original
   })
 
   it('no se puede pedir por OTRO alumno (?studentId= se ignora)', async () => {

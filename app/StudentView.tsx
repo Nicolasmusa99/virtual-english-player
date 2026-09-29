@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useState } from 'react'
 import styles from './page.module.css'
+import TeacherClasses from './TeacherClasses'
 
 // Cara visible de /api/assignments (lado alumno). Solo consume endpoints ya
 // scopeados por el backend; la seguridad real vive allá. NO toca captions.
@@ -82,6 +83,10 @@ export default function StudentView({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div className={styles.dzSub}>Alumno: <strong>{studentEmail}</strong></div>
+
+      <TeacherClasses studentId={studentId} />
+
+      <div className={styles.dzSub} style={{ margin: '14px 0 0', fontSize: 15, fontWeight: 600, color: 'var(--tx)' }}>Material</div>
 
       {/* ── Material asignado ── */}
       {error && <div className={styles.errorBox}>{error}</div>}

@@ -31,6 +31,7 @@ beforeEach(() => {
   listResponse = () => json(200, { material: MATERIAL })
   detailResponse = () => json(200, DETAIL)
   fetchMock = vi.fn((url: string) => {
+    if (url.startsWith('/api/student/classes')) return Promise.resolve(json(200, { classes: [] })) // calendario (C3)
     if (url === '/api/student/material') return Promise.resolve(listResponse())
     if (url.startsWith('/api/student/material/')) return Promise.resolve(detailResponse())
     return Promise.resolve(json(403, { error: 'No autorizado' }))

@@ -231,8 +231,10 @@ export function classToJson(c: ClassItem) {
 }
 
 // Para el ALUMNO: lista blanca (ni ids de serie/evento ni datos de otros).
+// `moved`: una clase del horario fijo que el profe pasó a otro día/hora ("Cambió de día").
 export function classToStudentJson(c: ClassItem) {
-  return { key: c.key, startsAt: c.startsAt.toISOString(), durationMin: c.durationMin, meetUrl: c.meetUrl, status: c.status }
+  const moved = !!c.originalStartsAt && c.status === 'scheduled' && c.startsAt.getTime() !== c.originalStartsAt.getTime()
+  return { key: c.key, startsAt: c.startsAt.toISOString(), durationMin: c.durationMin, meetUrl: c.meetUrl, status: c.status, moved }
 }
 
 export function seriesToJson(s: SeriesRow) {

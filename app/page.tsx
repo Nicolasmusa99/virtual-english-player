@@ -1334,7 +1334,9 @@ export default function Player() {
       )}
 
       {screen === 'student' && selectedStudent && (
-        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
+        // Arriba y con scroll (no centrado): con la sección "Clases" la pantalla puede ser
+        // más alta que el celular, y centrada sin scroll quedaba cortada arriba y abajo.
+        <div className={`${styles.loadScreen} ${styles.lightScope}`} style={{ justifyContent: 'flex-start', overflowY: 'auto', paddingTop: 56 }}>
           <div style={{ position: 'absolute', top: 16, right: 16 }}>
             <button className={styles.tbBtn} onClick={() => setScreen('users')}>← Volver a alumnos</button>
           </div>
