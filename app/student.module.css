@@ -51,8 +51,8 @@
 .seek { flex: 1; height: 28px; display: flex; align-items: center; cursor: pointer; touch-action: none; outline: none; }
 .track { position: relative; width: 100%; height: 6px; border-radius: 3px; background: var(--p4); }
 .fill { height: 100%; background: var(--ac); border-radius: 3px; }
-.thumb { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--tx); border: 3px solid var(--ac); box-sizing: border-box; transform: translate(-50%, -50%); pointer-events: none; }
-.seek:focus-visible .thumb { outline: 2px solid var(--ac); outline-offset: 2px; }
+.knob { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--tx); border: 3px solid var(--ac); box-sizing: border-box; transform: translate(-50%, -50%); pointer-events: none; }
+.seek:focus-visible .knob { outline: 2px solid var(--ac); outline-offset: 2px; }
 
 .ctrls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 22px; padding: 12px 18px 16px; }
 /* Cada control en una grilla: arriba un lugar FIJO de 60 px (el alto del botón más
