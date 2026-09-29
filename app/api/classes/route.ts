@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
-import { getStudentById } from '@/lib/users'
+import { getStudentById, getZoomUrl } from '@/lib/users'
 import { classScopeFor } from '@/lib/classAccess'
 import { getSchedule, listActiveSeries } from '@/lib/classes'
 import { classToJson, dateInTz, parseRange, seriesToJson } from '@/lib/classSchedule'
@@ -8,6 +8,7 @@ import { classToJson, dateInTz, parseRange, seriesToJson } from '@/lib/classSche
 // Calendario (C1) — lado PROFE. Las clases de UN alumno + sus horarios fijos vigentes.
 // GET /api/classes?studentId=X[&from=ISO&to=ISO]  (sin rango: desde hace 2 h, 35 días)
 // Profe: solo sus alumnos (403 si no). Admin: cualquiera (las del profe actual del alumno).
+// `zoomUrl` = "Mi sala de Zoom" de ese profe: la usan las clases sin link propio (G0).
 
 const err = (status: 400 | 401 | 403 | 404, msg: string) => NextResponse.json({ error: msg }, { status })
 
@@ -26,9 +27,10 @@ export async function GET(req: NextRequest) {
   const range = parseRange(q.get('from'), q.get('to'), now, 35, 120)
   if (!range.ok) return err(400, 'Rango de fechas inválido')
 
-  const [classes, series] = await Promise.all([
+  const [classes, series, zoomUrl] = await Promise.all([
     getSchedule(studentId, scope.teacherId, range.from, range.to),
     listActiveSeries(studentId, scope.teacherId, dateInTz(now)),
+    getZoomUrl(scope.teacherId),
   ])
-  return NextResponse.json({ series: series.map(seriesToJson), classes: classes.map(classToJson) })
+  return NextResponse.json({ series: series.map(seriesToJson), classes: classes.map(classToJson), zoomUrl })
 }

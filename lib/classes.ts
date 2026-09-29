@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNotNull, isNull, lt, or } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { classEvents, classSeries } from '@/lib/db/schema'
 import type { ClassStatus } from '@/lib/db/schema'
@@ -48,10 +48,18 @@ export async function getSchedule(studentId: string, teacherId: string, from: Da
   return buildSchedule(series, events, from, to)
 }
 
+// Las clases sin link propio usan "Mi sala de Zoom" del profe (G0). Se resuelve al leer,
+// así si el profe cambia su sala, todas sus clases la toman solas.
+export function withRoomLink(classes: ClassItem[], roomUrl: string | null): ClassItem[] {
+  if (!roomUrl) return classes
+  return classes.map((c) => (c.meetUrl ? c : { ...c, meetUrl: roomUrl }))
+}
+
 // ─── Horario fijo ───────────────────────────────────────────────────────────
 
-// Los horarios fijos del alumno con este profe que siguen vigentes (sin fin, o que
-// terminan hoy o después — `today` en 'YYYY-MM-DD' de CLASS_TZ).
+// Los horarios fijos del alumno con este profe que siguen vigentes: sin fin, o que
+// terminan DESPUÉS de hoy (`today` en 'YYYY-MM-DD' de CLASS_TZ). Uno que termina hoy
+// o antes ya no se muestra como horario (sus clases siguen en la lista / el mes).
 export async function listActiveSeries(studentId: string, teacherId: string, today: string): Promise<SeriesFull[]> {
   return db
     .select(SERIES_COLS)
@@ -60,7 +68,7 @@ export async function listActiveSeries(studentId: string, teacherId: string, tod
       and(
         eq(classSeries.studentId, studentId),
         eq(classSeries.teacherId, teacherId),
-        or(isNull(classSeries.endsOn), gte(classSeries.endsOn, today))
+        or(isNull(classSeries.endsOn), gt(classSeries.endsOn, today))
       )
     )
     .orderBy(asc(classSeries.weekday), asc(classSeries.startMinute))

@@ -19,7 +19,7 @@ const CLASSES = [
   fija('2026-10-20T21:00:00.000Z'),
 ]
 
-let data: { series: unknown[]; classes: unknown[] }
+let data: { series: unknown[]; classes: unknown[]; zoomUrl?: string | null }
 let fetchMock: ReturnType<typeof vi.fn>
 let nextWrite: () => Response
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -58,10 +58,10 @@ describe('TeacherClasses — lo que se ve', () => {
   it('cada clase con su tipo y sus botones', async () => {
     await mount()
     const texts = screen.getAllByTestId('class-row').map((r) => r.textContent)
-    expect(texts[0]).toMatch(/^Hoy, Mar 29\/9 · 18:00–19:00HoyFijaMoverCancelar$/)
-    expect(texts[1]).toMatch(/Vie 2\/10 · 10:30–11:15SueltaZoomEditarBorrar$/)
+    expect(texts[0]).toMatch(/^Hoy, Mar 29\/9 · 18:00–19:00HoySe repiteEditarCancelar$/)
+    expect(texts[1]).toMatch(/Vie 2\/10 · 10:30–11:15Una vezZoomEditarCancelar$/)
     expect(texts[2]).toMatch(/Mar 6\/10 · 18:00–19:00CanceladaRestaurar$/)
-    expect(texts[3]).toMatch(/Jue 15\/10 · 17:00–18:30Movidaera el mar 13\/10MoverDeshacer$/)
+    expect(texts[3]).toMatch(/Jue 15\/10 · 17:00–18:30Cambió de díaera el mar 13\/10EditarCancelar$/)
   })
 
   it('error al cargar → mensaje + Reintentar', async () => {
@@ -127,7 +127,7 @@ describe('TeacherClasses — acciones', () => {
 
   it('Mover una fija: formulario precargado en hora de Argentina → move con su "original"', async () => {
     await mount()
-    await click(within(row(/Mar 20\/10/)).getByRole('button', { name: T.move }))
+    await click(within(row(/Mar 20\/10/)).getByRole('button', { name: T.edit }))
     const form = screen.getByRole('form', { name: T.moveTitle('mar 20/10') })
     expect(within(form).getByLabelText(T.date)).toHaveValue('2026-10-20')
     expect(within(form).getByLabelText(T.hour)).toHaveValue('18:00')
@@ -141,7 +141,7 @@ describe('TeacherClasses — acciones', () => {
 
   it('Mover otra vez una movida: usa el martes ORIGINAL', async () => {
     await mount()
-    await click(within(row(/Jue 15\/10/)).getByRole('button', { name: T.move }))
+    await click(within(row(/Jue 15\/10/)).getByRole('button', { name: T.edit }))
     await click(screen.getByRole('button', { name: T.save }))
     expect(writes()[0][2]).toMatchObject({ originalStartsAt: '2026-10-13T21:00:00.000Z', date: '2026-10-15', time: '17:00', durationMin: 90 })
   })
@@ -155,24 +155,27 @@ describe('TeacherClasses — acciones', () => {
     expect(writes()).toEqual([['/api/classes/events', 'POST', { seriesId: SER, originalStartsAt: '2026-09-29T21:00:00.000Z', action: 'cancel' }]])
   })
 
-  it('Restaurar una cancelada y Deshacer una movida = borrar la excepción', async () => {
+  it('Restaurar una cancelada = borrar la excepción; cancelar una movida = cancelar ese martes', async () => {
     await mount()
     await click(within(row(/Mar 6\/10/)).getByRole('button', { name: T.restore }))
-    await click(within(row(/Jue 15\/10/)).getByRole('button', { name: T.undo }))
-    expect(writes()).toEqual([['/api/classes/events/e-canc', 'DELETE', undefined], ['/api/classes/events/e-mov', 'DELETE', undefined]])
+    await click(within(row(/Jue 15\/10/)).getByRole('button', { name: T.cancel }))
+    expect(writes()).toEqual([
+      ['/api/classes/events/e-canc', 'DELETE', undefined],
+      ['/api/classes/events', 'POST', { seriesId: SER, originalStartsAt: '2026-10-13T21:00:00.000Z', action: 'cancel' }],
+    ])
   })
 
-  it('Suelta: Editar (PATCH) y Borrar (DELETE con confirmación)', async () => {
+  it('Una vez: Editar (PATCH) y Cancelar (queda cancelada, con confirmación)', async () => {
     await mount()
     await click(within(row(/Vie 2\/10/)).getByRole('button', { name: T.edit }))
     const form = screen.getByRole('form', { name: T.editSingle })
     expect(within(form).getByLabelText(T.hour)).toHaveValue('10:30')
     expect(within(form).getByLabelText(T.duration)).toHaveValue('45')
     await click(within(form).getByRole('button', { name: T.save }))
-    await click(within(row(/Vie 2\/10/)).getByRole('button', { name: T.remove }))
+    await click(within(row(/Vie 2\/10/)).getByRole('button', { name: T.cancel }))
     expect(writes()).toEqual([
       ['/api/classes/events/e-suelta', 'PATCH', { date: '2026-10-02', time: '10:30', durationMin: 45, meetUrl: 'https://zoom.us/j/1' }],
-      ['/api/classes/events/e-suelta', 'DELETE', undefined],
+      ['/api/classes/events/e-suelta', 'PATCH', { status: 'cancelled' }],
     ])
   })
 
@@ -217,5 +220,28 @@ describe('TeacherClasses — acciones', () => {
       [`/api/classes/series/${SER}`, 'PATCH', { endsOn: null }],
     ])
     expect(screen.getByRole('alert')).toHaveTextContent('Hora inválida')
+  })
+})
+
+describe('TeacherClasses — "Mi sala de Zoom" (G0)', () => {
+  const ROOM = 'https://us02web.zoom.us/j/8412345678'
+  it('sin link propio → la etiqueta dice "Mi sala de Zoom"', async () => {
+    data = { series: [{ ...SERIES, meetUrl: null }], classes: [{ ...CLASSES[1], meetUrl: null }], zoomUrl: ROOM }
+    await mount()
+    expect(screen.getByTestId('series-row')).toHaveTextContent(T.room)
+    expect(row(/Vie 2\/10/)).toHaveTextContent(T.room)
+  })
+  it('sin sala y sin link → sin etiqueta', async () => {
+    data = { series: [{ ...SERIES, meetUrl: null }], classes: [] }
+    await mount()
+    expect(screen.getByTestId('series-row')).not.toHaveTextContent(T.room)
+  })
+  it('clase suelta con sala: el link arranca vacío (= usa la sala) y lo dice', async () => {
+    data = { series: [SERIES], classes: [], zoomUrl: ROOM }
+    await mount()
+    await click(screen.getByRole('button', { name: T.addSingle }))
+    const link = within(screen.getByRole('form', { name: T.newSingle })).getByLabelText(T.link)
+    expect(link).toHaveValue('')
+    expect(link).toHaveAttribute('placeholder', T.linkPhRoom)
   })
 })

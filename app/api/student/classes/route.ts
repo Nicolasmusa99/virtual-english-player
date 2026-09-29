@@ -1,14 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
-import { getStudentById } from '@/lib/users'
-import { getSchedule } from '@/lib/classes'
+import { getStudentById, getZoomUrl } from '@/lib/users'
+import { getSchedule, withRoomLink } from '@/lib/classes'
 import { classToStudentJson, parseRange } from '@/lib/classSchedule'
 
 // Calendario (C1) — lado ALUMNO: SUS clases con su profe ACTUAL.
 // GET /api/student/classes[?from=ISO&to=ISO]  (sin rango: desde hace 2 h, 35 días; máx. 100 días)
 // El alumno sale SIEMPRE de la sesión (no hay studentId en el pedido). Lista blanca:
 // { key, startsAt, durationMin, meetUrl, status } — nada del profe ni de otros alumnos.
-// Sin profe asignado → lista vacía.
+// Sin profe asignado → lista vacía. Las clases sin link propio usan "Mi sala de Zoom" de
+// SU profe (G0).
 
 export async function GET(req: NextRequest) {
   const gate = await requireRole('alumno')
@@ -24,6 +25,9 @@ export async function GET(req: NextRequest) {
   const student = await getStudentById(me.id)
   if (!student?.teacherId) return NextResponse.json({ classes: [] })
 
-  const classes = await getSchedule(me.id, student.teacherId, range.from, range.to)
-  return NextResponse.json({ classes: classes.map(classToStudentJson) })
+  const [classes, room] = await Promise.all([
+    getSchedule(me.id, student.teacherId, range.from, range.to),
+    getZoomUrl(student.teacherId),
+  ])
+  return NextResponse.json({ classes: withRoomLink(classes, room).map(classToStudentJson) })
 }

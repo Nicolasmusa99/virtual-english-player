@@ -58,6 +58,14 @@ export function normalizeMeetUrl(x: unknown): { ok: true; url: string | null } |
   return allowed ? { ok: true, url: u.href } : { ok: false }
 }
 
+// "Mi sala de Zoom": como normalizeMeetUrl pero SOLO Zoom (zoom.us o *.zoom.us).
+export function normalizeZoomRoomUrl(x: unknown): { ok: true; url: string | null } | { ok: false } {
+  const r = normalizeMeetUrl(x)
+  if (!r.ok || r.url === null) return r
+  const host = new URL(r.url).hostname.toLowerCase()
+  return host === 'zoom.us' || host.endsWith('.zoom.us') ? r : { ok: false }
+}
+
 // ─── Fechas y zona horaria ──────────────────────────────────────────────────
 
 const pad = (n: number) => String(n).padStart(2, '0')

@@ -9,6 +9,7 @@ import UsersPanel from './UsersPanel'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
+import ZoomRoomCard from './ZoomRoomCard'
 import StudentApp from './StudentApp'
 import VoiceBoostControl from './VoiceBoostControl'
 import { StageChannel } from '@/lib/stageChannel'
@@ -1122,7 +1123,7 @@ export default function Player() {
       )}
 
       {screen === 'load' && authStatus === 'authenticated' && (
-        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
+        <div className={`${styles.loadScreen} ${styles.lightScope} ${styles.loadScroll}`}>
           <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
             <button className={styles.tbBtn} onClick={() => {
               setScreen('exercises')
@@ -1192,6 +1193,8 @@ export default function Player() {
                 </label>
               ) : userRole === 'profesor' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 520 }}>
+                  {/* Mi sala de Zoom (calendario, G0) */}
+                  <ZoomRoomCard />
                   {/* ① Mis alumnos (flujo principal) */}
                   <div className={styles.dropzone} style={{ cursor: 'default' }}>
                     <div className={styles.dzIcon}>

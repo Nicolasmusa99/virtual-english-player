@@ -6,13 +6,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const m = vi.hoisted(() => ({
-  auth: vi.fn(), getStudentById: vi.fn(),
+  auth: vi.fn(), getStudentById: vi.fn(), getZoomUrl: vi.fn(),
   getSchedule: vi.fn(), listActiveSeries: vi.fn(), createSeries: vi.fn(), getSeries: vi.fn(),
   updateSeries: vi.fn(), deleteSeries: vi.fn(), createSingleClass: vi.fn(), upsertException: vi.fn(),
   getEvent: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn(),
 }))
 vi.mock('@/lib/auth', () => ({ auth: m.auth }))
-vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById }))
+vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById, getZoomUrl: m.getZoomUrl }))
 vi.mock('@/lib/classes', () => ({
   getSchedule: m.getSchedule, listActiveSeries: m.listActiveSeries, createSeries: m.createSeries, getSeries: m.getSeries,
   updateSeries: m.updateSeries, deleteSeries: m.deleteSeries, createSingleClass: m.createSingleClass,
@@ -53,6 +53,7 @@ beforeEach(() => {
   m.getStudentById.mockImplementation(async (id: string) =>
     id === ST_A ? { id: ST_A, role: 'alumno', teacherId: PA } : id === PA ? { id: PA, role: 'profesor', teacherId: null } : null)
   m.getSchedule.mockResolvedValue([])
+  m.getZoomUrl.mockResolvedValue(null)
   m.listActiveSeries.mockResolvedValue([])
   m.createSeries.mockImplementation(async (d) => ({ id: SER, ...d }))
   m.getSeries.mockImplementation(async (id: string) => (id === SER ? SERIES_A : null))
@@ -106,6 +107,14 @@ describe('GET /api/classes — las clases de UN alumno', () => {
       meetUrl: SERIES_A.meetUrl, status: 'scheduled', originalStartsAt: null,
     })
     expect(m.getSchedule.mock.calls[0].slice(0, 2)).toEqual([ST_A, PA])
+    expect(body.zoomUrl).toBeNull()
+  })
+  it('manda "Mi sala de Zoom" del profe de ESE alumno (admin: la del profe, no la suya)', async () => {
+    m.getZoomUrl.mockImplementation(async (id: string) => (id === PA ? 'https://us02web.zoom.us/j/1' : 'https://zoom.us/j/admin'))
+    as('ad', 'admin')
+    const body = await (await listClasses(req(`/api/classes?studentId=${ST_A}`))).json()
+    expect(body.zoomUrl).toBe('https://us02web.zoom.us/j/1')
+    expect(m.getZoomUrl).toHaveBeenCalledWith(PA)
   })
   it('sin rango: desde hace 2 h y 35 días', async () => {
     as(PA, 'profesor')
