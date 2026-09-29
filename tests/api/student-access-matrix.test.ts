@@ -21,6 +21,10 @@ vi.mock('@/lib/db', () => {
 
 type Handler = (req: NextRequest, ctx: { params: Promise<Record<string, string>> }) => Promise<Response>
 const METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'] as const
+// Cada caso importa su ruta en frío (Next + sus dependencias): con la suite completa
+// en paralelo eso a veces pasa los 5 s por defecto de Vitest. El tiempo extra es solo
+// para el import; lo que se verifica (403 y base sin tocar) no cambia.
+const ROUTE_TIMEOUT_MS = 30_000
 
 const modules = import.meta.glob('/app/api/**/route.ts')
 const guarded = Object.keys(modules)
@@ -58,6 +62,6 @@ describe('matriz de acceso: el alumno recibe 403 en TODAS las rutas que no son s
         expect(res.status, `${m} ${url}`).toBe(403)
         expect(dbTouched.value, `${m} ${url} tocó la base antes de rechazar`).toBe(false)
       }
-    })
+    }, ROUTE_TIMEOUT_MS)
   }
 })
