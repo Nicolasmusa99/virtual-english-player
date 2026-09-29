@@ -1,14 +1,15 @@
 'use client'
-// Player del ALUMNO (fase vista-alumno, E3). SOLO: play/pausa, stop, volumen − / +
-// y una barra de tiempo para MIRAR (no se puede adelantar). Subtítulos del profe
-// SIEMPRE visibles (sin botón para apagarlos), con el delay que él configuró.
+// Player del ALUMNO (fase vista-alumno, E3). SOLO: play/pausa, stop, volumen − / +,
+// barra de tiempo que se toca o arrastra para ir a otro momento, y CC para prender /
+// apagar los subtítulos del profe (arrancan prendidos; no se guarda). Los subtítulos
+// llegan sin descripciones de sonido ("(music)"), limpiados en el servidor.
 // Es un componente aparte a propósito: el player del profe (page.tsx) no se toca.
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import styles from './student.module.css'
 import { fmtTime } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import {
-  displayVideoName, phraseAt, progressPct, stepVolume, volumeBarsOn, VOLUME_BARS,
+  displayVideoName, phraseAt, progressPct, stepSeek, stepVolume, timeAtX, volumeBarsOn, VOLUME_BARS,
 } from '@/lib/studentView'
 import type { StudentPhrase } from '@/lib/assignments'
 
@@ -30,17 +31,24 @@ export const PLAYER_TEXTS = {
   volDown: 'Bajar volumen',
   volUp: 'Subir volumen',
   time: 'Tiempo del video',
+  timeOf: (cur: string, total: string) => `${cur} de ${total}`,
+  cc: 'Subtítulos',
+  ccOn: 'Subtítulos: sí',
+  ccOff: 'Subtítulos: no',
   videoError: 'No se pudo reproducir el video. Probá de nuevo más tarde.',
 } as const
 
 export default function StudentPlayer({ data, onBack }: { data: StudentVideoData; onBack: () => void }) {
   const vidRef = useRef<HTMLVideoElement>(null)
+  const seekRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
   const [playing, setPlaying] = useState(false)
   const [time, setTime] = useState(0)
   const [duration, setDuration] = useState(data.durationSec ?? 0)
   const [volume, setVolume] = useState(1)
   const [sub, setSub] = useState('')
   const [error, setError] = useState(false)
+  const [cc, setCc] = useState(true)
 
   // Subtítulos y tiempo al ritmo del video: un loop de requestAnimationFrame mientras
   // reproduce (timeupdate solo es demasiado grueso para los subtítulos) + una
@@ -92,6 +100,46 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
     setSub(phraseAt(data.phrases, 0, data.delay))
   }
 
+  // Ir a un momento del video (barra de tiempo). Sigue reproduciendo si estaba en play.
+  function seekTo(t: number) {
+    const v = vidRef.current
+    if (!v) return
+    v.currentTime = t
+    setTime(t)
+    setSub(phraseAt(data.phrases, t, data.delay))
+  }
+
+  function seekFromPointer(clientX: number) {
+    const r = seekRef.current?.getBoundingClientRect()
+    if (!r) return
+    const t = timeAtX(clientX, r.left, r.width, duration)
+    if (t != null) seekTo(t)
+  }
+
+  function onSeekDown(e: PointerEvent<HTMLDivElement>) {
+    draggingRef.current = true
+    e.currentTarget.setPointerCapture?.(e.pointerId) // el arrastre sigue aunque el dedo salga de la barra
+    seekFromPointer(e.clientX)
+  }
+  function onSeekMove(e: PointerEvent<HTMLDivElement>) {
+    if (draggingRef.current) seekFromPointer(e.clientX)
+  }
+  function onSeekUp() {
+    draggingRef.current = false
+  }
+  function onSeekKey(e: KeyboardEvent<HTMLDivElement>) {
+    const v = vidRef.current
+    if (!v || !(duration > 0)) return
+    let t: number | null = null
+    if (e.key === 'ArrowRight') t = stepSeek(v.currentTime, 1, duration)
+    else if (e.key === 'ArrowLeft') t = stepSeek(v.currentTime, -1, duration)
+    else if (e.key === 'Home') t = 0
+    else if (e.key === 'End') t = duration
+    if (t == null) return
+    e.preventDefault()
+    seekTo(t)
+  }
+
   function changeVolume(dir: 1 | -1) {
     const next = stepVolume(volume, dir)
     setVolume(next)
@@ -110,7 +158,7 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
 
       <div className={styles.pStage}>
         <video ref={vidRef} src={data.storageUrl} className={styles.video} playsInline preload="metadata" />
-        {sub && (
+        {cc && sub && (
           <div className={styles.subOverlay}>
             <div className={styles.subBox} data-testid="student-sub">{hl(sub)}</div>
           </div>
@@ -120,9 +168,15 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
 
       <div className={styles.timeRow}>
         <span>{fmtTime(time)}</span>
-        <div className={styles.track} role="progressbar" aria-label={PLAYER_TEXTS.time}
-          aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(pct)}>
-          <div className={styles.fill} style={{ width: pct + '%' }} />
+        <div ref={seekRef} className={styles.seek} role="slider" tabIndex={0} aria-label={PLAYER_TEXTS.time}
+          aria-valuemin={0} aria-valuemax={Math.round(duration)} aria-valuenow={Math.round(time)}
+          aria-valuetext={PLAYER_TEXTS.timeOf(fmtTime(time), fmtTime(duration))}
+          onPointerDown={onSeekDown} onPointerMove={onSeekMove} onPointerUp={onSeekUp} onPointerCancel={onSeekUp}
+          onKeyDown={onSeekKey}>
+          <div className={styles.track}>
+            <div className={styles.fill} style={{ width: pct + '%' }} />
+            <div className={styles.thumb} style={{ left: pct + '%' }} />
+          </div>
         </div>
         <span>{fmtTime(duration)}</span>
       </div>
@@ -161,6 +215,14 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
               disabled={volume >= 1} aria-label={PLAYER_TEXTS.volUp}>+</button>
           </div>
           <span className={styles.lbl} aria-hidden="true">{PLAYER_TEXTS.volume}</span>
+        </div>
+
+        <span className={styles.sep} aria-hidden="true" />
+
+        <div className={styles.grp}>
+          <button type="button" className={`${styles.cBtn} ${styles.ccBtn} ${cc ? styles.ccOn : ''}`}
+            onClick={() => setCc((on) => !on)} aria-pressed={cc} aria-label={PLAYER_TEXTS.cc}>CC</button>
+          <span className={styles.lbl} aria-hidden="true">{cc ? PLAYER_TEXTS.ccOn : PLAYER_TEXTS.ccOff}</span>
         </div>
       </div>
     </div>

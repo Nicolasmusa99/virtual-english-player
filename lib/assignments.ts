@@ -138,8 +138,41 @@ export function pickCaptionsRow(
   return null
 }
 
+// Palabras que marcan una DESCRIPCIÓN DE SONIDO entre paréntesis: "(music)",
+// "(upbeat music)", "(risas)". Un paréntesis sin ninguna de estas palabras se queda:
+// en las canciones los coros suelen ir entre paréntesis ("(oh baby)").
+export const SOUND_WORDS = [
+  'music', 'musica', 'música', 'instrumental', 'song', 'singing', 'humming', 'whistling',
+  'applause', 'aplausos', 'clapping', 'cheering', 'cheers',
+  'laugh', 'laughs', 'laughing', 'laughter', 'chuckles', 'giggles', 'risa', 'risas', 'ríe',
+  'sigh', 'sighs', 'suspira', 'gasp', 'gasps', 'cough', 'coughs', 'tos',
+  'crying', 'sobbing', 'llora', 'llanto', 'screams', 'screaming', 'grita', 'grunts',
+  'silence', 'silencio', 'inaudible', 'noise', 'ruido', 'sound', 'sonido', 'sonidos',
+  'footsteps', 'beep', 'beeping', 'ringing', 'doorbell', 'knocking', 'thunder',
+] as const
+const SOUND_RE = new RegExp(`(^|[^\\p{L}])(${SOUND_WORDS.join('|')})(?=$|[^\\p{L}])`, 'iu')
+const MAX_SOUND_TAG_WORDS = 4
+
+// Subtítulo para el ALUMNO: sin descripciones de sonido.
+//   - todo lo que va entre corchetes: "[Music]", "[risas]" (Gemini los usa solo para eso)
+//   - paréntesis cortos (≤ 4 palabras) con una palabra de sonido: "(music)", "(Música)"
+//   - las notas ♪ ♫ ♬ ♩ (la letra de la canción que envuelven se queda)
+// Si no queda ni una letra ni un número, devuelve '' (la frase no se muestra).
+export function cleanCaption(text: string): string {
+  const out = text
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/\(([^()]*)\)/g, (m, inner: string) =>
+      SOUND_RE.test(inner) && inner.trim().split(/\s+/).length <= MAX_SOUND_TAG_WORDS ? ' ' : m)
+    .replace(/[♪♫♬♩]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  return /[\p{L}\p{N}]/u.test(out) ? out : ''
+}
+
 // Deja solo lo que el player del alumno necesita de cada frase ({start,end,text}),
 // descartando cualquier otro campo de la copia del profe (p. ej. su selección `sel`).
+// El texto va limpio de descripciones de sonido (cleanCaption); si queda vacío, la
+// frase se descarta. La copia del profe en la base NO se toca.
 export function toStudentPhrases(raw: unknown): StudentPhrase[] {
   if (!Array.isArray(raw)) return []
   const out: StudentPhrase[] = []
@@ -147,7 +180,9 @@ export function toStudentPhrases(raw: unknown): StudentPhrase[] {
     if (!p || typeof p !== 'object') continue
     const { start, end, text } = p as Record<string, unknown>
     if (typeof start !== 'number' || typeof end !== 'number' || typeof text !== 'string') continue
-    out.push({ start, end, text })
+    const clean = cleanCaption(text)
+    if (!clean) continue
+    out.push({ start, end, text: clean })
   }
   return out
 }

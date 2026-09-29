@@ -7,7 +7,7 @@ import { describe, it, expect, vi } from 'vitest'
 
 vi.mock('@/lib/db', () => ({ db: {} })) // estas funciones son puras: la DB no se usa
 
-import { pickCaptionsRow, toStudentPhrases } from '@/lib/assignments'
+import { cleanCaption, pickCaptionsRow, toStudentPhrases } from '@/lib/assignments'
 
 const PROFE_A = 'profe-a'
 const PROFE_B = 'profe-b'
@@ -55,5 +55,42 @@ describe('toStudentPhrases — solo {start,end,text}', () => {
     expect(toStudentPhrases({ start: 1 })).toEqual([])
     expect(toStudentPhrases([null, 3, { start: '1', end: 2, text: 'x' }, { start: 0, end: 1, text: 'ok' }]))
       .toEqual([{ start: 0, end: 1, text: 'ok' }])
+  })
+})
+
+describe('cleanCaption — el alumno no ve descripciones de sonido', () => {
+  it('sola en la frase → vacío (no se muestra)', () => {
+    for (const t of ['(music)', '(Music)', '(MUSIC)', '[Music]', '[música]', '(Música)', '(upbeat music)',
+      '(music playing)', '(applause)', '(laughs)', '[risas]', '♪', '♪ ♪', '(música de fondo)', '- (music) -'])
+      expect(cleanCaption(t), t).toBe('')
+  })
+  it('pegada a una frase → se saca solo la marca', () => {
+    expect(cleanCaption("(laughs) I don't know")).toBe("I don't know")
+    expect(cleanCaption('Hello [door slams] there')).toBe('Hello there')
+    expect(cleanCaption('♪ Let it go, let it go ♪')).toBe('Let it go, let it go')
+    expect(cleanCaption('Yes! (MUSIC)')).toBe('Yes!')
+  })
+  it('paréntesis que NO son sonido se quedan (coros de canciones, aclaraciones)', () => {
+    expect(cleanCaption('I love you (oh baby)')).toBe('I love you (oh baby)')
+    expect(cleanCaption('(Hey!) Come on')).toBe('(Hey!) Come on')
+    expect(cleanCaption('The musical (Hamilton) is great')).toBe('The musical (Hamilton) is great')
+  })
+  it('paréntesis largo aunque diga "music" → se queda (es texto, no una marca)', () => {
+    expect(cleanCaption('(I just want to hear the music tonight)')).toBe('(I just want to hear the music tonight)')
+  })
+  it('texto normal intacto', () => {
+    expect(cleanCaption('  Hello   there ')).toBe('Hello there')
+    expect(cleanCaption('I like music')).toBe('I like music')
+    expect(cleanCaption('99')).toBe('99')
+  })
+})
+
+describe('toStudentPhrases — limpia sonidos y descarta las frases que quedan vacías', () => {
+  it('la frase "(music)" desaparece; las otras quedan limpias', () => {
+    expect(toStudentPhrases([
+      { start: 0, end: 2, text: '(music)' },
+      { start: 2, end: 4, text: '(laughs) Hi' },
+      { start: 4, end: 6, text: 'Bye' },
+    ])).toEqual([{ start: 2, end: 4, text: 'Hi' }, { start: 4, end: 6, text: 'Bye' }])
   })
 })

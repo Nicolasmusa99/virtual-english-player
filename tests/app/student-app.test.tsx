@@ -220,7 +220,7 @@ describe('StudentApp — abrir un video', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('StudentPlayer — solo play/pausa, stop, volumen y tiempo para mirar', () => {
+describe('StudentPlayer — play/pausa, stop, volumen, barra de tiempo y CC', () => {
   const DATA: StudentVideoData = {
     id: VID_A, originalName: 'Frozen (demo).mp4', storageUrl: 'https://blob.example/frozen.mp4',
     durationSec: 185, phrases: DETAIL.captions.phrases, delay: 0,
@@ -233,10 +233,10 @@ describe('StudentPlayer — solo play/pausa, stop, volumen y tiempo para mirar',
     return { ...r, video, st, onBack }
   }
 
-  it('los ÚNICOS botones son: volver, play, stop, bajar y subir volumen (sin herramientas del profe)', () => {
+  it('los ÚNICOS botones son: volver, play, stop, bajar y subir volumen, CC (sin herramientas del profe)', () => {
     mountPlayer()
     const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)
-    expect(names).toEqual([PLAYER_TEXTS.back, PLAYER_TEXTS.play, PLAYER_TEXTS.stop, PLAYER_TEXTS.volDown, PLAYER_TEXTS.volUp])
+    expect(names).toEqual([PLAYER_TEXTS.back, PLAYER_TEXTS.play, PLAYER_TEXTS.stop, PLAYER_TEXTS.volDown, PLAYER_TEXTS.volUp, PLAYER_TEXTS.cc])
     expect(document.querySelector('input')).toBeNull() // ni sliders ni campos editables
   })
 
@@ -281,15 +281,36 @@ describe('StudentPlayer — solo play/pausa, stop, volumen y tiempo para mirar',
     expect(video.volume).toBeCloseTo(0.1, 5)
   })
 
-  it('subtítulos del profe SIEMPRE visibles en su momento (y no hay botón para apagarlos)', async () => {
+  it('subtítulos del profe visibles en su momento (arrancan prendidos)', async () => {
     const { st, video } = mountPlayer()
+    expect(screen.getByRole('button', { name: PLAYER_TEXTS.cc })).toHaveAttribute('aria-pressed', 'true')
     st.t = 2
     await act(async () => { video.dispatchEvent(new Event('seeked')) })
     expect(screen.getByTestId('student-sub')).toHaveTextContent('Hello there')
     st.t = 5
     await act(async () => { video.dispatchEvent(new Event('seeked')) })
     expect(screen.getByTestId('student-sub')).toHaveTextContent('Second line')
-    expect(screen.queryByRole('button', { name: /subt|CC/i })).toBeNull()
+  })
+
+  it('CC apaga y prende los subtítulos (sin tocar el video)', async () => {
+    const { st, video } = mountPlayer()
+    st.t = 2
+    await act(async () => { video.dispatchEvent(new Event('seeked')) })
+    const cc = screen.getByRole('button', { name: PLAYER_TEXTS.cc })
+    fireEvent.click(cc)
+    expect(cc).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText(PLAYER_TEXTS.ccOff)).toBeInTheDocument()
+    expect(screen.queryByTestId('student-sub')).toBeNull()
+    st.t = 5 // sigue apagado aunque cambie la frase
+    await act(async () => { video.dispatchEvent(new Event('seeked')) })
+    expect(screen.queryByTestId('student-sub')).toBeNull()
+    expect(video.play).not.toHaveBeenCalled()
+    expect(video.pause).not.toHaveBeenCalled()
+    expect(st.t).toBe(5)
+    fireEvent.click(cc)
+    expect(cc).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByText(PLAYER_TEXTS.ccOn)).toBeInTheDocument()
+    expect(screen.getByTestId('student-sub')).toHaveTextContent('Second line')
   })
 
   it('respeta el delay del profe', async () => {
@@ -302,16 +323,85 @@ describe('StudentPlayer — solo play/pausa, stop, volumen y tiempo para mirar',
     expect(screen.getByTestId('student-sub')).toHaveTextContent('Hello there')
   })
 
-  it('barra de tiempo SOLO para mirar: avanza con el video y no se puede tocar para adelantar', async () => {
+  // La barra mide 400 px desde x=100: tocar en x = 100 + 400·f lleva a f·185 s.
+  function mockBarRect() {
+    const bar = screen.getByRole('slider', { name: PLAYER_TEXTS.time })
+    bar.getBoundingClientRect = () => ({ left: 100, width: 400, top: 0, height: 28, right: 500, bottom: 28, x: 100, y: 0, toJSON: () => ({}) })
+    return bar
+  }
+
+  it('barra de tiempo: avanza con el video', async () => {
     const { st, video } = mountPlayer()
     st.t = 92.5
     await act(async () => { video.dispatchEvent(new Event('seeked')) })
-    const bar = screen.getByRole('progressbar', { name: PLAYER_TEXTS.time })
-    expect(bar).toHaveAttribute('aria-valuenow', '50')
+    const bar = screen.getByRole('slider', { name: PLAYER_TEXTS.time })
+    expect(bar).toHaveAttribute('aria-valuenow', '93')
+    expect(bar).toHaveAttribute('aria-valuemax', '185')
+    expect(bar).toHaveAttribute('aria-valuetext', '1:32 de 3:05')
     expect(screen.getByText('1:32')).toBeInTheDocument()
     expect(screen.getByText('3:05')).toBeInTheDocument()
-    fireEvent.click(bar)
-    expect(st.t).toBe(92.5) // tocar la barra no mueve el video
+  })
+
+  it('tocar la barra lleva el video a ese momento (y el subtítulo sigue al nuevo tiempo)', async () => {
+    const { st } = mountPlayer()
+    const bar = mockBarRect()
+    await act(async () => { fireEvent.pointerDown(bar, { clientX: 300, pointerId: 1 }) }) // mitad
+    fireEvent.pointerUp(bar, { pointerId: 1 })
+    expect(st.t).toBeCloseTo(92.5, 5)
+    expect(screen.getByText('1:32')).toBeInTheDocument()
+    await act(async () => { fireEvent.pointerDown(bar, { clientX: 100 + 400 * (2 / 185), pointerId: 1 }) }) // segundo 2
+    fireEvent.pointerUp(bar, { pointerId: 1 })
+    expect(st.t).toBeCloseTo(2, 5)
+    expect(screen.getByTestId('student-sub')).toHaveTextContent('Hello there')
+  })
+
+  it('arrastrar sobre la barra va siguiendo el dedo; al soltar, moverse ya no salta', async () => {
+    const { st } = mountPlayer()
+    const bar = mockBarRect()
+    await act(async () => { fireEvent.pointerDown(bar, { clientX: 140, pointerId: 1 }) })
+    await act(async () => { fireEvent.pointerMove(bar, { clientX: 400, pointerId: 1 }) })
+    expect(st.t).toBeCloseTo(138.75, 5)
+    await act(async () => { fireEvent.pointerMove(bar, { clientX: 900, pointerId: 1 }) }) // fuera → el final
+    expect(st.t).toBeCloseTo(185, 5)
+    fireEvent.pointerUp(bar, { pointerId: 1 })
+    await act(async () => { fireEvent.pointerMove(bar, { clientX: 200, pointerId: 1 }) })
+    expect(st.t).toBeCloseTo(185, 5)
+  })
+
+  it('tocar la barra mientras reproduce: salta y SIGUE reproduciendo', async () => {
+    const { st, video } = mountPlayer()
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: PLAYER_TEXTS.play })) })
+    const bar = mockBarRect()
+    await act(async () => { fireEvent.pointerDown(bar, { clientX: 300, pointerId: 1 }) })
+    fireEvent.pointerUp(bar, { pointerId: 1 })
+    expect(st.t).toBeCloseTo(92.5, 5)
+    expect(video.pause).not.toHaveBeenCalled()
+    expect(st.paused).toBe(false)
+  })
+
+  it('con el teclado: → / ← mueven 5 s, Inicio / Fin van a las puntas', async () => {
+    const { st } = mountPlayer()
+    const bar = screen.getByRole('slider', { name: PLAYER_TEXTS.time })
+    st.t = 10
+    await act(async () => { fireEvent.keyDown(bar, { key: 'ArrowRight' }) })
+    expect(st.t).toBe(15)
+    await act(async () => { fireEvent.keyDown(bar, { key: 'ArrowLeft' }) })
+    await act(async () => { fireEvent.keyDown(bar, { key: 'ArrowLeft' }) })
+    expect(st.t).toBe(5)
+    await act(async () => { fireEvent.keyDown(bar, { key: 'End' }) })
+    expect(st.t).toBe(185)
+    await act(async () => { fireEvent.keyDown(bar, { key: 'Home' }) })
+    expect(st.t).toBe(0)
+  })
+
+  it('sin duración conocida la barra no salta', async () => {
+    const { st, video } = mountPlayer({ ...DATA, durationSec: null })
+    Object.defineProperty(video, 'duration', { get: () => NaN, configurable: true })
+    const bar = mockBarRect()
+    st.t = 7
+    await act(async () => { fireEvent.pointerDown(bar, { clientX: 300, pointerId: 1 }) })
+    await act(async () => { fireEvent.keyDown(bar, { key: 'ArrowRight' }) })
+    expect(st.t).toBe(7)
   })
 
   it('si el video no carga → aviso', async () => {
