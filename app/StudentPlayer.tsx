@@ -175,7 +175,7 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
           onKeyDown={onSeekKey}>
           <div className={styles.track}>
             <div className={styles.fill} style={{ width: pct + '%' }} />
-            <div className={styles.thumb} style={{ left: pct + '%' }} />
+            <div className={styles.knob} style={{ left: pct + '%' }} />
           </div>
         </div>
         <span>{fmtTime(duration)}</span>
