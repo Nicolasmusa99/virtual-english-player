@@ -1,7 +1,7 @@
 'use client'
 // Calendario (C3) — sección "Clases" en la pantalla de un alumno (lado PROFE / ADMIN).
-// Horario fijo (crear, cambiar, terminar), clase suelta, y por cada próxima clase:
-// mover / cancelar / restaurar / deshacer / editar / borrar. Todo en hora de Argentina
+// Horario fijo (crear, editar, terminar), clase suelta, y por cada próxima clase:
+// editar / cancelar / restaurar (G0: todo dice "Editar"). Todo en hora de Argentina
 // (en la que carga el profe). Solo habla con /api/classes/** — quién puede tocar qué lo
 // decide el servidor (lib/classAccess.ts).
 import { useCallback, useEffect, useState, type ChangeEvent, type ReactNode } from 'react'
@@ -22,29 +22,30 @@ export const TEACHER_CLASS_TEXTS = {
   noFixed: 'Todavía no tiene horario fijo.',
   addFixed: '+ Horario fijo',
   addOtherFixed: '+ Otro horario fijo',
-  change: 'Cambiar horario',
+  change: 'Editar',
   end: 'Terminar',
   upcoming: 'Próximas clases',
   none: 'No hay clases agendadas.',
   showing: 'Mostrando las próximas 5 semanas.',
   today: 'Hoy',
-  kinds: { fija: 'Fija', suelta: 'Suelta', movida: 'Movida', cancelada: 'Cancelada' },
+  kinds: { fija: 'Se repite', suelta: 'Una vez', movida: 'Cambió de día', cancelada: 'Cancelada' },
   was: (d: string) => `era el ${d}`,
-  move: 'Mover', cancel: 'Cancelar', restore: 'Restaurar', undo: 'Deshacer', edit: 'Editar', remove: 'Borrar',
+  cancel: 'Cancelar', restore: 'Restaurar', edit: 'Editar',
   save: 'Guardar', close: 'Cancelar',
   day: 'Día', hour: 'Hora', duration: 'Duración', from: 'Desde', date: 'Fecha',
   link: 'Link de la clase (Zoom, Meet o Teams)',
   linkPh: 'https://meet.google.com/…',
+  linkPhRoom: 'Vacío = Mi sala de Zoom',
+  room: 'Mi sala de Zoom',
   newFixed: 'Nuevo horario fijo',
-  changeFixed: 'Cambiar el horario fijo',
+  changeFixed: 'Editar el horario fijo',
   changeHint: 'Las clases de antes de esa fecha quedan como estaban.',
   fixedHint: 'Se repite todas las semanas.',
   newSingle: 'Nueva clase suelta',
   editSingle: 'Editar clase suelta',
-  moveTitle: (d: string) => `Mover la clase del ${d}`,
+  moveTitle: (d: string) => `Editar la clase del ${d}`,
   moveHint: 'El alumno lo ve al instante. Las demás clases no cambian.',
   confirmCancel: (d: string) => `¿Cancelar la clase del ${d}? El alumno la va a ver cancelada.`,
-  confirmRemove: (d: string) => `¿Borrar la clase suelta del ${d}?`,
   confirmEnd: (t: string) => `¿Terminar el horario "${t}"? Desde mañana deja de repetirse.`,
   loading: 'Cargando clases…',
   loadError: 'No se pudieron cargar las clases.',
@@ -56,6 +57,12 @@ export const TEACHER_CLASS_TEXTS = {
 } as const
 
 const DURATIONS = [30, 45, 60, 75, 90, 120]
+
+// De qué es el link de una clase/horario. Sin link propio → "Mi sala de Zoom" (si hay).
+function LinkPill({ url, room }: { url: string | null; room: string | null }) {
+  const label = url ? meetLabel(url) : room ? TEACHER_CLASS_TEXTS.room : null
+  return label ? <span className={styles.tcPill}>{label}</span> : null
+}
 
 type Form =
   | { kind: 'newSeries' }
@@ -79,7 +86,7 @@ async function send(url: string, method: string, body?: unknown): Promise<{ ok: 
 
 export default function TeacherClasses({ studentId }: { studentId: string }) {
   const T = TEACHER_CLASS_TEXTS
-  const [data, setData] = useState<{ series: Series[]; classes: TeacherClass[] } | null>(null)
+  const [data, setData] = useState<{ series: Series[]; classes: TeacherClass[]; zoomUrl: string | null } | null>(null)
   const [loadError, setLoadError] = useState(false)
   const [form, setForm] = useState<Form | null>(null)
   const [f, setF] = useState<Fields>({ weekday: '2', date: '', time: '18:00', durationMin: '60', meetUrl: '' })
@@ -92,7 +99,11 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
       const res = await fetch(`/api/classes?studentId=${encodeURIComponent(studentId)}`)
       if (!res.ok) throw new Error(String(res.status))
       const body = await res.json()
-      setData({ series: Array.isArray(body?.series) ? body.series : [], classes: Array.isArray(body?.classes) ? body.classes : [] })
+      setData({
+        series: Array.isArray(body?.series) ? body.series : [],
+        classes: Array.isArray(body?.classes) ? body.classes : [],
+        zoomUrl: typeof body?.zoomUrl === 'string' ? body.zoomUrl : null,
+      })
     } catch {
       setLoadError(true)
     }
@@ -110,7 +121,7 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
       const s = next.series
       setF({ weekday: String(s.weekday), date: today > s.startsOn ? today : s.startsOn, time: s.time, durationMin: String(s.durationMin), meetUrl: s.meetUrl ?? '' })
     }
-    if (next.kind === 'single') setF({ weekday: '', date: today, time: '18:00', durationMin: '60', meetUrl: data?.series[0]?.meetUrl ?? '' })
+    if (next.kind === 'single') setF({ weekday: '', date: today, time: '18:00', durationMin: '60', meetUrl: data?.zoomUrl ? '' : data?.series[0]?.meetUrl ?? '' })
     if (next.kind === 'editSingle' || next.kind === 'move') {
       const t = new Date(next.c.startsAt)
       setF({ weekday: '', date: formDate(t), time: formTime(t), durationMin: String(next.c.durationMin), meetUrl: next.c.meetUrl ?? '' })
@@ -174,10 +185,6 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
     // una suelta cancelada vuelve a "programada".
     run(() => c.seriesId ? send(`/api/classes/events/${c.eventId}`, 'DELETE') : send(`/api/classes/events/${c.eventId}`, 'PATCH', { status: 'scheduled' }))
   }
-  function removeSingle(c: TeacherClass) {
-    if (!window.confirm(T.confirmRemove(label(c)))) return
-    run(() => send(`/api/classes/events/${c.eventId}`, 'DELETE'))
-  }
   function endSeries(s: Series) {
     if (!window.confirm(T.confirmEnd(seriesTitle(s.weekday, s.time)))) return
     // Termina hoy (la clase de hoy, si hay, queda). Si todavía no empezó, se borra entera.
@@ -219,7 +226,7 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
           {isSeries && field(T.from, <input className={styles.tcInput} type="date" required value={f.date} onChange={set('date')} />)}
           {form.kind !== 'move' && (
             <label className={`${styles.tcField} ${styles.tcFieldWide}`}>{T.link}
-              <input className={styles.tcInput} type="url" inputMode="url" placeholder={T.linkPh} value={f.meetUrl} onChange={set('meetUrl')} />
+              <input className={styles.tcInput} type="url" inputMode="url" placeholder={data?.zoomUrl ? T.linkPhRoom : T.linkPh} value={f.meetUrl} onChange={set('meetUrl')} />
             </label>
           )}
         </div>
@@ -260,7 +267,7 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
                 <span className={styles.tcMeta}>
                   {T.minutes(s.durationMin)} · {s.startsOn > today ? T.since(dayMonth(s.startsOn)) : s.endsOn ? T.until(dayMonth(s.endsOn)) : T.since(dayMonth(s.startsOn))}
                 </span>
-                {meetLabel(s.meetUrl) && <span className={styles.tcPill}>{meetLabel(s.meetUrl)}</span>}
+                <LinkPill url={s.meetUrl} room={data.zoomUrl} />
                 <span className={styles.tcSp} />
                 <button type="button" className={styles.tcBtn} onClick={() => open({ kind: 'changeSeries', series: s })} disabled={busy}>{T.change}</button>
                 <button type="button" className={styles.tcBtn} onClick={() => endSeries(s)} disabled={busy}>{T.end}</button>
@@ -292,19 +299,12 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
                       {rel === 'Hoy' && kind !== 'cancelada' && <span className={styles.tcToday}>{T.today}</span>}
                       <span className={`${styles.tcKind} ${styles['k_' + kind]}`}>{T.kinds[kind]}</span>
                       {kind === 'movida' && c.originalStartsAt && <span className={styles.tcWas}>{T.was(shortDate(new Date(c.originalStartsAt), CLASS_TZ).toLowerCase())}</span>}
-                      {kind === 'suelta' && meetLabel(c.meetUrl) && <span className={styles.tcPill}>{meetLabel(c.meetUrl)}</span>}
+                      {kind === 'suelta' && <LinkPill url={c.meetUrl} room={data.zoomUrl} />}
                       <span className={styles.tcSp} />
-                      {kind === 'fija' && <>
-                        <button type="button" className={styles.tcBtn} onClick={() => open({ kind: 'move', c })} disabled={busy}>{T.move}</button>
+                      {kind !== 'cancelada' && <>
+                        <button type="button" className={styles.tcBtn} disabled={busy}
+                          onClick={() => open(kind === 'suelta' ? { kind: 'editSingle', c } : { kind: 'move', c })}>{T.edit}</button>
                         <button type="button" className={styles.tcDanger} onClick={() => cancelClass(c)} disabled={busy}>{T.cancel}</button>
-                      </>}
-                      {kind === 'movida' && <>
-                        <button type="button" className={styles.tcBtn} onClick={() => open({ kind: 'move', c })} disabled={busy}>{T.move}</button>
-                        <button type="button" className={styles.tcBtn} onClick={() => restore(c)} disabled={busy}>{T.undo}</button>
-                      </>}
-                      {kind === 'suelta' && <>
-                        <button type="button" className={styles.tcBtn} onClick={() => open({ kind: 'editSingle', c })} disabled={busy}>{T.edit}</button>
-                        <button type="button" className={styles.tcDanger} onClick={() => removeSingle(c)} disabled={busy}>{T.remove}</button>
                       </>}
                       {kind === 'cancelada' && (
                         <button type="button" className={styles.tcAccent} onClick={() => restore(c)} disabled={busy}>{T.restore}</button>

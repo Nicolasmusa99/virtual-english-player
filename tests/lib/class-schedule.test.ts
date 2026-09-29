@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest'
 import {
   addDays, buildSchedule, CLASS_TZ, dateInTz, expandSeries, formatTime, isDateStr, isDurationOk,
-  isOccurrence, isWeekday, minuteInTz, normalizeMeetUrl, parseRange, parseTime, weekdayOf, zonedToUtc,
+  isOccurrence, isWeekday, minuteInTz, normalizeMeetUrl, normalizeZoomRoomUrl, parseRange, parseTime, weekdayOf, zonedToUtc,
   type EventRow, type SeriesRow,
 } from '@/lib/classSchedule'
 
@@ -206,5 +206,18 @@ describe('parseRange', () => {
     expect(parseRange('nada', null, NOW, 35).ok).toBe(false)
     expect(parseRange('2026-11-01T00:00:00Z', '2026-10-01T00:00:00Z', NOW, 35).ok).toBe(false)
     expect(parseRange('2026-01-01T00:00:00Z', '2026-06-01T00:00:00Z', NOW, 35).ok).toBe(false)
+  })
+})
+
+describe('normalizeZoomRoomUrl — "Mi sala de Zoom": solo Zoom', () => {
+  it('acepta zoom.us y subdominios; vacío = sin sala', () => {
+    expect(normalizeZoomRoomUrl('https://us02web.zoom.us/j/8412345678?pwd=abc')).toEqual({ ok: true, url: 'https://us02web.zoom.us/j/8412345678?pwd=abc' })
+    expect(normalizeZoomRoomUrl('https://zoom.us/my/profe.juan')).toEqual({ ok: true, url: 'https://zoom.us/my/profe.juan' })
+    expect(normalizeZoomRoomUrl('')).toEqual({ ok: true, url: null })
+    expect(normalizeZoomRoomUrl(null)).toEqual({ ok: true, url: null })
+  })
+  it('rechaza Meet/Teams (no es una sala de Zoom) y todo lo inválido', () => {
+    for (const u of ['https://meet.google.com/abc', 'https://teams.microsoft.com/x', 'http://zoom.us/j/1', 'https://evilzoom.us/j/1', 'https://zoom.us.evil.com/j', 42])
+      expect(normalizeZoomRoomUrl(u), String(u)).toEqual({ ok: false })
   })
 })

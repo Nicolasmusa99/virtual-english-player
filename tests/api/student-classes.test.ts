@@ -4,10 +4,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const m = vi.hoisted(() => ({ auth: vi.fn(), getStudentById: vi.fn(), getSchedule: vi.fn() }))
+const m = vi.hoisted(() => ({ auth: vi.fn(), getStudentById: vi.fn(), getSchedule: vi.fn(), getZoomUrl: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ auth: m.auth }))
-vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById }))
-vi.mock('@/lib/classes', () => ({ getSchedule: m.getSchedule }))
+vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById, getZoomUrl: m.getZoomUrl }))
+vi.mock('@/lib/db', () => ({ db: {} }))
+vi.mock('@/lib/classes', async (orig) => ({ withRoomLink: (await orig<typeof import('@/lib/classes')>()).withRoomLink, getSchedule: m.getSchedule }))
 
 import { GET } from '@/app/api/student/classes/route'
 
@@ -24,6 +25,7 @@ beforeEach(() => {
   for (const f of Object.values(m)) f.mockReset()
   m.getStudentById.mockImplementation(async (id: string) => ({ id, role: 'alumno', teacherId: 'profe-1' }))
   m.getSchedule.mockResolvedValue([ITEM])
+  m.getZoomUrl.mockResolvedValue(null)
 })
 
 describe('GET /api/student/classes', () => {
@@ -94,5 +96,14 @@ describe('GET /api/student/classes', () => {
 
     expect((await GET(req('?from=2026-01-01T00:00:00Z&to=2026-12-01T00:00:00Z'))).status).toBe(400)
     expect((await GET(req('?from=nada'))).status).toBe(400)
+  })
+
+  it('clases sin link → "Mi sala de Zoom" de SU profe; con link propio, el suyo', async () => {
+    as(ST, 'alumno')
+    m.getZoomUrl.mockResolvedValue('https://us02web.zoom.us/j/8412345678')
+    m.getSchedule.mockResolvedValue([{ ...ITEM, key: 'a', meetUrl: null }, { ...ITEM, key: 'b' }])
+    const body = await (await GET(req())).json()
+    expect(m.getZoomUrl).toHaveBeenCalledWith('profe-1')
+    expect(body.classes.map((c: { meetUrl: string }) => c.meetUrl)).toEqual(['https://us02web.zoom.us/j/8412345678', ITEM.meetUrl])
   })
 })

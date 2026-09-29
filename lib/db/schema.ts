@@ -54,6 +54,9 @@ export const users = pgTable('user', {
   // NULL = sin profe asignado. El estado "sin profe activo" por impago se derivará
   // de la flag de pago del profesor (Fase de pagos); no se borra teacherId.
   teacherId: uuid('teacher_id').references((): AnyPgColumn => users.id, { onDelete: 'set null' }),
+  // Calendario (G0): "Mi sala de Zoom" del profe (su link personal). Las clases sin link
+  // propio usan este. NULL = no cargó ninguno. Solo https de zoom.us.
+  zoomUrl: text('zoom_url'),
 })
 
 export const accounts = pgTable(

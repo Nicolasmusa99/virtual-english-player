@@ -38,6 +38,17 @@ export async function getStudentById(id: string): Promise<{ id: string; role: Ro
   return row ?? null
 }
 
+// "Mi sala de Zoom" (calendario, G0). Solo la lee/escribe el propio usuario (la ruta
+// usa el id de la sesión) y la lee el calendario del alumno (la de SU profe).
+export async function getZoomUrl(userId: string): Promise<string | null> {
+  const [row] = await db.select({ zoomUrl: users.zoomUrl }).from(users).where(eq(users.id, userId))
+  return row?.zoomUrl ?? null
+}
+
+export async function setZoomUrl(userId: string, zoomUrl: string | null): Promise<void> {
+  await db.update(users).set({ zoomUrl }).where(eq(users.id, userId))
+}
+
 export async function insertUser(data: { email: string; role: Role; teacherId: string | null }): Promise<PublicUser> {
   const [row] = await db.insert(users).values(data).returning(PUBLIC_COLS)
   return row
