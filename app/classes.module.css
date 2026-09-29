@@ -1,0 +1,60 @@
+/* Calendario (C3) — sección "Clases" del profe en la pantalla de un alumno.
+   Vive dentro de .lightScope (page.module.css): todo el color sale de sus tokens. */
+
+.tc { display: flex; flex-direction: column; gap: 12px; }
+.tcHead { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
+.tcTitle { font-size: 15px; font-weight: 600; color: var(--tx); margin: 0; }
+.tcNote { font: 10.5px var(--font-mono); color: var(--tx3); }
+.tcSp { flex: 1; }
+.tcBox { border: 1px solid var(--ln2); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.tcBoxTitle { font: 10px var(--font-mono); letter-spacing: 0.6px; text-transform: uppercase; color: var(--tx3); }
+.tcFixed { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; color: var(--tx); }
+.tcFixed b { font-weight: 600; }
+.tcMeta { color: var(--tx2); }
+.tcPill { font: 10.5px var(--font-mono); color: var(--ac); background: var(--ac2); border: 1px solid var(--ac3); border-radius: 20px; padding: 1px 8px; white-space: nowrap; }
+
+.tcBtn { padding: 4px 10px; border-radius: 5px; font: 11px var(--font-sans); cursor: pointer; white-space: nowrap; min-height: 28px; transition: background 0.12s; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); }
+.tcBtn:hover { background: var(--p3); color: var(--tx); }
+.tcAccent { padding: 4px 10px; border-radius: 5px; font: 11px var(--font-sans); cursor: pointer; white-space: nowrap; min-height: 28px; transition: background 0.12s; border: 1px solid var(--ac3); background: var(--ac2); color: var(--ac); }
+.tcAccent:hover { background: var(--ac3); }
+.tcDanger { padding: 4px 10px; border-radius: 5px; font: 11px var(--font-sans); cursor: pointer; white-space: nowrap; min-height: 28px; transition: background 0.12s; border: 1px solid var(--rd3); background: transparent; color: var(--rd); }
+.tcDanger:hover { background: var(--rd2); }
+.tcBtn:disabled, .tcAccent:disabled, .tcDanger:disabled { opacity: 0.5; cursor: default; }
+.tcBtn:focus-visible, .tcAccent:focus-visible, .tcDanger:focus-visible, .tcPrimary:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+
+.tcRows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.tcRowWrap { border-top: 1px solid var(--ln); padding: 2px 0; }
+.tcRowWrap:first-child { border-top: 0; }
+.tcRow { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 7px 2px; font-size: 12.5px; }
+.tcWhen { min-width: 190px; color: var(--tx); }
+.tcD { font-weight: 600; }
+.tcH { color: var(--tx2); }
+.tcCanc .tcWhen, .tcCanc .tcD, .tcCanc .tcH { text-decoration: line-through; color: var(--tx3); }
+.tcToday { font: 9.5px var(--font-mono); color: #fff; background: var(--acDeep); border-radius: 20px; padding: 2px 8px; text-transform: uppercase; letter-spacing: 0.4px; }
+.tcKind { font: 9.5px var(--font-mono); letter-spacing: 0.4px; text-transform: uppercase; padding: 2px 8px; border-radius: 20px; white-space: nowrap; }
+.k_fija { background: var(--bl2); color: var(--bl); border: 1px solid var(--bl3); }
+.k_suelta { background: var(--gr2); color: var(--gr); border: 1px solid var(--gr3); }
+.k_movida { background: var(--ac2); color: var(--pu); border: 1px solid var(--ac3); }
+.k_cancelada { background: var(--rd2); color: var(--rd); border: 1px solid var(--rd3); }
+.tcWas { font-size: 11px; color: var(--tx3); }
+
+.tcForm { background: var(--p3); border: 1px solid var(--ac3); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin: 4px 0 8px; }
+.tcFormTitle { font-size: 12.5px; font-weight: 600; color: var(--tx); }
+.tcFields { display: flex; flex-wrap: wrap; gap: 10px; }
+.tcField { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--tx3); }
+.tcFieldWide { flex: 1 1 280px; }
+.tcInput { height: 32px; border: 1px solid var(--ln2); border-radius: 6px; background: var(--p1); color: var(--tx); font: 12.5px var(--font-sans); padding: 0 10px; min-width: 110px; }
+.tcInput:focus { outline: 2px solid var(--ac3); border-color: var(--ac); }
+.tcBtns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.tcPrimary { padding: 6px 14px; border-radius: 6px; border: 0; background: var(--acDeep); color: #fff; font: 500 12px var(--font-sans); cursor: pointer; min-height: 30px; }
+.tcPrimary:hover { background: var(--acDeepHover); }
+.tcPrimary:disabled { opacity: 0.6; cursor: wait; }
+.tcHint { font-size: 11px; color: var(--tx3); }
+.tcError { font-size: 12px; color: var(--rd); background: var(--rd2); border: 1px solid var(--rd3); border-radius: 8px; padding: 8px 12px; }
+
+@media (max-width: 640px) {
+  .tcWhen { min-width: 0; flex: 1 1 60%; }
+  .tcFieldWide { flex-basis: 100%; }
+  .tcInput { min-width: 0; width: 100%; }
+  .tcField { flex: 1 1 40%; }
+}

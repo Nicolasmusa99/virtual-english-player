@@ -1,5 +1,6 @@
 'use client'
-// Vista del ALUMNO (fase vista-alumno, E3): "Hola {nombre}" + su material + su player.
+// Vista del ALUMNO (fase vista-alumno, E3): "Hola {nombre}" + sus clases (calendario, C3)
+// + su material + su player.
 // Es un camino APARTE: page.tsx la muestra EN LUGAR de todo lo demás cuando el rol es
 // 'alumno', así que el alumno nunca llega a una pantalla del profe. Solo habla con
 // /api/student/** (el servidor scopea todo al alumno de la sesión).
@@ -8,6 +9,8 @@ import { signOut } from 'next-auth/react'
 import pageStyles from './page.module.css'
 import styles from './student.module.css'
 import StudentPlayer, { type StudentVideoData } from './StudentPlayer'
+import StudentClasses from './StudentClasses'
+import StudentMonth from './StudentMonth'
 import {
   assignedAgo, displayVideoName, durationLabel, firstName, levelLabel, typeLabel,
 } from '@/lib/studentView'
@@ -25,8 +28,9 @@ export type MaterialItem = {
 
 export const STUDENT_TEXTS = {
   hello: (name: string) => (name ? `Hola, ${name}` : 'Hola'),
-  intro: 'Este es el material que te asignó tu profe. Tocá un video para verlo.',
-  introEmpty: 'Este es el material que te asignó tu profe.',
+  intro: 'Tus clases y el material que te asignó tu profe. Tocá un video para verlo.',
+  introEmpty: 'Tus clases y el material que te asignó tu profe.',
+  material: 'Tu material',
   loading: 'Cargando tu material…',
   emptyTitle: 'Todavía no tenés material',
   emptySub: 'Cuando tu profe te asigne un video, lo vas a ver acá.',
@@ -63,6 +67,7 @@ export default function StudentApp({ name, email }: { name: string | null; email
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [playing, setPlaying] = useState<StudentVideoData | null>(null)
   const [notice, setNotice] = useState('')
+  const [monthOpen, setMonthOpen] = useState(false)
 
   // silent: refresco "por detrás" (tras un 404): la lista actual queda en pantalla
   // hasta que llega la nueva, sin el parpadeo de "Cargando…". Si ese refresco falla,
@@ -107,17 +112,34 @@ export default function StudentApp({ name, email }: { name: string | null; email
   const hello = STUDENT_TEXTS.hello(firstName(name, email))
   const hasItems = list.kind === 'ok' && list.items.length > 0
 
+  const header = (
+    <header className={styles.hBar}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img className={styles.hLogo} src="/logo-ve.jpeg" alt="Virtual English" />
+      <button type="button" className={styles.hOut} onClick={() => signOut()}>{STUDENT_TEXTS.signOut}</button>
+    </header>
+  )
+
+  if (monthOpen) {
+    return (
+      <div className={`${pageStyles.lightScope} ${styles.home}`}>
+        {header}
+        <main className={styles.hBody}><StudentMonth onBack={() => setMonthOpen(false)} /></main>
+      </div>
+    )
+  }
+
   return (
     <div className={`${pageStyles.lightScope} ${styles.home}`}>
-      <header className={styles.hBar}>
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img className={styles.hLogo} src="/logo-ve.jpeg" alt="Virtual English" />
-        <button type="button" className={styles.hOut} onClick={() => signOut()}>{STUDENT_TEXTS.signOut}</button>
-      </header>
+      {header}
 
       <main className={styles.hBody}>
         <h1 className={styles.hello}>{hello}</h1>
         <p className={styles.helloSub}>{hasItems ? STUDENT_TEXTS.intro : STUDENT_TEXTS.introEmpty}</p>
+
+        <StudentClasses onOpenMonth={() => setMonthOpen(true)} />
+
+        <h2 className={styles.sTitle}>{STUDENT_TEXTS.material}</h2>
 
         {notice && (
           <div role="alert" className={styles.notice}>
