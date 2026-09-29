@@ -1,5 +1,7 @@
 import {
   boolean,
+  date,
+  index,
   integer,
   jsonb,
   numeric,
@@ -8,6 +10,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uuid,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
@@ -164,4 +167,67 @@ export const assignments = pgTable(
     assignedAt: timestamp('assigned_at', { mode: 'date' }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.studentId, t.videoId] })]
+)
+
+// --- Calendario de clases (fase calendario, C1) ---
+// El profe agenda las clases de SUS alumnos. Dos tablas:
+//   · class_series: el HORARIO FIJO semanal ("martes 18:00, 60 min"). NO se guardan
+//     las clases una por una: las fechas se calculan en read-time (lib/classSchedule.ts)
+//     a partir de la serie + sus excepciones, así editar el horario no deja clases
+//     viejas colgadas. weekday/start_minute/starts_on/ends_on están en la hora de
+//     CLASS_TZ (Buenos Aires); los instantes reales se calculan de ahí.
+//   · class_events: las clases SUELTAS (series_id NULL) y las EXCEPCIONES de una serie
+//     (series_id + original_starts_at = qué martes reemplaza): cancelarlo o moverlo.
+//     Una excepción por ocurrencia (unique series_id + original_starts_at).
+// teacher_id = el profe de la clase. El alumno solo ve las de su profe ACTUAL
+// (users.teacher_id), igual que la "versión viva" de los subtítulos.
+// Todo en cascada: si se borra el profe, el alumno o la serie, sus clases se van.
+export const classStatus = pgEnum('class_status', ['scheduled', 'cancelled'])
+export type ClassStatus = (typeof classStatus.enumValues)[number]
+
+export const classSeries = pgTable(
+  'class_series',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    teacherId: uuid('teacher_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    weekday: integer('weekday').notNull(), // 0 = domingo … 6 = sábado
+    startMinute: integer('start_minute').notNull(), // minutos desde 00:00 (18:00 → 1080)
+    durationMin: integer('duration_min').notNull(),
+    startsOn: date('starts_on', { mode: 'string' }).notNull(), // 'YYYY-MM-DD', inclusive
+    endsOn: date('ends_on', { mode: 'string' }), // NULL = sin fin; inclusive
+    meetUrl: text('meet_url'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [index('class_series_student_teacher_idx').on(t.studentId, t.teacherId)]
+)
+
+export const classEvents = pgTable(
+  'class_events',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    teacherId: uuid('teacher_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    studentId: uuid('student_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    seriesId: uuid('series_id').references(() => classSeries.id, { onDelete: 'cascade' }),
+    originalStartsAt: timestamp('original_starts_at', { mode: 'date', withTimezone: true }),
+    startsAt: timestamp('starts_at', { mode: 'date', withTimezone: true }).notNull(),
+    durationMin: integer('duration_min').notNull(),
+    status: classStatus('status').notNull().default('scheduled'),
+    meetUrl: text('meet_url'),
+    createdBy: uuid('created_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [
+    unique('class_events_series_original_uq').on(t.seriesId, t.originalStartsAt),
+    index('class_events_student_teacher_starts_idx').on(t.studentId, t.teacherId, t.startsAt),
+  ]
 )
