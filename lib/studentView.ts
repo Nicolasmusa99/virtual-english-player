@@ -67,8 +67,23 @@ export function volumeBarsOn(v: number, bars = VOLUME_BARS): number {
   return Math.min(bars, Math.max(1, Math.round(v * bars)))
 }
 
-// Progreso 0..100 para la barra de tiempo (solo para mirar).
+// Progreso 0..100 para la barra de tiempo.
 export function progressPct(current: number, duration: number): number {
   if (!(duration > 0) || !Number.isFinite(current)) return 0
   return Math.min(100, Math.max(0, (current / duration) * 100))
+}
+
+// Barra de tiempo: dónde tocó el alumno (x en pantalla) → segundo del video.
+// Fuera de la barra se clava en 0 / el final. Sin duración conocida → null (no salta).
+export function timeAtX(clientX: number, left: number, width: number, duration: number): number | null {
+  if (!(duration > 0) || !(width > 0) || !Number.isFinite(clientX)) return null
+  const frac = Math.min(1, Math.max(0, (clientX - left) / width))
+  return frac * duration
+}
+
+// Flechas ← → sobre la barra: 5 segundos para atrás / adelante, sin salirse del video.
+export const SEEK_STEP = 5
+export function stepSeek(t: number, dir: 1 | -1, duration: number): number {
+  if (!(duration > 0)) return 0
+  return Math.min(duration, Math.max(0, t + dir * SEEK_STEP))
 }

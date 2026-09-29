@@ -5,7 +5,7 @@ vi.mock('@/lib/db', () => ({ db: {} })) // el import de tipos arrastra lib/assig
 
 import {
   assignedAgo, displayVideoName, durationLabel, firstName, levelLabel, phraseAt,
-  progressPct, stepVolume, typeLabel, volumeBarsOn, VOLUME_BARS,
+  progressPct, SEEK_STEP, stepSeek, stepVolume, timeAtX, typeLabel, volumeBarsOn, VOLUME_BARS,
 } from '@/lib/studentView'
 
 describe('firstName', () => {
@@ -96,5 +96,32 @@ describe('progressPct', () => {
     expect(progressPct(200, 120)).toBe(100)
     expect(progressPct(10, 0)).toBe(0)
     expect(progressPct(NaN, 100)).toBe(0)
+  })
+})
+
+describe('timeAtX — tocar la barra de tiempo', () => {
+  it('la posición del toque dentro de la barra → segundo del video', () => {
+    expect(timeAtX(100, 100, 400, 200)).toBe(0)
+    expect(timeAtX(300, 100, 400, 200)).toBe(100)
+    expect(timeAtX(500, 100, 400, 200)).toBe(200)
+  })
+  it('fuera de la barra se clava en 0 / el final', () => {
+    expect(timeAtX(40, 100, 400, 200)).toBe(0)
+    expect(timeAtX(900, 100, 400, 200)).toBe(200)
+  })
+  it('sin duración o sin ancho → null (no salta)', () => {
+    expect(timeAtX(300, 100, 400, 0)).toBeNull()
+    expect(timeAtX(300, 100, 0, 200)).toBeNull()
+    expect(timeAtX(NaN, 100, 400, 200)).toBeNull()
+  })
+})
+
+describe('stepSeek — flechas sobre la barra', () => {
+  it(`±${SEEK_STEP} s sin salirse del video`, () => {
+    expect(stepSeek(10, 1, 60)).toBe(15)
+    expect(stepSeek(10, -1, 60)).toBe(5)
+    expect(stepSeek(2, -1, 60)).toBe(0)
+    expect(stepSeek(58, 1, 60)).toBe(60)
+    expect(stepSeek(10, 1, 0)).toBe(0)
   })
 })

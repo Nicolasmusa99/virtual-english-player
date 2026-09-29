@@ -45,10 +45,14 @@
 .subBox { background: rgba(0, 0, 0, 0.82); padding: 10px 28px 12px; border-radius: 4px; font-size: clamp(16px, 2.2vw, 26px); color: #fff; line-height: 1.55; text-align: center; max-width: 900px; letter-spacing: 0.02em; text-shadow: 0 1px 4px rgba(0, 0, 0, 0.8); }
 .pError { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); max-width: 80%; background: rgba(0, 0, 0, 0.75); border: 1px solid var(--rd3); color: var(--tx); padding: 12px 16px; border-radius: 8px; font-size: 14px; text-align: center; z-index: 3; }
 
-/* Barra de tiempo: SOLO para mirar (no se puede adelantar). */
-.timeRow { display: flex; align-items: center; gap: 12px; padding: 10px 18px 0; flex-shrink: 0; font: 11px var(--font-mono); color: var(--tx3); }
-.track { flex: 1; height: 4px; border-radius: 2px; background: var(--p4); overflow: hidden; }
-.fill { height: 100%; background: var(--ac); border-radius: 2px; }
+/* Barra de tiempo: se toca o se arrastra para ir a otro momento. El área que responde
+   (.seek, 28 px) es más alta que la línea visible (.track, 6 px): fácil con el dedo. */
+.timeRow { display: flex; align-items: center; gap: 12px; padding: 6px 18px 0; flex-shrink: 0; font: 11px var(--font-mono); color: var(--tx3); }
+.seek { flex: 1; height: 28px; display: flex; align-items: center; cursor: pointer; touch-action: none; outline: none; }
+.track { position: relative; width: 100%; height: 6px; border-radius: 3px; background: var(--p4); }
+.fill { height: 100%; background: var(--ac); border-radius: 3px; }
+.thumb { position: absolute; top: 50%; width: 16px; height: 16px; border-radius: 50%; background: var(--tx); border: 3px solid var(--ac); box-sizing: border-box; transform: translate(-50%, -50%); pointer-events: none; }
+.seek:focus-visible .thumb { outline: 2px solid var(--ac); outline-offset: 2px; }
 
 .ctrls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 22px; padding: 12px 18px 16px; }
 /* Cada control en una grilla: arriba un lugar FIJO de 60 px (el alto del botón más
@@ -70,6 +74,10 @@
 .meter { display: flex; gap: 3px; align-items: flex-end; height: 22px; }
 .bar { width: 5px; border-radius: 2px; background: var(--p4); }
 .barOn { background: var(--bl); }
+/* CC: prendido = celeste de marca; apagado = igual que los otros botones. */
+.ccBtn { font: 500 14px var(--font-mono); }
+.ccOn { background: var(--ac2); border-color: var(--ac); color: var(--ac); }
+.ccOn:hover { background: var(--ac3); }
 
 /* ═════ Celular ═════ */
 @media (max-width: 640px) {
@@ -81,8 +89,8 @@
   .go { display: none; }
   .pStage { flex: 0 0 auto; aspect-ratio: 16 / 9; }
   .subBox { font-size: 15px; padding: 6px 12px 8px; }
-  .timeRow { padding: 12px 16px 0; }
+  .timeRow { padding: 8px 16px 0; }
   .ctrls { flex-wrap: wrap; gap: 14px; padding: 14px 10px 20px; }
   .sep { display: none; }
-  .volGrp { flex-basis: 100%; }
+  .volGrp { flex-basis: 100%; order: 1; } /* celu: play · stop · CC arriba, volumen abajo */
 }
