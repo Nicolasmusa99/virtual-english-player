@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { hl } from '@/lib/hl'
 import { StageChannel } from '@/lib/stageChannel'
-import { sharedVoiceBoost } from '@/lib/voiceBoost'
+import { sharedVoiceBoost, isOff, type EqSetting } from '@/lib/voiceBoost'
 
 // US-037 / US-038: Stage view — video + subtitle overlay only. No controls.
 // Receives PanelCmd via BroadcastChannel; emits timeupdate back to panel.
@@ -19,16 +19,16 @@ export default function Stage() {
     const ch = new StageChannel()
     channelRef.current = ch
 
-    // "Voces más claras": con el stage abierto el audio sale de ACÁ, así que el
+    // "Sonido" (ecualizador): con el stage abierto el audio sale de ACÁ, así que el
     // ecualizador se aplica sobre este <video> y se le contesta al panel si se pudo.
     // Si el navegador no dejó arrancar el audio sin gesto, un clic en esta ventana
     // reintenta (lib/voiceBoost.ts: nunca engancha con el audio dormido).
     let alive = true
     const vb = sharedVoiceBoost()
-    const applyVoice = (amount: number) =>
-      vb.set(amount).then(status => { if (alive) ch.send({ type: 'voice_boost_status', status }) })
+    const applyVoice = (eq: EqSetting) =>
+      vb.set(eq).then(status => { if (alive) ch.send({ type: 'voice_boost_status', status }) })
     vb.attach(vidRef.current)
-    const retryVoice = () => { if (vb.amount > 0) applyVoice(vb.amount) }
+    const retryVoice = () => { if (!isOff(vb.eq)) applyVoice(vb.eq) }
     window.addEventListener('pointerdown', retryVoice)
 
     const unsub = ch.onMessage(msg => {
@@ -64,7 +64,7 @@ export default function Stage() {
           setSubText(msg.text)
           setSubVisible(msg.visible)
           break
-        case 'voice_boost': applyVoice(msg.amount); break
+        case 'voice_boost': applyVoice(msg.eq); break
         case 'close':   window.close(); break
       }
     })
@@ -76,6 +76,10 @@ export default function Stage() {
       ch.send({ type: 'timeupdate', currentTime: vid.currentTime, duration: vid.duration, isPlaying: !vid.paused })
     }
     v?.addEventListener('timeupdate', onTU)
+    // P1: la duración apenas se conoce (sin esto la barra del panel no andaba hasta dar
+    // play) y la pausa al toque (la barra del panel deja de avanzar sola).
+    v?.addEventListener('loadedmetadata', onTU)
+    v?.addEventListener('pause', onTU)
     ch.send({ type: 'ready' })   // FIX 3: signal panel to send load_blob (no setTimeout race)
 
     return () => {
@@ -83,6 +87,8 @@ export default function Stage() {
       window.removeEventListener('pointerdown', retryVoice)
       unsub()
       v?.removeEventListener('timeupdate', onTU)
+      v?.removeEventListener('loadedmetadata', onTU)
+      v?.removeEventListener('pause', onTU)
       ch.send({ type: 'closed' })
       ch.close()
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)

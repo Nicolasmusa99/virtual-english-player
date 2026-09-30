@@ -1,38 +1,79 @@
 'use client'
-// "Voces más claras" — barra del player que realza los diálogos sobre la música de
-// fondo. Todo en el navegador (lib/voiceBoost.ts). NO se guarda: es del momento.
-// Con el stage abierto el audio sale de ESA ventana: el valor se le manda al stage
-// (lib/voiceBoostStage.ts, que sigue vivo aunque esta barra se desmonte al pasar a
+// "Sonido" (P2 + P3) — ajustes rápidos (Original / Voces claras / Voces muy claras),
+// "Filtro de voz" (IA gratis, aparte: se combina con cualquier ajuste) y "Ajuste
+// manual" con 3 barras: Graves / Medios (voz) / Agudos. Todo en el navegador
+// (lib/voiceBoost.ts, con limitador para que nada sature) y se RECUERDA en este
+// navegador para el próximo video.
+// Con el stage abierto el audio sale de ESA ventana: el ajuste se le manda al stage
+// (lib/voiceBoostStage.ts, que sigue vivo aunque esta sección se desmonte al pasar a
 // Ejercicios), y el stage contesta si pudo aplicarlo.
-import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react'
+import { useEffect, useId, useRef, useState, type CSSProperties, type RefObject } from 'react'
 import styles from './VoiceBoostControl.module.css'
 import { sharedVoiceBoostStageLink } from '@/lib/voiceBoostStage'
-import { sharedVoiceBoost, voiceBoostLabel, type VoiceBoostStatus } from '@/lib/voiceBoost'
+import {
+  sharedVoiceBoost, saveEq, presetOf, clampEq, isOff,
+  EQ_PRESETS, EQ_PRESET_ORDER, EQ_MIN_DB, EQ_MAX_DB,
+  type EqPreset, type EqSetting, type VoiceBoostStatus,
+} from '@/lib/voiceBoost'
 
-export const VOICE_BOOST_TEXTS = {
-  label: 'Voces más claras',
-  desc: 'Resalta los diálogos sobre la música',
-  tooltip: 'Resalta las voces y baja un poco la música de fondo, para que los diálogos se entiendan mejor. No es otro volumen. A la izquierda: audio original.',
-  off: 'apagar',
-  unavailable: 'El navegador no dejó activarlo. Probá mover la barra de nuevo.',
+export const SOUND_TEXTS = {
+  title: 'Sonido',
+  presets: { original: 'Original', clear: 'Voces claras', veryClear: 'Voces muy claras' } satisfies Record<EqPreset, string>,
+  custom: 'Personalizado',
+  denoise: 'Filtro de voz',
+  denoiseTag: 'IA',
+  denoiseDesc: 'Baja la música y los ruidos que no son voz',
+  withDenoise: ' + filtro',
+  denoiseUnavailable: 'El filtro de voz no está disponible en este navegador; el resto del sonido sí se aplica.',
+  manual: 'Ajuste manual',
+  bands: [
+    { key: 'low', name: 'Graves', hint: 'música, golpes' },
+    { key: 'mid', name: 'Medios', hint: 'la voz' },
+    { key: 'high', name: 'Agudos', hint: 'platillos, siseo' },
+  ] as const,
+  limiter: 'Sin saturar (limitador)',
+  reset: 'Volver a Original',
+  unavailable: 'El navegador no dejó activarlo. Probá elegirlo de nuevo.',
   stageUnavailable: 'Hacé un clic en la ventana del stage para activarlo.',
 } as const
+
+// "−10 dB", "+3 dB", "0 dB" (signo menos tipográfico).
+export function fmtDb(db: number): string {
+  return (db > 0 ? '+' : db < 0 ? '−' : '') + Math.abs(db) + ' dB'
+}
+// Posición en % de un valor dentro de la barra [EQ_MIN_DB, EQ_MAX_DB].
+const pos = (db: number) => ((db - EQ_MIN_DB) / (EQ_MAX_DB - EQ_MIN_DB)) * 100
 
 type Props = { videoRef: RefObject<HTMLVideoElement | null>; stageOpen: boolean }
 
 export default function VoiceBoostControl({ videoRef, stageOpen }: Props) {
   const vb = sharedVoiceBoost()
-  const [amount, setAmount] = useState(() => vb.amount)
+  const [eq, setEq] = useState<EqSetting>(() => vb.eq)
+  const [open, setOpen] = useState(false)
   const [status, setStatus] = useState<VoiceBoostStatus>('off')
   const [stageStatus, setStageStatus] = useState<VoiceBoostStatus>('off')
-  const seqRef = useRef(0) // solo cuenta la respuesta del último movimiento
+  const seqRef = useRef(0) // solo cuenta la respuesta del último cambio
+  const eqId = useId()
 
-  // El <video> del panel: si la barra ya estaba arriba (volvió al player), se engancha.
+  // El <video> del panel: si hay ajuste (elegido o recordado), se engancha.
   useEffect(() => {
     let alive = true
     vb.attach(videoRef.current).then(s => { if (alive) setStatus(s) })
     return () => { alive = false; vb.attach(null) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Ajuste recordado: el navegador no deja arrancar el audio sin un gesto, así que se
+  // aplica con el primer clic o tecla (p. ej. el play) en cualquier parte de la página.
+  useEffect(() => {
+    if (status !== 'pending') return
+    const onGesture = () => { apply(vb.eq) }
+    window.addEventListener('pointerdown', onGesture, { capture: true, once: true })
+    window.addEventListener('keydown', onGesture, { capture: true, once: true })
+    return () => {
+      window.removeEventListener('pointerdown', onGesture, { capture: true })
+      window.removeEventListener('keydown', onGesture, { capture: true })
+    }
+  }, [status]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lo que contestó el stage (el enlace se crea acá, en el navegador, no en el server).
   useEffect(() => {
@@ -41,44 +82,100 @@ export default function VoiceBoostControl({ videoRef, stageOpen }: Props) {
     return link.subscribe(setStageStatus)
   }, [])
 
-  function change(next: number) {
-    setAmount(next)
+  function apply(next: EqSetting) {
     const seq = ++seqRef.current
     vb.set(next).then(s => { if (seq === seqRef.current) setStatus(s) }) // dentro del gesto
-    sharedVoiceBoostStageLink().send(next)
   }
 
-  // El nivel se ve en la barra (más llena / más vacía); en palabras solo para lectores de pantalla.
-  const label = voiceBoostLabel(amount)
-  const on = amount > 0
+  function change(next: EqSetting) {
+    const e = clampEq(next)
+    setEq(e)
+    apply(e)
+    sharedVoiceBoostStageLink().send(e)
+    saveEq(e)
+  }
+
+  // Los ajustes rápidos cambian las bandas; el filtro de voz queda como estaba.
+  function choose(p: EqPreset) {
+    change({ ...EQ_PRESETS[p], denoise: eq.denoise })
+    setOpen(false) // elegido un ajuste rápido, el manual se cierra (deja lugar a la lista)
+  }
+
+  const preset = presetOf(eq)
+  const stateLabel = (preset ? SOUND_TEXTS.presets[preset] : SOUND_TEXTS.custom) + (eq.denoise ? SOUND_TEXTS.withDenoise : '')
+  const on = !isOff(eq)
+  const shown = stageOpen ? stageStatus : status
   const hint =
-    amount === 0 ? null
-    : stageOpen ? (stageStatus === 'unavailable' ? VOICE_BOOST_TEXTS.stageUnavailable : null)
-    : (status === 'unavailable' ? VOICE_BOOST_TEXTS.unavailable : null)
+    !on ? null
+    : shown === 'partial' ? SOUND_TEXTS.denoiseUnavailable
+    : shown === 'unavailable' ? (stageOpen ? SOUND_TEXTS.stageUnavailable : SOUND_TEXTS.unavailable)
+    : null
 
   return (
     <div className={styles.section}>
-      <div className={`${styles.card} ${on ? styles.cardOn : ''}`} title={VOICE_BOOST_TEXTS.tooltip}>
-        <div className={styles.head}>
-          <span className={styles.icon} aria-hidden="true">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z" /><path d="M19 10v2a7 7 0 0 1-14 0v-2" /><line x1="12" y1="19" x2="12" y2="22" />
-            </svg>
-          </span>
-          <span className={styles.title}>{VOICE_BOOST_TEXTS.label}</span>
-          <span className={styles.desc}>{VOICE_BOOST_TEXTS.desc}</span>
-          <button type="button" className={`${styles.off} ${on ? '' : styles.offHidden}`}
-            onClick={() => change(0)} tabIndex={on ? 0 : -1} aria-hidden={!on}>
-            {VOICE_BOOST_TEXTS.off}
-          </button>
-        </div>
-        <input type="range" className={`${styles.range} ${on ? '' : styles.rangeZero}`}
-          min={0} max={100} step={1} value={amount}
-          style={{ '--pct': amount + '%' } as CSSProperties}
-          aria-label={VOICE_BOOST_TEXTS.label} aria-valuetext={label}
-          onChange={e => change(+e.target.value)} />
-        {hint && <div role="status" className={styles.hint}>{hint}</div>}
+      <div className={styles.head}>
+        <span className={styles.title}>{SOUND_TEXTS.title}</span>
+        <span className={`${styles.state} ${on ? styles.stateOn : ''}`} data-testid="sound-state">{stateLabel}</span>
       </div>
+
+      <div className={styles.presets} role="group" aria-label={SOUND_TEXTS.title}>
+        {EQ_PRESET_ORDER.map(p => (
+          <button key={p} type="button" aria-pressed={preset === p}
+            className={`${styles.preset} ${preset === p ? styles.presetOn : ''}`}
+            onClick={() => choose(p)}>
+            {SOUND_TEXTS.presets[p]}
+          </button>
+        ))}
+      </div>
+
+      <button type="button" role="switch" aria-checked={eq.denoise}
+        className={`${styles.denoise} ${eq.denoise ? styles.denoiseOn : ''}`}
+        onClick={() => change({ ...eq, denoise: !eq.denoise })}>
+        <span className={styles.dnText}>
+          <span className={styles.dnTitle}>{SOUND_TEXTS.denoise}<em>{SOUND_TEXTS.denoiseTag}</em></span>
+          <span className={styles.dnDesc}>{SOUND_TEXTS.denoiseDesc}</span>
+        </span>
+        <span className={styles.switch} aria-hidden="true"><i /></span>
+      </button>
+
+      <button type="button" className={`${styles.manualTog} ${open ? styles.manualOpen : ''}`}
+        aria-expanded={open} aria-controls={eqId} onClick={() => setOpen(o => !o)}>
+        <span className={styles.caret} aria-hidden="true">▶</span>{SOUND_TEXTS.manual}
+      </button>
+
+      {open && (
+        <div id={eqId} className={styles.eq}>
+          {SOUND_TEXTS.bands.map((b, i) => {
+            const v = eq[b.key]
+            const lo = Math.min(pos(v), pos(0)), hi = Math.max(pos(v), pos(0))
+            const sign = v > 0 ? styles.up : v < 0 ? styles.down : ''
+            return (
+              <div key={b.key} className={styles.band}>
+                <div className={styles.bTop}>
+                  <label htmlFor={`${eqId}-${b.key}`} className={styles.bName}>{b.name}<small>{b.hint}</small></label>
+                  <span className={`${styles.bVal} ${sign}`}>{fmtDb(v)}</span>
+                </div>
+                <input id={`${eqId}-${b.key}`} type="range" className={`${styles.range} ${sign}`}
+                  min={EQ_MIN_DB} max={EQ_MAX_DB} step={1} value={v}
+                  aria-valuetext={fmtDb(v)}
+                  style={{ '--lo': lo + '%', '--hi': hi + '%', '--zero': pos(0) + '%' } as CSSProperties}
+                  onChange={e => change({ ...eq, [b.key]: +e.target.value })} />
+                {i === SOUND_TEXTS.bands.length - 1 && (
+                  <div className={styles.scale} aria-hidden="true">
+                    <span style={{ left: '0%' }}>−24</span><span style={{ left: pos(0) + '%' }}>0</span><span style={{ left: '100%' }}>+12</span>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+          <div className={styles.foot}>
+            <span className={styles.lim}><i aria-hidden="true" />{SOUND_TEXTS.limiter}</span>
+            <button type="button" className={styles.reset} onClick={() => choose('original')}>{SOUND_TEXTS.reset}</button>
+          </div>
+        </div>
+      )}
+
+      {hint && <div role="status" className={styles.hint}>{hint}</div>}
     </div>
   )
 }

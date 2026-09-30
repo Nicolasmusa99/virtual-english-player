@@ -1,6 +1,6 @@
 // Bloque F — US-035: salto directo desde tick del progress bar
 // TC-081: click en tick[idx] → jumpTo(idx) → seek al stage con time = phrase.start + 0.05
-// TC-082: click en el track fuera de ticks → scrub proporcional intacto (comportamiento actual)
+// TC-082: tocar el track fuera de ticks → salto proporcional (P1: pointer events)
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, act, fireEvent } from '@testing-library/react'
@@ -58,6 +58,11 @@ describe('US-035 — salto directo desde tick del progress bar', () => {
 
     const { mockStage, panelCmds } = await openStageWithMock(container)
     _mockStage = mockStage
+    // P1: las marcas se dibujan cuando se conoce la duración (la manda el stage).
+    await act(async () => {
+      mockStage.send({ type: 'timeupdate', currentTime: 0, duration: 200, isPlaying: false })
+      await tick(50)
+    })
     panelCmds.length = 0
 
     // ROJO: data-phrase-idx no existe todavía en los ticks
@@ -103,8 +108,10 @@ describe('US-035 — salto directo desde tick del progress bar', () => {
 
     // Click en el centro del track (clientX=200, fuera de los ticks de phrase 0 y 1)
     // pct = 200/400 = 0.5 → seek time = 0.5 * 200 = 100
+    // P1: la barra se toca/arrastra con pointer events (antes era un click).
     await act(async () => {
-      fireEvent.click(track!, { clientX: 200 })
+      fireEvent.pointerDown(track!, { clientX: 200, pointerId: 1 })
+      fireEvent.pointerUp(track!, { clientX: 200, pointerId: 1 })
       await tick(50)
     })
 

@@ -1,0 +1,3 @@
+# Filtro de voz: archivos de terceros que se sirven tal cual (el test
+# tests/lib/rnnoise-assets.test.ts los compara byte a byte con el paquete instalado).
+public/audio/rnnoise/** -text

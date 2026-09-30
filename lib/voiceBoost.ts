@@ -1,91 +1,131 @@
-// "Voces más claras" — ecualizador que REALZA los diálogos sobre la música/ruido de
-// fondo. Todo en el navegador (Web Audio), sin servidor y sin guardar nada.
+// "Sonido" (P2 + P3) — ecualizador de 3 bandas (Graves / Medios (voz) / Agudos) +
+// limitador, y un FILTRO DE VOZ opcional (RNNoise, inteligencia artificial gratis y
+// libre) que baja la música y los ruidos que no son voz. Todo en el navegador
+// (Web Audio), sin servidor. El ajuste se recuerda en este navegador (loadEq/saveEq).
 //
-// Cadena:  <video> → graves (lowshelf) → voz (peaking) → agudos (highshelf) → compensación → parlantes
+// Cadena:  <video> → [filtro de voz] → graves (lowshelf) → voz (peaking) → agudos (highshelf)
+//                  → compensación → limitador → parlantes
 //
 // Reglas de seguridad del audio:
-//   · Mientras la barra NUNCA se movió no se toca nada: el audio sale por el camino
-//     nativo del navegador, idéntico bit a bit.
+//   · Mientras el ajuste NUNCA dejó de ser "apagado" (Original sin filtro) no se toca
+//     nada: el audio sale por el camino nativo del navegador, idéntico bit a bit.
 //   · REGLA DE ORO: el <video> se engancha a Web Audio SOLO si el AudioContext ya
 //     está andando ('running'). Engancharlo con el contexto dormido lo dejaría mudo;
 //     si no se puede, el audio sigue por el camino normal. Nunca silencio.
 //   · Solo se enganchan <video> con crossOrigin="anonymous": un video de otro origen
 //     sin CORS entregaría SILENCIO a Web Audio (verificado en vivo con un video de
 //     Vercel Blob: sin crossOrigin, RMS 0).
-//   · En 0 (después del primer uso) los filtros quedan FUERA del circuito:
-//     video → parlantes directo. Un <video> enganchado no puede volver al camino
-//     nativo (limitación del navegador), por eso "bit a bit" vale hasta el primer uso.
+//   · Apagado (después del primer uso) todo queda FUERA del circuito: video →
+//     parlantes directo. Un <video> enganchado no puede volver al camino nativo
+//     (limitación del navegador), por eso "bit a bit" vale hasta el primer uso.
 //   · El volumen del <video> sigue actuando después de engancharlo (verificado en
 //     vivo: volume 0.25 → 0.261 del nivel).
+//   · Un ajuste recordado (de otra vez) NO crea el AudioContext solo: queda 'pending'
+//     hasta el primer gesto del usuario (el navegador no deja arrancar audio sin gesto).
+//   · El filtro de voz se baja recién la primera vez que se prende. Mientras carga,
+//     o si el navegador no puede usarlo, suena el ecualizador SIN el filtro ('partial').
 
-export const VOICE_BOOST_MAX = 100
-
-// ═══════════════════════════════════════════════════════════════════════════
-//  TABLA DEL EFECTO — acá se afina de oído. Son los ÚNICOS números a tocar.
-//  Los tests (tests/lib/voiceBoost.test.ts) calculan la curva real de estos
-//  filtros y FALLAN si algún punto queda por encima de 0 dB (riesgo de saturar).
-//
-//  Tabla "A" (2026-09-28), medida en Chrome con audio real mezclado fuerte
-//  (picos originales a −0,5 dBFS): 0 muestras saturadas al máximo. Respuesta al
-//  máximo: 100 Hz −17,8 · 500 Hz −2,6 · 1 kHz −1,6 · 2 kHz −0,6 · 8 kHz −11,1
-//  · 12 kHz −15,4 dB → contraste voz/fondo ~15–16 dB (la tabla anterior: ~9–10).
-//  Por qué NO se sube más la voz: con videos mezclados fuerte, cualquier
-//  realce pasa de 0 dBFS y cruje (medido: +7 dB de voz → 281 muestras
-//  saturadas). Para subirla sin saturar haría falta un limitador (otra fase).
-// ═══════════════════════════════════════════════════════════════════════════
-
-// Dónde actúa cada filtro. Los cortes están corridos hacia afuera (150 Hz y
-// 7 kHz) para que un recorte fuerte no se coma la base de la voz (300 Hz–1 kHz):
-// con el corte en 250 Hz, −20 dB dejaba 300 Hz en −11 dB (voz "de teléfono").
+// Dónde actúa cada banda. Los cortes están corridos hacia afuera (150 Hz y 7 kHz)
+// para que un recorte fuerte no se coma la base de la voz (300 Hz–1 kHz): con el
+// corte en 250 Hz, −20 dB dejaba 300 Hz en −11 dB (voz "de teléfono").
 export const VOICE_BOOST_FREQS = {
-  lowShelfHz: 150,   // debajo: graves de la música / ruido
-  voiceHz: 2000,     // centro de la zona de inteligibilidad de la voz (~1–4 kHz)
-  voiceQ: 0.7,       // ancho del realce de voz (más chico = más ancho)
-  highShelfHz: 7000, // arriba: platillos, siseo
+  lowShelfHz: 150,   // Graves: música de abajo, golpes
+  voiceHz: 2000,     // Medios: centro de la zona de inteligibilidad de la voz (~1–4 kHz)
+  voiceQ: 0.7,       // ancho de la banda de voz (más chico = más ancho)
+  highShelfHz: 7000, // Agudos: platillos, siseo
 } as const
 
-// Cuánto hace cada filtro con la barra al MÁXIMO (dB). En el medio, proporcional
-// (lineal en dB, que ya es una escala de oído).
-export const VOICE_BOOST_MAX_DB = {
-  low: -20,   // graves: cuánto baja la música de abajo
-  voice: 2,   // voz: realce chico en ~2 kHz (más = riesgo de saturar)
-  high: -14,  // agudos: cuánto baja lo de arriba
-  trim: -2.5, // compensación: margen para que nada pase de 0 dB
+// Rango de cada barra (dB). 0 = sin cambio.
+export const EQ_MIN_DB = -24
+export const EQ_MAX_DB = 12
+
+export type EqBands = { low: number; mid: number; high: number }
+export type EqSetting = EqBands & { denoise: boolean }
+export const EQ_FLAT: EqSetting = { low: 0, mid: 0, high: 0, denoise: false }
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  AJUSTES RÁPIDOS (solo las bandas; el filtro de voz va aparte) — se afinan de oído acá.
+//  "Voces muy claras" ≈ la tabla "A" de antes (−20 / +2 / −14) pero con la voz en
+//  +6: se puede gracias al limitador (antes +7 dB de voz daba 281 muestras saturadas).
+// ═══════════════════════════════════════════════════════════════════════════
+export const EQ_PRESETS = {
+  original: { low: 0, mid: 0, high: 0 },
+  clear: { low: -10, mid: 3, high: -7 },
+  veryClear: { low: -20, mid: 6, high: -14 },
+} as const satisfies Record<string, EqBands>
+export type EqPreset = keyof typeof EQ_PRESETS
+export const EQ_PRESET_ORDER: EqPreset[] = ['original', 'clear', 'veryClear']
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  LIMITADOR + COMPENSACIÓN — medidos en Chrome (OfflineAudioContext) con el audio
+//  real de un comercial mezclado fuerte (picos a −0,5 dBFS), 2026-09-30:
+//    sin limitador: "Voces muy claras" 30 muestras saturadas, todo +12 → 371.
+//    con esto:      0 saturadas en TODOS los casos (presets, cada banda en +12,
+//                   todo en +12, todo en −24); pico máximo −0,3 dBFS.
+//  Umbral −1 dB dejaba escapar hasta 21 muestras: por eso −4 y ataque 0.
+//  El compresor del navegador suma algo de volumen propio (~+1 dB): no pasa de 0 dBFS.
+// ═══════════════════════════════════════════════════════════════════════════
+export const EQ_LIMITER = { thresholdDb: -4, kneeDb: 0, ratio: 20, attackS: 0, releaseS: 0.15 } as const
+// Compensación: se baja todo la MITAD del mayor realce (el resto lo ataja el limitador).
+export const EQ_TRIM_PER_BOOST = 0.5
+
+// ═══════════════════════════════════════════════════════════════════════════
+//  FILTRO DE VOZ — RNNoise (xiph, BSD-3) vía @sapphi-red/web-noise-suppressor (MIT).
+//  Probado de oído por el dueño (2026-09-30, "receta D"): Voces muy claras + RNNoise.
+//  Sus archivos van copiados en public/audio/rnnoise (tests/lib/rnnoise-assets.test.ts
+//  controla que sean los de la versión instalada; al actualizar el paquete, copiar
+//  dist/rnnoise/workletProcessor.js → rnnoiseWorklet.js y dist/rnnoise*.wasm).
+//  Trabaja SOLO a 48 kHz: por eso el AudioContext se crea a 48 kHz (el navegador
+//  convierte el audio del video solo).
+// ═══════════════════════════════════════════════════════════════════════════
+export const DENOISE_SAMPLE_RATE = 48000
+export const DENOISE_ASSETS = {
+  worklet: '/audio/rnnoise/rnnoiseWorklet.js',
+  wasm: '/audio/rnnoise/rnnoise.wasm',
+  simd: '/audio/rnnoise/rnnoise_simd.wasm',
 } as const
+
+const clampDb = (v: unknown): number => {
+  const n = typeof v === 'number' ? v : Number(v)
+  if (!Number.isFinite(n)) return 0
+  // `+ 0` convierte un -0 en 0.
+  return Math.min(EQ_MAX_DB, Math.max(EQ_MIN_DB, Math.round(n))) + 0
+}
+
+// Acota a enteros dentro de [EQ_MIN_DB, EQ_MAX_DB]; lo que no es número → 0.
+// El filtro de voz solo se prende con un `true` explícito.
+export function clampEq(s: unknown): EqSetting {
+  const o = (s && typeof s === 'object' ? s : {}) as Record<string, unknown>
+  return { low: clampDb(o.low), mid: clampDb(o.mid), high: clampDb(o.high), denoise: o.denoise === true }
+}
+
+// Bandas en 0 (el filtro de voz no cuenta).
+export const isFlat = (s: EqBands) => s.low === 0 && s.mid === 0 && s.high === 0
+// Todo apagado: bandas en 0 y sin filtro de voz → nada en el circuito.
+export const isOff = (s: EqSetting) => isFlat(s) && !s.denoise
+export const sameEq = (a: EqBands, b: EqBands) => a.low === b.low && a.mid === b.mid && a.high === b.high
+
+// Qué ajuste rápido tienen las bandas (o null = "Personalizado").
+export function presetOf(s: EqBands): EqPreset | null {
+  return EQ_PRESET_ORDER.find(k => sameEq(EQ_PRESETS[k], s)) ?? null
+}
 
 export type VoiceBoostBands = { lowDb: number; voiceDb: number; highDb: number; trimDb: number }
 
-export function clampVoiceBoost(amount: number): number {
-  if (!Number.isFinite(amount)) return 0
-  return Math.min(VOICE_BOOST_MAX, Math.max(0, Math.round(amount)))
+export function eqBands(s: EqBands): VoiceBoostBands {
+  const e = clampEq(s)
+  const boost = Math.max(0, e.low, e.mid, e.high)
+  return { lowDb: e.low, voiceDb: e.mid, highDb: e.high, trimDb: -EQ_TRIM_PER_BOOST * boost + 0 }
 }
 
-export function voiceBoostBands(amount: number): VoiceBoostBands {
-  const k = clampVoiceBoost(amount) / VOICE_BOOST_MAX
-  // `+ 0` convierte un -0 en 0 (0 * -10 da -0).
-  return {
-    lowDb: VOICE_BOOST_MAX_DB.low * k + 0,
-    voiceDb: VOICE_BOOST_MAX_DB.voice * k + 0,
-    highDb: VOICE_BOOST_MAX_DB.high * k + 0,
-    trimDb: VOICE_BOOST_MAX_DB.trim * k + 0,
-  }
-}
-
-export type VoiceBoostLabel = 'Apagado' | 'Suave' | 'Medio' | 'Fuerte'
-
-export function voiceBoostLabel(amount: number): VoiceBoostLabel {
-  const a = clampVoiceBoost(amount)
-  if (a === 0) return 'Apagado'
-  if (a <= 33) return 'Suave'
-  if (a <= 66) return 'Medio'
-  return 'Fuerte'
-}
-
-// 'off'         → barra en 0 (camino nativo, o filtros fuera del circuito).
-// 'active'      → filtros aplicados.
+// 'off'         → apagado (camino nativo, o todo fuera del circuito).
+// 'active'      → aplicado (con el filtro de voz, si se pidió).
+// 'partial'     → ecualizador aplicado pero el filtro de voz NO (no disponible en
+//                 este navegador o no se pudo bajar).
+// 'pending'     → hay un ajuste recordado esperando el primer gesto del usuario.
 // 'unavailable' → no se pudo enganchar (contexto dormido, sin Web Audio o video
 //                 sin crossOrigin): el audio sigue por el camino normal.
-export type VoiceBoostStatus = 'off' | 'active' | 'unavailable'
+export type VoiceBoostStatus = 'off' | 'active' | 'partial' | 'pending' | 'unavailable'
 
 // Suavizado de los cambios (evita "clics" al mover la barra) y cuánto se espera,
 // ya en 0 dB, antes de sacar los filtros del circuito.
@@ -100,31 +140,54 @@ type Chain = {
   voice: BiquadFilterNode
   high: BiquadFilterNode
   trim: GainNode
-  bypassed: boolean
+  limiter: DynamicsCompressorNode
+  denoiser: AudioNode | null
+  /** El filtro de esta cadena, preparándose o listo (true) / no disponible (false). */
+  denoiserReady: Promise<boolean> | null
+  /** Por dónde entra hoy la fuente: directo a los parlantes, al ecualizador o al filtro. */
+  input: 'bypass' | 'eq' | 'denoise'
 }
 
 const dbToGain = (db: number) => Math.pow(10, db / 20)
 
+// El filtro de verdad (en el navegador). La librería se importa recién acá: define
+// clases que extienden AudioWorkletNode, que no existe en el servidor ni en jsdom.
+export async function loadRnnoiseNode(c: AudioContext): Promise<AudioNode> {
+  if (c.sampleRate !== DENOISE_SAMPLE_RATE) throw new Error(`RNNoise necesita ${DENOISE_SAMPLE_RATE} Hz (hay ${c.sampleRate})`)
+  if (!c.audioWorklet) throw new Error('sin AudioWorklet')
+  const { RnnoiseWorkletNode, loadRnnoise } = await import('@sapphi-red/web-noise-suppressor')
+  const [wasmBinary] = await Promise.all([
+    loadRnnoise({ url: DENOISE_ASSETS.wasm, simdUrl: DENOISE_ASSETS.simd }),
+    c.audioWorklet.addModule(DENOISE_ASSETS.worklet),
+  ])
+  return new RnnoiseWorkletNode(c, { wasmBinary, maxChannels: 2 })
+}
+
 export type VoiceBoostDeps = {
   createContext?: () => AudioContext
+  /** Crea el nodo del filtro de voz (en los tests, uno falso). */
+  createDenoiser?: (c: AudioContext) => Promise<AudioNode>
+  /** Ajuste con el que arranca (el recordado). No crea el AudioContext. */
+  initial?: EqSetting
 }
 
 export type VoiceBoost = {
-  /** El <video> que suena ahora en esta ventana (o null). Si la barra está arriba, lo engancha. */
+  /** El <video> que suena ahora en esta ventana (o null). Si hay ajuste, lo engancha. */
   attach(video: HTMLMediaElement | null): Promise<VoiceBoostStatus>
   /**
-   * Mueve la barra (0..100). Llamarlo DENTRO del evento del usuario (input/click):
+   * Cambia el ajuste. Llamarlo DENTRO del evento del usuario (input/click/tecla):
    * la primera vez crea el AudioContext ahí, así el navegador lo deja arrancar.
    */
-  set(amount: number): Promise<VoiceBoostStatus>
-  readonly amount: number
+  set(eq: EqSetting): Promise<VoiceBoostStatus>
+  readonly eq: EqSetting
 }
 
 export function createVoiceBoost(deps: VoiceBoostDeps = {}): VoiceBoost {
-  const createContext = deps.createContext ?? (() => new AudioContext())
+  const createContext = deps.createContext ?? (() => new AudioContext({ sampleRate: DENOISE_SAMPLE_RATE }))
+  const createDenoiser = deps.createDenoiser ?? loadRnnoiseNode
   let ctx: AudioContext | null = null
   let noWebAudio = false
-  let amount = 0
+  let eq: EqSetting = clampEq(deps.initial ?? EQ_FLAT)
   let video: HTMLMediaElement | null = null
   let bypassTimer: ReturnType<typeof setTimeout> | null = null
   const chains = new WeakMap<HTMLMediaElement, Chain>()
@@ -167,24 +230,33 @@ export function createVoiceBoost(deps: VoiceBoostDeps = {}): VoiceBoost {
     high.gain.value = 0
     const trim = c.createGain()
     trim.gain.value = 1
+    const limiter = c.createDynamicsCompressor()
+    limiter.threshold.value = EQ_LIMITER.thresholdDb
+    limiter.knee.value = EQ_LIMITER.kneeDb
+    limiter.ratio.value = EQ_LIMITER.ratio
+    limiter.attack.value = EQ_LIMITER.attackS
+    limiter.release.value = EQ_LIMITER.releaseS
     low.connect(voice)
     voice.connect(high)
     high.connect(trim)
-    trim.connect(c.destination)
+    trim.connect(limiter)
+    limiter.connect(c.destination)
     // Arranca FUERA del circuito; route() lo mete si hace falta.
     source.connect(c.destination)
-    return { source, low, voice, high, trim, bypassed: true }
+    return { source, low, voice, high, trim, limiter, denoiser: null, denoiserReady: null, input: 'bypass' }
   }
 
-  function route(c: AudioContext, chain: Chain, bypass: boolean) {
-    if (chain.bypassed === bypass) return
+  function route(c: AudioContext, chain: Chain, input: Chain['input']) {
+    if (chain.input === input) return
     chain.source.disconnect()
-    chain.source.connect(bypass ? c.destination : chain.low)
-    chain.bypassed = bypass
+    if (input === 'bypass') chain.source.connect(c.destination)
+    else if (input === 'eq') chain.source.connect(chain.low)
+    else chain.source.connect(chain.denoiser!)
+    chain.input = input
   }
 
-  function applyBands(c: AudioContext, chain: Chain, a: number) {
-    const b = voiceBoostBands(a)
+  function applyBands(c: AudioContext, chain: Chain, s: EqBands) {
+    const b = eqBands(s)
     const t = c.currentTime
     chain.low.gain.setTargetAtTime(b.lowDb, t, RAMP_TIME_CONSTANT_S)
     chain.voice.gain.setTargetAtTime(b.voiceDb, t, RAMP_TIME_CONSTANT_S)
@@ -192,14 +264,25 @@ export function createVoiceBoost(deps: VoiceBoostDeps = {}): VoiceBoost {
     chain.trim.gain.setTargetAtTime(dbToGain(b.trimDb), t, RAMP_TIME_CONSTANT_S)
   }
 
-  // Aplica `amount` al video actual. Nunca engancha con el contexto dormido.
+  // Prepara el filtro de esta cadena UNA vez (si falla, no se reintenta con cada
+  // movimiento de barra: queda 'partial'). true = listo.
+  function ensureDenoiser(c: AudioContext, chain: Chain): Promise<boolean> {
+    return (chain.denoiserReady ??= createDenoiser(c).then(
+      node => { node.connect(chain.low); chain.denoiser = node; return true },
+      () => false,
+    ))
+  }
+
+  // Aplica `eq` al video actual. Nunca engancha con el contexto dormido.
   async function sync(): Promise<VoiceBoostStatus> {
     const el = video
-    if (!el) return amount === 0 ? 'off' : 'unavailable'
+    const off = isOff(eq)
+    if (!el) return off ? 'off' : (ctx ? 'unavailable' : 'pending')
 
     let chain = chains.get(el)
     if (!chain) {
-      if (amount === 0) return 'off' // nunca usado con este video: camino nativo intacto
+      if (off) return 'off' // nunca usado con este video: camino nativo intacto
+      if (!ctx && !noWebAudio) return 'pending' // ajuste recordado: espera un gesto
       if (el.crossOrigin !== 'anonymous') return 'unavailable'
       const c = ctx
       if (!c || !(await waitRunning(c))) return 'unavailable'
@@ -210,40 +293,70 @@ export function createVoiceBoost(deps: VoiceBoostDeps = {}): VoiceBoost {
     const c = ctx!
     if (bypassTimer) { clearTimeout(bypassTimer); bypassTimer = null }
 
-    if (amount === 0) {
+    if (off) {
       // Bajar a 0 dB (identidad exacta para shelf/peaking) y, ya asentado, sacar
-      // los filtros del circuito. Así el paso no hace "clic".
-      applyBands(c, chain, 0)
+      // todo del circuito. Así el paso no hace "clic".
+      applyBands(c, chain, EQ_FLAT)
+      if (chain.input === 'denoise') route(c, chain, 'eq')
       const ch = chain
       bypassTimer = setTimeout(() => {
         bypassTimer = null
-        if (amount === 0) route(c, ch, true)
+        if (isOff(eq)) route(c, ch, 'bypass')
       }, BYPASS_AFTER_MS)
       return 'off'
     }
-    route(c, chain, false) // entra en 0 dB (identidad), después sube suave
-    applyBands(c, chain, amount)
+    applyBands(c, chain, eq)
+    if (!eq.denoise) {
+      route(c, chain, 'eq') // entra en 0 dB (identidad), después sube suave
+      return c.state === 'running' ? 'active' : 'unavailable'
+    }
+    // Con filtro de voz: mientras carga suena el ecualizador; cuando está, se mete.
+    if (!chain.denoiser) route(c, chain, 'eq')
+    const ok = await ensureDenoiser(c, chain)
+    if (!eq.denoise || isOff(eq)) return sync() // lo apagaron mientras cargaba
+    if (!ok) { route(c, chain, 'eq'); return 'partial' }
+    route(c, chain, 'denoise')
     return c.state === 'running' ? 'active' : 'unavailable'
   }
 
   return {
-    get amount() { return amount },
+    get eq() { return eq },
     attach(el) {
       video = el
       return sync()
     },
     set(next) {
-      amount = clampVoiceBoost(next)
-      if (amount > 0) wakeContext() // dentro del gesto
+      eq = clampEq(next)
+      if (!isOff(eq)) wakeContext() // dentro del gesto
       return sync()
     },
   }
 }
 
+// ─── Recordar el ajuste (localStorage de este navegador) ────────────────────
+// Si el almacenamiento no está (modo privado, bloqueado, servidor) o trae basura,
+// se arranca apagado. Nunca tira.
+export const EQ_STORAGE_KEY = 've-eq-v1'
+function localStore(): Storage | null {
+  try { return typeof window === 'undefined' ? null : window.localStorage } catch { return null }
+}
+export function loadEq(storage: Storage | null = localStore()): EqSetting {
+  try {
+    const raw = storage?.getItem(EQ_STORAGE_KEY)
+    return raw ? clampEq(JSON.parse(raw)) : EQ_FLAT
+  } catch { return EQ_FLAT }
+}
+export function saveEq(eq: EqSetting, storage: Storage | null = localStore()): void {
+  try {
+    if (isOff(eq)) storage?.removeItem(EQ_STORAGE_KEY)
+    else storage?.setItem(EQ_STORAGE_KEY, JSON.stringify(clampEq(eq)))
+  } catch { /* sin almacenamiento: no se recuerda, nada más */ }
+}
+
 // UNO por ventana (panel o stage): un solo AudioContext y un solo registro de videos
-// enganchados, aunque el componente de la barra se desmonte y se vuelva a montar.
-// El valor de la barra vive acá mientras la página esté abierta (no se guarda).
+// enganchados, aunque el componente se desmonte y se vuelva a montar. Arranca con el
+// ajuste recordado, sin tocar el audio hasta el primer gesto ('pending').
 let shared: VoiceBoost | null = null
 export function sharedVoiceBoost(): VoiceBoost {
-  return (shared ??= createVoiceBoost())
+  return (shared ??= createVoiceBoost({ initial: loadEq() }))
 }
