@@ -1,9 +1,10 @@
-// "Voces más claras" — enlace panel → stage (lib/voiceBoostStage.ts).
-// Lo central: el stage recibe el valor ACTUAL cuando se abre (aunque la barra esté
+// "Sonido" — enlace panel → stage (lib/voiceBoostStage.ts).
+// Lo central: el stage recibe el ajuste ACTUAL cuando se abre (aunque la sección esté
 // desmontada), y su respuesta llega a quien esté escuchando.
 import { describe, it, expect, afterEach } from 'vitest'
 import { StageChannel, type ChannelMsg } from '@/lib/stageChannel'
 import { createVoiceBoostStageLink } from '@/lib/voiceBoostStage'
+import { EQ_FLAT, type EqSetting } from '@/lib/voiceBoost'
 
 const tick = () => new Promise<void>(r => setTimeout(r, 15))
 const CH = 've-stage-voice-test'
@@ -11,7 +12,7 @@ const open: StageChannel[] = []
 function chan() { const c = new StageChannel(CH); open.push(c); return c }
 afterEach(() => { while (open.length) open.pop()!.close() })
 
-function setup(amount = { v: 0 }) {
+function setup(amount: { v: EqSetting } = { v: EQ_FLAT }) {
   const link = createVoiceBoostStageLink(() => amount.v, chan())
   const stage = chan()
   const atStage: ChannelMsg[] = []
@@ -20,19 +21,19 @@ function setup(amount = { v: 0 }) {
 }
 
 describe('voiceBoostStage', () => {
-  it('cuando el stage avisa "ready", le manda el valor ACTUAL de la barra', async () => {
-    const { stage, atStage, amount } = setup({ v: 0 })
-    amount.v = 65 // la barra se movió (quizás con el componente desmontado)
+  it('cuando el stage avisa "ready", le manda el ajuste ACTUAL', async () => {
+    const { stage, atStage, amount } = setup({ v: EQ_FLAT })
+    amount.v = { low: -10, mid: 3, high: -7 } // se cambió (quizás con el componente desmontado)
     stage.send({ type: 'ready' })
     await tick()
-    expect(atStage).toEqual([{ type: 'voice_boost', amount: 65 }])
+    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: -10, mid: 3, high: -7 } }])
   })
 
-  it('send() manda el valor al stage', async () => {
+  it('send() manda el ajuste al stage', async () => {
     const { link, atStage } = setup()
-    link.send(30)
+    link.send({ low: 4, mid: 0, high: -2 })
     await tick()
-    expect(atStage).toEqual([{ type: 'voice_boost', amount: 30 }])
+    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: 4, mid: 0, high: -2 } }])
   })
 
   it('la respuesta del stage queda guardada y avisa a los suscriptos; al cerrarse vuelve a off', async () => {

@@ -1,40 +1,58 @@
-/* "Voces más claras" — tarjeta propia, separada de la barra de Volumen.
-   Todo sale de los tokens de app/globals.css. */
+/* "Sonido" (P2) — ajustes rápidos + ajuste manual de 3 bandas.
+   Todo sale de los tokens de app/globals.css. Mismo ritmo que las secciones del panel. */
 
-.section { padding: 14px; border-top: 1px solid var(--ln); border-bottom: 1px solid var(--ln); margin-top: 6px; flex-shrink: 0; }
+.section { padding: 12px 16px; border-bottom: 1px solid var(--ln); flex-shrink: 0; }
 
-.card { border: 1px solid var(--ln2); border-radius: 9px; background: var(--p2); padding: 10px 12px 12px; transition: border-color 0.15s, background 0.15s; }
-.card:hover { border-color: rgba(255, 255, 255, 0.18); }
-.cardOn { border-color: var(--ac3); background: linear-gradient(180deg, var(--ac2), transparent 70%), var(--p2); }
-.cardOn:hover { border-color: var(--ac3); }
+.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.title { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--tx2); }
+.state { font-family: var(--font-mono); font-size: 11px; color: var(--tx3); }
+.stateOn { color: var(--ac); }
 
-/* [ícono] [nombre]      [apagar]
-   [ícono] [descripción ··········] */
-.head { display: grid; grid-template-columns: 26px 1fr auto; column-gap: 8px; align-items: center; }
-.icon { grid-row: 1 / 3; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--p3); color: var(--tx2); transition: all 0.15s; }
-.cardOn .icon { background: var(--ac2); color: var(--ac); box-shadow: 0 0 0 1px var(--ac3) inset; }
-.title { grid-column: 2; grid-row: 1; font-size: 12.5px; font-weight: 600; color: var(--tx); line-height: 1.2; }
-.desc { grid-column: 2 / 4; grid-row: 2; font-size: 10.5px; color: var(--tx3); line-height: 1.3; margin-top: 1px; white-space: nowrap; }
+.presets { display: flex; gap: 5px; flex-wrap: wrap; }
+.preset { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--ln2); background: transparent; color: var(--tx2); font-size: 12px; font-family: inherit; white-space: nowrap; cursor: pointer; transition: all 0.12s; }
+.preset:hover { background: var(--p3); color: var(--tx); }
+.presetOn { background: var(--ac2); border-color: var(--ac3); color: var(--ac); }
+.presetOn:hover { background: var(--ac2); color: var(--ac); }
 
-/* "apagar": ocupa su lugar siempre (visibility), así la tarjeta no cambia de alto. */
-.off { grid-column: 3; grid-row: 1; font-family: var(--font-mono); font-size: 9px; padding: 3px 8px; border-radius: 10px; border: 1px solid var(--ac3); background: var(--ac2); color: var(--ac); cursor: pointer; transition: all 0.12s; }
-.off:hover { background: var(--ac); color: var(--p1); border-color: var(--ac); }
-.offHidden { visibility: hidden; }
+.manualTog { margin-top: 9px; display: flex; align-items: center; gap: 6px; padding: 2px 0; border: none; background: transparent; font-size: 12px; font-family: inherit; color: var(--tx3); cursor: pointer; }
+.manualTog:hover { color: var(--tx2); }
+.manualOpen { color: var(--tx2); }
+.caret { font-size: 9px; display: inline-block; transition: transform 0.15s; }
+.manualOpen .caret { transform: rotate(90deg); }
 
-/* Barra grande: 28px de zona para agarrar, pista de 6px, perilla de 18px.
-   El relleno sale de --pct (lo pone el componente). */
-.range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 28px; margin: 8px 0 0; padding: 0; background: transparent; cursor: pointer; }
+.eq { margin-top: 6px; border: 1px solid var(--ln2); border-radius: 10px; background: var(--p2); padding: 8px 12px 6px; }
+.band { padding: 4px 0; }
+.bTop { display: flex; justify-content: space-between; align-items: baseline; }
+.bName { font-size: 12.5px; font-weight: 500; color: var(--tx); }
+.bName small { font-size: 11px; font-weight: 400; color: var(--tx3); margin-left: 5px; }
+.bVal { font-family: var(--font-mono); font-size: 12px; color: var(--tx2); }
+.up { color: var(--bl); }
+.down { color: var(--ac); }
+
+/* Barra de −24 a +12 con el 0 marcado: el relleno va DESDE el 0 hasta el valor
+   (--lo/--hi los pone el componente). Celeste = baja, cian = sube. */
+.range { -webkit-appearance: none; appearance: none; display: block; width: 100%; height: 24px; margin: 0; padding: 0; background: transparent; cursor: pointer; --fill: var(--ac); }
+.range.up { --fill: var(--bl); }
 .range:focus { outline: none; }
-.range::-webkit-slider-runnable-track { height: 6px; border-radius: 3px; background: linear-gradient(to right, var(--ac) var(--pct, 0%), var(--p4) var(--pct, 0%)); }
-.range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 18px; height: 18px; margin-top: -6px; border-radius: 50%; background: var(--tx); border: 3px solid var(--ac); box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45); transition: transform 0.1s; }
+.range::-webkit-slider-runnable-track {
+  height: 5px; border-radius: 3px;
+  background:
+    linear-gradient(to right, transparent calc(var(--zero) - 1px), rgba(255,255,255,0.35) calc(var(--zero) - 1px), rgba(255,255,255,0.35) calc(var(--zero) + 1px), transparent calc(var(--zero) + 1px)),
+    linear-gradient(to right, var(--p4) var(--lo), var(--fill) var(--lo), var(--fill) var(--hi), var(--p4) var(--hi));
+}
+.range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 16px; height: 16px; margin-top: -5.5px; border-radius: 50%; background: var(--tx); border: 3px solid var(--fill); box-shadow: 0 1px 4px rgba(0,0,0,0.45); transition: transform 0.1s; }
 .range:hover::-webkit-slider-thumb { transform: scale(1.12); }
-.range:active::-webkit-slider-thumb { transform: scale(1.18); }
 .range:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 4px var(--ac3); }
-.rangeZero::-webkit-slider-thumb { border-color: var(--tx3); }
-.range::-moz-range-track { height: 6px; border-radius: 3px; background: var(--p4); }
-.range::-moz-range-progress { height: 6px; border-radius: 3px; background: var(--ac); }
-.range::-moz-range-thumb { width: 12px; height: 12px; border-radius: 50%; background: var(--tx); border: 3px solid var(--ac); }
-.rangeZero::-moz-range-thumb { border-color: var(--tx3); }
-.range:focus-visible::-moz-range-thumb { box-shadow: 0 0 0 4px var(--ac3); }
+.range::-moz-range-track { height: 5px; border-radius: 3px; background: var(--p4); }
+.range::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--tx); border: 3px solid var(--fill); }
 
-.hint { font-size: 11px; color: var(--tx2); margin-top: 6px; line-height: 1.35; }
+.scale { position: relative; height: 12px; margin: 0 8px; font-family: var(--font-mono); font-size: 10px; color: var(--tx3); }
+.scale span { position: absolute; transform: translateX(-50%); }
+
+.foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--ln); }
+.lim { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--tx3); }
+.lim i { width: 7px; height: 7px; border-radius: 50%; background: var(--gr); }
+.reset { border: none; background: transparent; padding: 0; font-family: var(--font-mono); font-size: 11px; color: var(--tx3); text-decoration: underline; cursor: pointer; }
+.reset:hover { color: var(--tx2); }
+
+.hint { font-size: 11px; color: var(--tx2); margin-top: 8px; line-height: 1.35; }
