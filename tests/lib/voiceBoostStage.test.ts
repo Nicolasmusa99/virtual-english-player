@@ -23,17 +23,17 @@ function setup(amount: { v: EqSetting } = { v: EQ_FLAT }) {
 describe('voiceBoostStage', () => {
   it('cuando el stage avisa "ready", le manda el ajuste ACTUAL', async () => {
     const { stage, atStage, amount } = setup({ v: EQ_FLAT })
-    amount.v = { low: -10, mid: 3, high: -7 } // se cambió (quizás con el componente desmontado)
+    amount.v = { low: -10, mid: 3, high: -7, denoise: true } // se cambió (quizás con el componente desmontado)
     stage.send({ type: 'ready' })
     await tick()
-    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: -10, mid: 3, high: -7 } }])
+    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: -10, mid: 3, high: -7, denoise: true } }])
   })
 
   it('send() manda el ajuste al stage', async () => {
     const { link, atStage } = setup()
-    link.send({ low: 4, mid: 0, high: -2 })
+    link.send({ low: 4, mid: 0, high: -2, denoise: false })
     await tick()
-    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: 4, mid: 0, high: -2 } }])
+    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: 4, mid: 0, high: -2, denoise: false } }])
   })
 
   it('la respuesta del stage queda guardada y avisa a los suscriptos; al cerrarse vuelve a off', async () => {

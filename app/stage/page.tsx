@@ -2,7 +2,7 @@
 import { useRef, useState, useEffect, useMemo } from 'react'
 import { hl } from '@/lib/hl'
 import { StageChannel } from '@/lib/stageChannel'
-import { sharedVoiceBoost, isFlat, type EqSetting } from '@/lib/voiceBoost'
+import { sharedVoiceBoost, isOff, type EqSetting } from '@/lib/voiceBoost'
 
 // US-037 / US-038: Stage view — video + subtitle overlay only. No controls.
 // Receives PanelCmd via BroadcastChannel; emits timeupdate back to panel.
@@ -28,7 +28,7 @@ export default function Stage() {
     const applyVoice = (eq: EqSetting) =>
       vb.set(eq).then(status => { if (alive) ch.send({ type: 'voice_boost_status', status }) })
     vb.attach(vidRef.current)
-    const retryVoice = () => { if (!isFlat(vb.eq)) applyVoice(vb.eq) }
+    const retryVoice = () => { if (!isOff(vb.eq)) applyVoice(vb.eq) }
     window.addEventListener('pointerdown', retryVoice)
 
     const unsub = ch.onMessage(msg => {

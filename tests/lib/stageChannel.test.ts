@@ -151,11 +151,11 @@ describe('StageChannel — "Sonido" (ecualizador)', () => {
     const u1 = stage.onMessage(m => atStage.push(m))
     const u2 = panel.onMessage(m => atPanel.push(m))
 
-    panel.send({ type: 'voice_boost', eq: { low: -20, mid: 6, high: -14 } })
+    panel.send({ type: 'voice_boost', eq: { low: -20, mid: 6, high: -14, denoise: true } })
     stage.send({ type: 'voice_boost_status', status: 'unavailable' })
     await tick()
 
-    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: -20, mid: 6, high: -14 } }])
+    expect(atStage).toEqual([{ type: 'voice_boost', eq: { low: -20, mid: 6, high: -14, denoise: true } }])
     expect(atPanel).toEqual([{ type: 'voice_boost_status', status: 'unavailable' }])
     u1(); u2(); cleanup()
   })

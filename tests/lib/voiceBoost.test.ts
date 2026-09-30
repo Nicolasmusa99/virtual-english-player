@@ -16,13 +16,18 @@ import {
   EQ_PRESET_ORDER,
   EQ_STORAGE_KEY,
   EQ_TRIM_PER_BOOST,
+  DENOISE_ASSETS,
+  DENOISE_SAMPLE_RATE,
   clampEq,
+  isOff,
+  loadRnnoiseNode,
   createVoiceBoost,
   eqBands,
   isFlat,
   loadEq,
   presetOf,
   saveEq,
+  type EqBands,
   type EqSetting,
 } from '@/lib/voiceBoost'
 
@@ -86,10 +91,19 @@ function video(cross: string | null = 'anonymous') {
   if (cross !== null) v.crossOrigin = cross
   return v
 }
+// El filtro de voz de mentira: por defecto se prepara bien; `dn.fail` lo hace fallar y
+// `dn.hold` lo deja "cargando" hasta llamar dn.release().
+const dn = { fail: false, hold: false, release: () => {} }
 function setup(ctx = new FakeCtx(), initial?: EqSetting) {
   const createContext = vi.fn(() => ctx as unknown as AudioContext)
-  const vb = createVoiceBoost({ createContext, initial })
-  return { vb, ctx, createContext }
+  const createDenoiser = vi.fn(() => {
+    if (dn.fail) return Promise.reject(new Error('sin AudioWorklet'))
+    const node = new FakeNode('denoiser') as unknown as AudioNode
+    if (!dn.hold) return Promise.resolve(node)
+    return new Promise<AudioNode>(r => { dn.release = () => r(node) })
+  })
+  const vb = createVoiceBoost({ createContext, createDenoiser, initial })
+  return { vb, ctx, createContext, createDenoiser }
 }
 // Recorre la cadena desde la fuente: [tipos...] hasta el destino.
 function path(ctx: FakeCtx, i = 0): string[] {
@@ -103,7 +117,8 @@ function path(ctx: FakeCtx, i = 0): string[] {
   return out
 }
 const chainOf = (ctx: FakeCtx, i = 0) => {
-  const low = ctx.sources[i].outputs[0] as FakeBiquad
+  const first = ctx.sources[i].outputs[0]
+  const low = (first.kind === 'denoiser' ? first.outputs[0] : first) as FakeBiquad
   const voice = low.outputs[0] as FakeBiquad
   const high = voice.outputs[0] as FakeBiquad
   const trim = high.outputs[0] as FakeGain
@@ -111,24 +126,31 @@ const chainOf = (ctx: FakeCtx, i = 0) => {
   return { low, voice, high, trim, limiter }
 }
 const FULL = ['source', 'lowshelf', 'peaking', 'highshelf', 'gain', 'compressor', 'destination']
+const FULL_DN = ['source', 'denoiser', 'lowshelf', 'peaking', 'highshelf', 'gain', 'compressor', 'destination']
 const BYPASS = ['source', 'destination']
 // Ajustes de prueba (lo único que importa es que no sean planos).
-const A: EqSetting = { low: -10, mid: 3, high: -7 }
-const B: EqSetting = { low: -5, mid: 0, high: -2 }
-const BIG: EqSetting = { low: -20, mid: 6, high: -14 }
+const A: EqSetting = { low: -10, mid: 3, high: -7, denoise: false }
+const B: EqSetting = { low: -5, mid: 0, high: -2, denoise: false }
+const BIG: EqSetting = { low: -20, mid: 6, high: -14, denoise: false }
+const FILTER_ONLY: EqSetting = { ...EQ_FLAT, denoise: true }
 
-beforeEach(() => { vi.useFakeTimers() })
+beforeEach(() => { vi.useFakeTimers(); dn.fail = false; dn.hold = false })
 afterEach(() => { vi.useRealTimers() })
 
 // ─────────────────────────────────────────────────────────────────────────────
 describe('ajustes (clampEq / presetOf / eqBands)', () => {
   it('clampEq: enteros dentro de −24..+12; lo raro → 0; nunca -0', () => {
-    expect(clampEq({ low: -30, mid: 20, high: 3.6 })).toEqual({ low: EQ_MIN_DB, mid: EQ_MAX_DB, high: 4 })
+    expect(clampEq({ low: -30, mid: 20, high: 3.6 })).toEqual({ low: EQ_MIN_DB, mid: EQ_MAX_DB, high: 4, denoise: false })
     expect(clampEq({ low: NaN, mid: 'x', high: Infinity })).toEqual(EQ_FLAT)
     expect(clampEq(null)).toEqual(EQ_FLAT)
     expect(clampEq('basura')).toEqual(EQ_FLAT)
-    expect(clampEq({ low: '-5' })).toEqual({ low: -5, mid: 0, high: 0 })
-    for (const v of Object.values(clampEq({ low: -0.2, mid: -0, high: 0 }))) expect(Object.is(v, 0)).toBe(true)
+    expect(clampEq({ low: '-5' })).toEqual({ low: -5, mid: 0, high: 0, denoise: false })
+    // el filtro de voz solo con un true explícito
+    expect(clampEq({ denoise: true }).denoise).toBe(true)
+    expect(clampEq({ denoise: 'si' }).denoise).toBe(false)
+    expect(clampEq({ denoise: 1 }).denoise).toBe(false)
+    const z = clampEq({ low: -0.2, mid: -0, high: 0 })
+    for (const v of [z.low, z.mid, z.high]) expect(Object.is(v, 0)).toBe(true)
   })
 
   it('los ajustes rápidos: Original es plano; los de voz bajan graves/agudos y suben la voz', () => {
@@ -139,7 +161,7 @@ describe('ajustes (clampEq / presetOf / eqBands)', () => {
       expect(p.low).toBeLessThan(0)
       expect(p.high).toBeLessThan(0)
       expect(p.mid).toBeGreaterThan(0)
-      expect(clampEq(p)).toEqual(p) // dentro del rango
+      expect(clampEq(p)).toEqual({ ...p, denoise: false }) // dentro del rango
     }
     // "muy claras" es más fuerte que "claras" en todo
     expect(EQ_PRESETS.veryClear.low).toBeLessThan(EQ_PRESETS.clear.low)
@@ -147,8 +169,9 @@ describe('ajustes (clampEq / presetOf / eqBands)', () => {
     expect(EQ_PRESETS.veryClear.mid).toBeGreaterThan(EQ_PRESETS.clear.mid)
   })
 
-  it('presetOf reconoce los ajustes rápidos; cualquier otro es null (Personalizado)', () => {
+  it('presetOf reconoce los ajustes rápidos (con o sin filtro de voz); cualquier otro es null (Personalizado)', () => {
     for (const k of EQ_PRESET_ORDER) expect(presetOf({ ...EQ_PRESETS[k] })).toBe(k)
+    for (const k of EQ_PRESET_ORDER) expect(presetOf({ ...EQ_PRESETS[k], denoise: true } as EqSetting)).toBe(k)
     expect(presetOf({ low: -10, mid: 3, high: -6 })).toBeNull()
   })
 
@@ -184,7 +207,12 @@ describe('recordar el ajuste (loadEq / saveEq)', () => {
     saveEq(A, st)
     expect(loadEq(st)).toEqual(A)
   })
-  it('Original no se guarda (borra lo anterior)', () => {
+  it('solo el filtro de voz (bandas en 0) también se recuerda', () => {
+    const st = mem()
+    saveEq(FILTER_ONLY, st)
+    expect(loadEq(st)).toEqual(FILTER_ONLY)
+  })
+  it('Original sin filtro no se guarda (borra lo anterior)', () => {
     const st = mem()
     saveEq(A, st)
     saveEq(EQ_FLAT, st)
@@ -196,7 +224,7 @@ describe('recordar el ajuste (loadEq / saveEq)', () => {
     st.setItem(EQ_STORAGE_KEY, '{no es json')
     expect(loadEq(st)).toEqual(EQ_FLAT)
     st.setItem(EQ_STORAGE_KEY, JSON.stringify({ low: -99, mid: 50, high: 'x' }))
-    expect(loadEq(st)).toEqual({ low: EQ_MIN_DB, mid: EQ_MAX_DB, high: 0 })
+    expect(loadEq(st)).toEqual({ low: EQ_MIN_DB, mid: EQ_MAX_DB, high: 0, denoise: false })
   })
   it('sin almacenamiento o si tira (modo privado): no rompe', () => {
     expect(loadEq(null)).toEqual(EQ_FLAT)
@@ -247,7 +275,7 @@ function biquadDb(type: BiquadType, f0: number, gainDb: number, q: number, fs: n
     return 10 * Math.log10((nr * nr + ni * ni) / (dr * dr + di * di))
   }
 }
-function curveDb(eq: EqSetting, fs: number) {
+function curveDb(eq: EqBands, fs: number) {
   const bands = eqBands(eq)
   const F = VOICE_BOOST_FREQS
   const filters = [
@@ -376,8 +404,8 @@ describe('ajuste recordado: espera un gesto', () => {
   })
 
   it('un recordado fuera de rango se acota', () => {
-    const { vb } = setup(new FakeCtx(), { low: -99, mid: 40, high: 0 })
-    expect(vb.eq).toEqual({ low: EQ_MIN_DB, mid: EQ_MAX_DB, high: 0 })
+    const { vb } = setup(new FakeCtx(), { low: -99, mid: 40, high: 0, denoise: false })
+    expect(vb.eq).toEqual({ low: EQ_MIN_DB, mid: EQ_MAX_DB, high: 0, denoise: false })
   })
 })
 
@@ -504,6 +532,117 @@ describe('varios videos (el panel remonta el <video>, el stage cambia de fuente)
     await vb.set(EQ_FLAT)
     expect(await vb.attach(video())).toBe('off')
     expect(ctx.sources).toHaveLength(1)
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe('filtro de voz (P3)', () => {
+  it('isOff: apagado solo si bandas en 0 Y sin filtro', () => {
+    expect(isOff(EQ_FLAT)).toBe(true)
+    expect(isOff(FILTER_ONLY)).toBe(false)
+    expect(isOff(A)).toBe(false)
+  })
+
+  it('solo el filtro (Original + filtro): engancha y pasa por el filtro antes del ecualizador', async () => {
+    const { vb, ctx, createDenoiser } = setup()
+    await vb.attach(video())
+    expect(await vb.set(FILTER_ONLY)).toBe('active')
+    expect(path(ctx)).toEqual(FULL_DN)
+    expect(createDenoiser).toHaveBeenCalledTimes(1)
+  })
+
+  it('con un ajuste + filtro: filtro → bandas del ajuste → limitador', async () => {
+    const { vb, ctx } = setup()
+    await vb.attach(video())
+    expect(await vb.set({ ...BIG, denoise: true })).toBe('active')
+    expect(path(ctx)).toEqual(FULL_DN)
+    const { voice } = chainOf(ctx)
+    expect(voice.gain.value).toBe(BIG.mid)
+  })
+
+  it('mientras el filtro carga suena el ecualizador; cuando está listo, se mete', async () => {
+    dn.hold = true
+    const { vb, ctx } = setup()
+    await vb.attach(video())
+    const p = vb.set({ ...BIG, denoise: true })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(path(ctx)).toEqual(FULL) // todavía sin el filtro, pero con el ecualizador
+    dn.release()
+    expect(await p).toBe('active')
+    expect(path(ctx)).toEqual(FULL_DN)
+  })
+
+  it('el filtro se prepara UNA vez por video aunque se muevan las barras', async () => {
+    const { vb, createDenoiser } = setup()
+    await vb.attach(video())
+    await vb.set({ ...A, denoise: true })
+    await vb.set({ ...B, denoise: true })
+    await vb.set({ ...BIG, denoise: true })
+    expect(createDenoiser).toHaveBeenCalledTimes(1)
+  })
+
+  it('si el filtro no está disponible → partial: suena el ecualizador sin filtro, sin reintentar a cada rato', async () => {
+    dn.fail = true
+    const { vb, ctx, createDenoiser } = setup()
+    await vb.attach(video())
+    expect(await vb.set({ ...A, denoise: true })).toBe('partial')
+    expect(path(ctx)).toEqual(FULL)
+    expect(await vb.set({ ...B, denoise: true })).toBe('partial')
+    expect(createDenoiser).toHaveBeenCalledTimes(1)
+  })
+
+  it('apagar el filtro lo saca (queda el ecualizador); apagar todo saca todo', async () => {
+    const { vb, ctx } = setup()
+    await vb.attach(video())
+    await vb.set({ ...A, denoise: true })
+    expect(await vb.set(A)).toBe('active')
+    expect(path(ctx)).toEqual(FULL)
+    await vb.set({ ...A, denoise: true })
+    expect(path(ctx)).toEqual(FULL_DN)
+    expect(await vb.set(EQ_FLAT)).toBe('off')
+    await vi.advanceTimersByTimeAsync(BYPASS_AFTER_MS)
+    expect(path(ctx)).toEqual(BYPASS)
+  })
+
+  it('si lo apagan mientras carga, al terminar de cargar NO se mete', async () => {
+    dn.hold = true
+    const { vb, ctx } = setup()
+    await vb.attach(video())
+    const p = vb.set({ ...A, denoise: true })
+    await vi.advanceTimersByTimeAsync(0)
+    await vb.set(A)
+    dn.release()
+    await p
+    expect(path(ctx)).toEqual(FULL)
+  })
+
+  it('un video nuevo con el filtro prendido también lo recibe (su propio nodo)', async () => {
+    const { vb, ctx, createDenoiser } = setup()
+    await vb.attach(video())
+    await vb.set(FILTER_ONLY)
+    expect(await vb.attach(video())).toBe('active')
+    expect(path(ctx, 1)).toEqual(FULL_DN)
+    expect(createDenoiser).toHaveBeenCalledTimes(2)
+  })
+
+  it('REGLA DE ORO también con el filtro: contexto dormido → no engancha ni prepara el filtro', async () => {
+    const { vb, ctx, createDenoiser } = setup(new FakeCtx('suspended', 'stay'))
+    await vb.attach(video())
+    const p = vb.set(FILTER_ONLY)
+    await vi.advanceTimersByTimeAsync(RESUME_TIMEOUT_MS)
+    expect(await p).toBe('unavailable')
+    expect(ctx.sources).toHaveLength(0)
+    expect(createDenoiser).not.toHaveBeenCalled()
+  })
+
+  it('el filtro de verdad exige 48 kHz (RNNoise): con otra frecuencia no se crea', async () => {
+    expect(DENOISE_SAMPLE_RATE).toBe(48000)
+    await expect(loadRnnoiseNode({ sampleRate: 44100 } as AudioContext)).rejects.toThrow(/48000/)
+    await expect(loadRnnoiseNode({ sampleRate: 48000 } as AudioContext)).rejects.toThrow(/AudioWorklet/)
+  })
+
+  it('los archivos del filtro se sirven desde /audio/rnnoise', () => {
+    for (const u of Object.values(DENOISE_ASSETS)) expect(u).toMatch(/^\/audio\/rnnoise\//)
   })
 })
 

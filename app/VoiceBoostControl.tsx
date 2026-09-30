@@ -1,6 +1,7 @@
 'use client'
-// "Sonido" (P2) — ajustes rápidos (Original / Voces claras / Voces muy claras) y
-// "Ajuste manual" con 3 barras: Graves / Medios (voz) / Agudos. Todo en el navegador
+// "Sonido" (P2 + P3) — ajustes rápidos (Original / Voces claras / Voces muy claras),
+// "Filtro de voz" (IA gratis, aparte: se combina con cualquier ajuste) y "Ajuste
+// manual" con 3 barras: Graves / Medios (voz) / Agudos. Todo en el navegador
 // (lib/voiceBoost.ts, con limitador para que nada sature) y se RECUERDA en este
 // navegador para el próximo video.
 // Con el stage abierto el audio sale de ESA ventana: el ajuste se le manda al stage
@@ -10,7 +11,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type RefObject 
 import styles from './VoiceBoostControl.module.css'
 import { sharedVoiceBoostStageLink } from '@/lib/voiceBoostStage'
 import {
-  sharedVoiceBoost, saveEq, presetOf, clampEq, isFlat,
+  sharedVoiceBoost, saveEq, presetOf, clampEq, isOff,
   EQ_PRESETS, EQ_PRESET_ORDER, EQ_MIN_DB, EQ_MAX_DB,
   type EqPreset, type EqSetting, type VoiceBoostStatus,
 } from '@/lib/voiceBoost'
@@ -19,6 +20,11 @@ export const SOUND_TEXTS = {
   title: 'Sonido',
   presets: { original: 'Original', clear: 'Voces claras', veryClear: 'Voces muy claras' } satisfies Record<EqPreset, string>,
   custom: 'Personalizado',
+  denoise: 'Filtro de voz',
+  denoiseTag: 'IA',
+  denoiseDesc: 'Baja la música y los ruidos que no son voz',
+  withDenoise: ' + filtro',
+  denoiseUnavailable: 'El filtro de voz no está disponible en este navegador; el resto del sonido sí se aplica.',
   manual: 'Ajuste manual',
   bands: [
     { key: 'low', name: 'Graves', hint: 'música, golpes' },
@@ -89,18 +95,21 @@ export default function VoiceBoostControl({ videoRef, stageOpen }: Props) {
     saveEq(e)
   }
 
+  // Los ajustes rápidos cambian las bandas; el filtro de voz queda como estaba.
   function choose(p: EqPreset) {
-    change(EQ_PRESETS[p])
+    change({ ...EQ_PRESETS[p], denoise: eq.denoise })
     setOpen(false) // elegido un ajuste rápido, el manual se cierra (deja lugar a la lista)
   }
 
   const preset = presetOf(eq)
-  const stateLabel = preset ? SOUND_TEXTS.presets[preset] : SOUND_TEXTS.custom
-  const on = !isFlat(eq)
+  const stateLabel = (preset ? SOUND_TEXTS.presets[preset] : SOUND_TEXTS.custom) + (eq.denoise ? SOUND_TEXTS.withDenoise : '')
+  const on = !isOff(eq)
+  const shown = stageOpen ? stageStatus : status
   const hint =
     !on ? null
-    : stageOpen ? (stageStatus === 'unavailable' ? SOUND_TEXTS.stageUnavailable : null)
-    : (status === 'unavailable' ? SOUND_TEXTS.unavailable : null)
+    : shown === 'partial' ? SOUND_TEXTS.denoiseUnavailable
+    : shown === 'unavailable' ? (stageOpen ? SOUND_TEXTS.stageUnavailable : SOUND_TEXTS.unavailable)
+    : null
 
   return (
     <div className={styles.section}>
@@ -118,6 +127,16 @@ export default function VoiceBoostControl({ videoRef, stageOpen }: Props) {
           </button>
         ))}
       </div>
+
+      <button type="button" role="switch" aria-checked={eq.denoise}
+        className={`${styles.denoise} ${eq.denoise ? styles.denoiseOn : ''}`}
+        onClick={() => change({ ...eq, denoise: !eq.denoise })}>
+        <span className={styles.dnText}>
+          <span className={styles.dnTitle}>{SOUND_TEXTS.denoise}<em>{SOUND_TEXTS.denoiseTag}</em></span>
+          <span className={styles.dnDesc}>{SOUND_TEXTS.denoiseDesc}</span>
+        </span>
+        <span className={styles.switch} aria-hidden="true"><i /></span>
+      </button>
 
       <button type="button" className={`${styles.manualTog} ${open ? styles.manualOpen : ''}`}
         aria-expanded={open} aria-controls={eqId} onClick={() => setOpen(o => !o)}>
