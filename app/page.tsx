@@ -12,9 +12,11 @@ import StudentView from './StudentView'
 import ZoomRoomCard from './ZoomRoomCard'
 import StudentApp from './StudentApp'
 import VoiceBoostControl from './VoiceBoostControl'
+import PlayerDock, { type DockClock } from './PlayerDock'
 import { StageChannel } from '@/lib/stageChannel'
 import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
+import { extrapolateTime } from '@/lib/playerTimeline'
 import { sessionKey, saveSession, loadSession } from '@/lib/session'
 import type { SessionData } from '@/lib/session'
 import { useSession, signIn, signOut } from 'next-auth/react'
@@ -32,7 +34,6 @@ const NAV_HOLD_MS     = 450 // ms entre frase y frase al mantener ← / → pres
 export default function Player() {
   // ─── DOM refs ────────────────────────────────────────────────────────────
   const vidRef  = useRef<HTMLVideoElement>(null)
-  const progRef = useRef<HTMLDivElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
   const srtReloadRef   = useRef<HTMLInputElement>(null)
@@ -47,6 +48,7 @@ export default function Player() {
   const stageStartRef         = useRef(0)
   const lastStageTimeRef      = useRef(0)
   const stageDurationRef      = useRef(0)
+  const lastStageAtRef        = useRef(0)   // cuándo llegó lastStageTimeRef (la barra avanza sola entre mensajes)
   const pendingRestoreTimeRef = useRef<number | null>(null)
   const navHoldRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -80,9 +82,6 @@ export default function Player() {
   const [editingStartTs, setEditingStartTs] = useState('')
   const [editingEndTs,   setEditingEndTs]   = useState('')
   const [editingError,   setEditingError]   = useState('')
-  const [timeCur, setTimeCur]             = useState('0:00')
-  const [timeTot, setTimeTot]             = useState('0:00')
-  const [progPct, setProgPct]             = useState(0)
   const [bufPct, setBufPct]               = useState(0)
   const [isPlaying, setIsPlaying]         = useState(false)
   const [vol, setVol]                     = useState(100)
@@ -178,7 +177,6 @@ export default function Player() {
   useEffect(() => {
     const v = vidRef.current; if (!v) return
     const onMeta = () => {
-      setTimeTot(fmtTime(v.duration))
       if (pendingRestoreTimeRef.current !== null) {
         v.currentTime = pendingRestoreTimeRef.current
         pendingRestoreTimeRef.current = null
@@ -190,8 +188,6 @@ export default function Player() {
     }
     const onTU = () => {
       if (!v.duration) return
-      setProgPct(v.currentTime / v.duration * 100)
-      setTimeCur(fmtTime(v.currentTime))
       const t  = v.currentTime - delayRef.current
       const ps = phrasesRef.current
       if (ps.length === 0) return
@@ -286,11 +282,15 @@ export default function Player() {
   }, [screen])
 
   // ─── Scroll active phrase into view ──────────────────────────────────────
+  // Solo se mueve la LISTA. scrollIntoView movía también el panel entero y dejaba
+  // afuera de la vista los controles de arriba (pasaba en pantallas de 720 px).
   useEffect(() => {
-    if (listRef.current) {
-      const act = listRef.current.querySelector('[data-act="true"]')
-      if (act) act.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    }
+    const list = listRef.current
+    const act  = list?.querySelector<HTMLElement>('[data-act="true"]')
+    if (!list || !act) return
+    const lr = list.getBoundingClientRect(), ar = act.getBoundingClientRect()
+    if (ar.top < lr.top)            list.scrollTop += ar.top - lr.top
+    else if (ar.bottom > lr.bottom) list.scrollTop += ar.bottom - lr.bottom
   }, [curIdx])
 
   // ─── Playback ─────────────────────────────────────────────────────────────
@@ -315,15 +315,30 @@ export default function Player() {
     v.currentTime = Math.max(0, Math.min(v.duration || 0, v.currentTime + s))
   }
 
-  function scrub(e: React.MouseEvent) {
-    const r   = progRef.current!.getBoundingClientRect()
-    const pct = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width))
+  // Barra de tiempo (PlayerDock): ir a un segundo. Con el stage abierto se manda al stage
+  // y se anota como último tiempo conocido, así la barra no vuelve atrás hasta que conteste.
+  function seekTo(time: number) {
     if (stageOpenRef.current) {
-      channelRef.current?.send({ type: 'seek', time: pct * stageDurationRef.current })
+      channelRef.current?.send({ type: 'seek', time })
+      lastStageTimeRef.current = time
+      lastStageAtRef.current   = performance.now()
       return
     }
     const v = vidRef.current; if (!v?.duration) return
-    v.currentTime = pct * v.duration
+    v.currentTime = time
+  }
+
+  // Reloj de la barra, leído en cada cuadro. Con el stage abierto: el último tiempo que
+  // mandó el stage + lo que pasó desde entonces (lib/playerTimeline.ts).
+  function readClock(): DockClock {
+    if (stageOpenRef.current) {
+      const d = stageDurationRef.current
+      const playing = isPlayingRef.current
+      const t = extrapolateTime({ t: lastStageTimeRef.current, at: lastStageAtRef.current, playing, rate: SPEEDS[speedIdx], duration: d }, performance.now())
+      return { t, d, playing }
+    }
+    const v = vidRef.current
+    return { t: v?.currentTime ?? 0, d: v?.duration || 0, playing: !!v && !v.paused }
   }
 
   function jumpTo(idx: number) {
@@ -530,8 +545,7 @@ export default function Player() {
           const { currentTime: ct, duration, isPlaying: playing } = msg
           lastStageTimeRef.current = ct
           stageDurationRef.current = duration
-          if (duration) setProgPct(ct / duration * 100)
-          setTimeCur(fmtTime(ct))
+          lastStageAtRef.current   = performance.now()
           setIsPlaying(playing)
           const t   = ct - delayRef.current
           const idx = phrasesRef.current.findIndex(p => t >= p.start && t <= p.end)
@@ -1394,6 +1408,7 @@ export default function Player() {
           )}
 
           <div className={styles.layout}>
+            <div className={styles.leftCol}>
             <div className={styles.stage} id="ve-stage-wrap">
               {stageOpen
                 ? <div className={styles.shareHint}><span className={styles.shareHintDot} />Stage abierto en ventana separada — compartí esa ventana en Zoom</div>
@@ -1409,16 +1424,26 @@ export default function Player() {
                 )}
               </div>
             </div>
+            <PlayerDock
+              phrases={phrases} delay={delay} hideTexts={hideTexts} isPlaying={isPlaying} bufPct={bufPct}
+              speeds={SPEEDS} speedIdx={speedIdx} vol={vol} ccOn={ccOn}
+              readClock={readClock} onSeek={seekTo}
+              onJump={i => { jumpTo(i); capture('phrase_tick_clicked', { phrase_index: i }) }}
+              onTogglePlay={togglePlay} onSkip={skip} onPrev={prevPhrase} onNext={nextPhrase} onSpeed={setSpd}
+              onVol={v => { setVol(v); if (vidRef.current) vidRef.current.volume = v / 100 }}
+              onToggleCc={() => { setCcOn(p => !p); setIsDirty(true) }}
+            />
+            </div>
 
             <div className={styles.panel}>
               <div style={{ display: 'flex', borderBottom: '1px solid var(--ln)', flexShrink: 0 }}>
                 {(['player', 'exercises'] as const).map(t => (
                   <button key={t} data-testid={`tab-${t}`} onClick={() => setPanelTab(t)} style={{
-                    flex: 1, padding: '8px 0', border: 'none',
+                    flex: 1, padding: '10px 0', border: 'none',
                     borderBottom: panelTab === t ? '2px solid var(--ac)' : '2px solid transparent',
                     background: 'transparent',
                     color: panelTab === t ? 'var(--ac)' : 'var(--tx3)',
-                    fontSize: 9, fontFamily: 'var(--font-mono)', cursor: 'pointer',
+                    fontSize: 11, fontWeight: 500, fontFamily: 'var(--font-mono)', cursor: 'pointer',
                     letterSpacing: '1px', textTransform: 'uppercase' as const,
                   }}>
                     {t === 'player' ? 'Player' : 'Ejercicios'}
@@ -1438,75 +1463,12 @@ export default function Player() {
               ) : (
               <div className={styles.panelBody}>
                 <div className={styles.section}>
-                  <div className={styles.secLabel}>Reproduciendo <span className={styles.secBadge}>⊘ Solo profesor</span></div>
-                  <div className={styles.npTitle}>{videoFileName.replace(/\.[^.]+$/, '')}</div>
-                  <div className={styles.npMeta}>{timeTot} · {selPhrases.length} frases sel.</div>
-                  <div className={styles.prog}>
-                    <div className={styles.progTimes}><span>{timeCur}</span><span>{timeTot}</span></div>
-                    <div ref={progRef} data-testid="prog-track" className={styles.progTrack} onClick={scrub}>
-                      <div className={styles.pBuf}   style={{ width: bufPct + '%' }} />
-                      <div className={styles.pFill}  style={{ width: progPct + '%' }} />
-                      <div className={styles.pThumb} style={{ left: progPct + '%' }} />
-                      {phrases.map((p, i) => {
-                        const left = stageOpen
-                          ? (stageDurationRef.current ? (p.start / stageDurationRef.current * 100) + '%' : '0%')
-                          : (vidRef.current?.duration ? (p.start / vidRef.current.duration * 100) + '%' : '0%')
-                        return (
-                          <div
-                            key={i}
-                            data-phrase-idx={i}
-                            className={`${styles.ptick} ${p.sel ? styles.ptickSel : ''}`}
-                            style={{ left, cursor: 'pointer', padding: '0 5px', margin: '0 -5px', backgroundClip: 'content-box' }}
-                            onClick={e => { e.stopPropagation(); jumpTo(i); capture('phrase_tick_clicked', { phrase_index: i }) }}
-                          />
-                        )
-                      })}
-                    </div>
-                  </div>
-                  <div className={styles.pb}>
-                    <button className={styles.pbBtn} onClick={() => skip(-10)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M1 4v6h6" /><path d="M3.5 15A9 9 0 1 0 4 8.5" /></svg>
-                    </button>
-                    <div className={styles.pbSep} />
-                    <button className={styles.pbBtn} onClick={prevPhrase}>
-                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M19 20L9 12l10-8v16zM5 4h2v16H5z" /></svg>
-                    </button>
-                    <button className={`${styles.pbBtn} ${styles.pbPlay}`} onClick={togglePlay}>
-                      {isPlaying
-                        ? <svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
-                        : <svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z" /></svg>}
-                    </button>
-                    <button className={styles.pbBtn} onClick={nextPhrase}>
-                      <svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 4l10 8-10 8V4zM17 4h2v16h-2z" /></svg>
-                    </button>
-                    <div className={styles.pbSep} />
-                    <button className={styles.pbBtn} onClick={() => skip(10)}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M23 4v6h-6" /><path d="M20.5 15A9 9 0 1 1 20 8.5" /></svg>
-                    </button>
-                  </div>
-                  <button className={styles.ccRow} onClick={() => { setCcOn(p => !p); setIsDirty(true) }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="13" rx="2" /><path d="M8 12h4M14 12h2M8 16h2M12 16h4" /></svg>
-                    <span className={styles.ccLbl}>Subtítulos</span>
-                    <span className={`${styles.ccBadge} ${ccOn ? styles.ccOn : styles.ccOff}`}>{ccOn ? 'ON' : 'OFF'}</span>
-                  </button>
-                </div>
-
-                <div className={styles.section}>
-                  <div className={styles.secLabel}>Frase actual</div>
+                  <div className={styles.secLabel}>Frase actual <span className={styles.phCtr}>{curIdx >= 0 ? `${curIdx + 1} / ${phrases.length}` : '— / —'}</span></div>
                   <div className={styles.currPhrase}>{curIdx >= 0 ? phrases[curIdx]?.text : '—'}</div>
-                  <div className={styles.phraseCtrl}>
-                    <button className={styles.phBtn} onClick={prevPhrase}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M15 18l-6-6 6-6" /></svg>Anterior
-                    </button>
-                    <div className={styles.phCtr}>{curIdx >= 0 ? `${curIdx + 1} / ${phrases.length}` : '— / —'}</div>
-                    <button className={styles.phBtn} onClick={nextPhrase}>
-                      Siguiente<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M9 18l6-6-6-6" /></svg>
-                    </button>
-                  </div>
                   <div className={styles.microGrid}>
                     <button className={styles.mcBtn} onClick={repeatPhrase}>
                       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
-                      Reiniciar<span className={styles.kc}>↓</span>
+                      Repetir frase<span className={styles.kc}>↓</span>
                     </button>
                   </div>
                 </div>
@@ -1527,16 +1489,7 @@ export default function Player() {
                 </div>
 
                 <div className={styles.section}>
-                  <div className={styles.secLabel}>Velocidad</div>
-                  <div className={styles.speedBtns}>
-                    {SPEEDS.map((s, i) => (
-                      <button key={s} className={`${styles.sp} ${i === speedIdx ? styles.spAct : ''}`} onClick={() => setSpd(i)}>{s}×</button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className={styles.section}>
-                  <div className={styles.secLabel}>Delay subtítulos</div>
+                  <div className={styles.secLabel}>Subtítulos · desfase</div>
                   <div className={styles.delayRow}>
                     <button className={styles.delayBtn} onClick={() => adjDelay(-0.5)}>−</button>
                     <div className={styles.delayVal} style={{ color: delay === 0 ? 'var(--ac)' : delay > 0 ? 'var(--bl)' : 'var(--rd)' }}>
@@ -1547,26 +1500,20 @@ export default function Player() {
                   </div>
                 </div>
 
-                <div className={styles.section}>
-                  <div className={styles.secLabel}>Volumen</div>
-                  <div className={styles.volRow}>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--tx2)" strokeWidth="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
-                    <div className={styles.volTrack}>
-                      <div className={styles.volFill} style={{ width: vol + '%' }} />
-                      <input type="range" className={styles.volRange} min={0} max={100} value={vol}
-                        onChange={e => { setVol(+e.target.value); if (vidRef.current) vidRef.current.volume = +e.target.value / 100 }} />
-                    </div>
-                    <span className={styles.volVal}>{vol}%</span>
-                  </div>
-                </div>
-
                 <VoiceBoostControl videoRef={vidRef} stageOpen={stageOpen} />
 
                 <div className={styles.plWrap}>
                   <div className={styles.plHd}>
-                    Secuencia
+                    <span>Secuencia <span className={styles.plCount}>{selPhrases.length} sel.</span></span>
                     <div className={styles.plHdR}>
-                      <span className={styles.plCount}>{selPhrases.length} sel.</span>
+                      {(['all', 'sel'] as const).map(f => (
+                        <button key={f} className={`${styles.plFilter} ${filter === f ? styles.plFilterAct : ''}`} onClick={() => setFilter(f)}>
+                          {f === 'all' ? 'Todas' : 'Sel.'}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className={styles.plHd2}>
                       <button
                         className={styles.plFilter}
                         onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: true }))); setIsDirty(true); capture('phrases_bulk_selection', { action: 'select_all', total: phrasesRef.current.length }) }}
@@ -1580,12 +1527,6 @@ export default function Player() {
                         onClick={addPhrase}
                         disabled={editingIdx !== null}
                       >Agregar frase</button>
-                      {(['all', 'sel'] as const).map(f => (
-                        <button key={f} className={`${styles.plFilter} ${filter === f ? styles.plFilterAct : ''}`} onClick={() => setFilter(f)}>
-                          {f === 'all' ? 'Todas' : 'Sel.'}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                   <div ref={listRef} className={styles.pl}>
                     {showPhrases.length === 0 && <div className={styles.plEmpty}>Sin frases</div>}
@@ -1670,7 +1611,7 @@ export default function Player() {
                 </div>
 
                 <div className={styles.kbHint}>
-                  {[['Spc', 'Play'], ['←', 'Frase ant.'], ['→', 'Frase sig.'], ['↓', 'Reiniciar'], ['↑', 'Sección']].map(([k, l]) => (
+                  {[['Spc', 'Play'], ['←', 'Frase ant.'], ['→', 'Frase sig.'], ['↓', 'Repetir'], ['↑', 'Sección']].map(([k, l]) => (
                     <span key={k} className={styles.kbItem}><span className={styles.kbKey}>{k}</span>{l}</span>
                   ))}
                 </div>

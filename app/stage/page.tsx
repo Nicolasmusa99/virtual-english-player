@@ -76,6 +76,10 @@ export default function Stage() {
       ch.send({ type: 'timeupdate', currentTime: vid.currentTime, duration: vid.duration, isPlaying: !vid.paused })
     }
     v?.addEventListener('timeupdate', onTU)
+    // P1: la duración apenas se conoce (sin esto la barra del panel no andaba hasta dar
+    // play) y la pausa al toque (la barra del panel deja de avanzar sola).
+    v?.addEventListener('loadedmetadata', onTU)
+    v?.addEventListener('pause', onTU)
     ch.send({ type: 'ready' })   // FIX 3: signal panel to send load_blob (no setTimeout race)
 
     return () => {
@@ -83,6 +87,8 @@ export default function Stage() {
       window.removeEventListener('pointerdown', retryVoice)
       unsub()
       v?.removeEventListener('timeupdate', onTU)
+      v?.removeEventListener('loadedmetadata', onTU)
+      v?.removeEventListener('pause', onTU)
       ch.send({ type: 'closed' })
       ch.close()
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)

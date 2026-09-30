@@ -11,7 +11,7 @@ import Player from '@/app/page'
 const SRT = '1\n00:00:01,000 --> 00:00:03,000\nHello\n'
 
 describe('video listeners — regression ea36c81', () => {
-  it('onTU is attached after screen→player: timeCur and progPct update on timeupdate', async () => {
+  it('onTU is attached after screen→player: la frase actual y la barra de tiempo siguen al video', async () => {
     vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:mock-url')
     vi.spyOn(window, 'open').mockReturnValue({} as Window)
 
@@ -36,14 +36,13 @@ describe('video listeners — regression ea36c81', () => {
       await new Promise<void>(r => setTimeout(r, 60))
     })
 
-    // timeCur should now show "0:02", not the initial "0:00"
-    expect(container.textContent).toContain('0:02')
+    // onTU enganchado: la frase actual pasa a "Hello" (el contador sale de "— / —").
+    expect(container.querySelector('[class*="phCtr"]')!.textContent).toBe('1 / 1')
 
-    // progress fill should have a non-zero width (progPct = 2/15*100 ≈ 13.3%)
-    const fill = container.querySelector('[class*="pFill"]') as HTMLElement
-    expect(fill).not.toBeNull()
-    expect(fill.style.width).not.toBe('0%')
-    expect(fill.style.width).not.toBe('')
+    // P1: la barra de tiempo (PlayerDock) lee el video en cada cuadro → muestra 0:02.
+    expect(container.textContent).toContain('0:02')
+    const bar = container.querySelector('[data-testid="prog-track"]') as HTMLElement
+    expect(bar.getAttribute('aria-valuenow')).toBe('2')
 
     vi.restoreAllMocks()
   })
