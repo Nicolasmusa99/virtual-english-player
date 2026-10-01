@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, gte, isNotNull, isNull, lt, or } from 'drizzle-orm'
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, or } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { classEvents, classSeries } from '@/lib/db/schema'
 import type { ClassStatus } from '@/lib/db/schema'
@@ -37,21 +37,48 @@ export async function getSchedule(studentId: string, teacherId: string, from: Da
   const series = (await db.select(SERIES_COLS).from(classSeries).where(pair)).map(toSeries)
   // Margen de un día hacia atrás: una clase larga que empezó antes de `from` sigue en curso.
   // Las excepciones se traen también por su ORIGINAL, para esconder el martes que se movió.
-  const lo = new Date(from.getTime() - DAY)
   const events = await db
     .select(EVENT_COLS)
     .from(classEvents)
-    .where(
-      and(
-        eq(classEvents.studentId, studentId),
-        eq(classEvents.teacherId, teacherId),
-        or(
-          and(gte(classEvents.startsAt, lo), lt(classEvents.startsAt, to)),
-          and(isNotNull(classEvents.originalStartsAt), gte(classEvents.originalStartsAt, lo), lt(classEvents.originalStartsAt, to))
-        )
-      )
-    )
+    .where(and(eq(classEvents.studentId, studentId), eq(classEvents.teacherId, teacherId), eventsNear(from, to)))
   return buildSchedule(series, events, from, to)
+}
+
+// Eventos que pueden caer en [from, to): por su inicio o, si son excepciones, por su original.
+function eventsNear(from: Date, to: Date) {
+  const lo = new Date(from.getTime() - DAY)
+  return or(
+    and(gte(classEvents.startsAt, lo), lt(classEvents.startsAt, to)),
+    and(isNotNull(classEvents.originalStartsAt), gte(classEvents.originalStartsAt, lo), lt(classEvents.originalStartsAt, to))
+  )
+}
+
+// "Mi agenda" (G2): las clases de TODOS estos alumnos con este profe entre [from, to),
+// cada una con su alumno, y los horarios de los que salen (para poder editarlas). La
+// ruta pasa solo los alumnos ACTUALES del profe: las clases con un alumno que ya no es
+// suyo no se muestran (igual que en la pantalla del alumno).
+export type AgendaItem = ClassItem & { studentId: string }
+export async function getTeacherSchedule(
+  teacherId: string, studentIds: string[], from: Date, to: Date
+): Promise<{ classes: AgendaItem[]; series: SeriesFull[] }> {
+  if (studentIds.length === 0) return { classes: [], series: [] }
+  const [seriesRows, events] = await Promise.all([
+    db.select(SERIES_COLS).from(classSeries)
+      .where(and(eq(classSeries.teacherId, teacherId), inArray(classSeries.studentId, studentIds))),
+    db.select(EVENT_COLS).from(classEvents)
+      .where(and(eq(classEvents.teacherId, teacherId), inArray(classEvents.studentId, studentIds), eventsNear(from, to))),
+  ])
+  const series = seriesRows.map(toSeries)
+  const classes: AgendaItem[] = []
+  for (const studentId of studentIds) {
+    const own = series.filter((s) => s.studentId === studentId)
+    const ownEvents = events.filter((e) => e.studentId === studentId)
+    if (own.length === 0 && ownEvents.length === 0) continue
+    for (const c of buildSchedule(own, ownEvents, from, to)) classes.push({ ...c, studentId })
+  }
+  classes.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime() || a.key.localeCompare(b.key))
+  const used = new Set(classes.map((c) => c.seriesId))
+  return { classes, series: series.filter((s) => used.has(s.id)) }
 }
 
 // Las clases sin link propio usan "Mi sala de Zoom" del profe (G0). Se resuelve al leer,

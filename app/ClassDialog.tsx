@@ -4,7 +4,8 @@
 //   · ScopeDialog: al editar o cancelar una clase que se repite, "Solo esta clase /
 //     Esta y las siguientes / Todas las clases".
 // Solo arman el borrador (lib/classDraft.ts); qué se le pide a la API lo decide
-// TeacherClasses. Todo en hora de Argentina (la del profe).
+// useClassEditor. Todo en hora de Argentina (la del profe).
+// G2: desde "Mi agenda" la ventana muestra el alumno (y lo deja elegir al crear).
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import styles from './classes.module.css'
 import { weekdayOf } from '@/lib/classSchedule'
@@ -17,6 +18,9 @@ import { WEEKDAYS } from '@/lib/classView'
 export const DIALOG_TEXTS = {
   create: 'Nueva clase',
   edit: 'Editar clase',
+  student: 'Alumno',
+  pickStudent: 'Elegí el alumno…',
+  noStudent: 'Elegí el alumno',
   editSeries: 'Editar el horario',
   close: 'Cerrar',
   date: 'Fecha', start: 'Empieza', end: 'Termina a las',
@@ -45,9 +49,10 @@ export const DIALOG_TEXTS = {
 } as const
 
 export type Scope = 'only' | 'following' | 'all'
+export type StudentOption = { id: string; label: string }
 
 // Fondo + caja centrada. Escape cierra; el foco arranca en la ventana.
-function Modal({ label, onClose, children, wide }: { label: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+export function Modal({ label, onClose, children, wide }: { label: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const prev = document.activeElement as HTMLElement | null
@@ -73,15 +78,18 @@ type DialogProps = {
   zoomUrl: string | null
   /** Editar una clase de un horario: no se ofrece "No se repite". */
   lockRepeat?: boolean
+  /** "Mi agenda" (G2): de qué alumno es. `locked` = se muestra pero no se cambia. */
+  student?: { options: StudentOption[]; value: string | null; locked: boolean }
   busy: boolean
   error: string
-  onSave: (d: ClassDraft) => void
+  onSave: (d: ClassDraft, studentId?: string) => void
   onClose: () => void
 }
 
-export function ClassDialog({ mode, initial, zoomUrl, lockRepeat, busy, error, onSave, onClose }: DialogProps) {
+export function ClassDialog({ mode, initial, zoomUrl, lockRepeat, student, busy, error, onSave, onClose }: DialogProps) {
   const T = DIALOG_TEXTS
   const [d, setD] = useState<ClassDraft>(initial)
+  const [who, setWho] = useState(student?.value ?? '')
   const [endsMode, setEndsMode] = useState<'never' | 'on'>(initial.endsOn ? 'on' : 'never')
   const [ownLink, setOwnLink] = useState(!zoomUrl || !!initial.link)
   const [localError, setLocalError] = useState('')
@@ -103,10 +111,11 @@ export function ClassDialog({ mode, initial, zoomUrl, lockRepeat, busy, error, o
   }
   function save() {
     const draft = { ...d, endsOn: d.repeat !== 'none' && endsMode === 'on' ? d.endsOn : null, link: ownLink ? d.link : '' }
-    const err = draftError(draft)
+    const err = student && !who ? T.noStudent : draftError(draft)
     if (err) { setLocalError(err); return }
-    onSave(draft)
+    onSave(draft, student ? who : undefined)
   }
+  const pickFirst = !!student && !student.locked && !who
 
   return (
     <Modal label={title} onClose={onClose}>
@@ -116,10 +125,27 @@ export function ClassDialog({ mode, initial, zoomUrl, lockRepeat, busy, error, o
           <button type="button" className={styles.cdX} onClick={onClose} aria-label={T.close}>×</button>
         </div>
 
+        {student && (
+          <div className={styles.cdLine}>
+            <span className={styles.cdIco} aria-hidden="true">👤</span>
+            {student.locked ? (
+              <b className={styles.cdRoom} data-testid="dialog-student">{student.options.find((o) => o.id === who)?.label ?? ''}</b>
+            ) : (
+              <label className={styles.cdField}><span className={styles.cdSr}>{T.student}</span>
+                <select data-autofocus={pickFirst || undefined} className={styles.cdInput} value={who}
+                  onChange={(e) => { setLocalError(''); setWho(e.target.value) }}>
+                  <option value="" disabled>{T.pickStudent}</option>
+                  {student.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
+        )}
+
         <div className={styles.cdLine}>
           <span className={styles.cdIco} aria-hidden="true">🕒</span>
           <label className={`${styles.cdField} ${styles.cdDateField}`}><span className={styles.cdSr}>{T.date}</span>
-            <input data-autofocus className={styles.cdInput} type="date" required value={d.date} onChange={(e) => set({ date: e.target.value })} />
+            <input data-autofocus={!pickFirst || undefined} className={styles.cdInput} type="date" required value={d.date} onChange={(e) => set({ date: e.target.value })} />
           </label>
           <label className={styles.cdField}><span className={styles.cdSr}>{T.start}</span>
             <input className={styles.cdInput} type="time" required value={d.start} onChange={(e) => changeStart(e.target.value)} />

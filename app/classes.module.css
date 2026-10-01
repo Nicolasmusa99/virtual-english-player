@@ -96,6 +96,67 @@
 .zrRow { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
 .zrOk { font-size: 12px; color: var(--gr); }
 
+/* G2 — "Mi agenda" del profe: grilla semanal estilo Google Calendar (MyAgenda.tsx).
+   Vive dentro de .lightScope. Colores por alumno: tonos oscuros para que el texto
+   blanco tenga buen contraste (AA). */
+.ag { width: 100%; max-width: 1280px; margin: 0 auto; padding: 8px 20px 28px; display: flex; flex-direction: column; color: var(--tx); --agGutter: 56px; }
+.agSticky { position: sticky; top: 0; z-index: 3; background: var(--p1); }
+.agTop { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 0 12px; }
+.agCreate { display: inline-flex; align-items: center; gap: 10px; padding: 8px 20px 8px 10px; border-radius: 24px; border: 1px solid var(--ln); background: var(--p1); color: var(--tx); font: 500 14px var(--font-sans); box-shadow: 0 1px 3px rgba(15, 27, 45, 0.22); cursor: pointer; }
+.agCreate:hover { box-shadow: 0 3px 10px rgba(15, 27, 45, 0.25); }
+.agCreate:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+.agPlus { width: 26px; height: 26px; border-radius: 50%; background: var(--acDeep); color: #fff; display: grid; place-items: center; font-size: 19px; line-height: 1; }
+.agToday { padding: 7px 16px; border-radius: 6px; border: 1px solid var(--ln2); background: transparent; color: var(--tx2); font: 13px var(--font-sans); cursor: pointer; }
+.agRound { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--ln2); background: transparent; color: var(--tx2); font-size: 17px; line-height: 1; cursor: pointer; }
+.agToday:hover, .agRound:hover { background: var(--p3); color: var(--tx); }
+.agCreate:focus-visible, .agToday:focus-visible, .agRound:focus-visible, .agStripDay:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
+.agTitle { margin: 0 4px; font-size: 21px; font-weight: 500; color: var(--tx); white-space: nowrap; }
+.agTz { font: 10.5px var(--font-mono); color: var(--tx3); }
+.agHead { display: grid; grid-template-columns: var(--agGutter) repeat(var(--agCols), minmax(0, 1fr)); border-bottom: 1px solid var(--ln2); }
+.agDay { display: flex; flex-direction: column; align-items: center; padding: 4px 0 8px; font: 11px var(--font-sans); letter-spacing: 0.5px; color: var(--tx3); }
+.agNum { display: grid; place-items: center; width: 40px; height: 40px; margin-top: 2px; border-radius: 50%; font-size: 22px; font-weight: 400; color: var(--tx); }
+.agIsToday { color: var(--ac); }
+.agIsToday .agNum { background: var(--acDeep); color: #fff; }
+.agBody { position: relative; display: grid; grid-template-columns: var(--agGutter) repeat(var(--agCols), minmax(0, 1fr)); margin-top: 10px; }
+.agHours { position: relative; }
+.agHour { position: absolute; right: 8px; transform: translateY(-50%); font: 10.5px var(--font-mono); color: var(--tx3); }
+.agCol { position: relative; border-left: 1px solid var(--ln); background-image: linear-gradient(to bottom, var(--ln2) 1px, transparent 1px); background-size: 100% 48px; cursor: pointer; }
+.agEv { position: absolute; border: 0; border-radius: 6px; padding: 3px 7px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; overflow: hidden; color: #fff; font: 12.5px var(--font-sans); line-height: 1.3; cursor: pointer; box-shadow: 0 0 0 1px var(--p1); }
+.agEv b { max-width: 100%; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agEv:hover { filter: brightness(1.08); }
+.agEv:focus-visible { outline: 2px solid var(--tx); outline-offset: 1px; z-index: 2; }
+.agEvTight { flex-direction: row; align-items: center; gap: 6px; padding-top: 0; padding-bottom: 0; }
+.agEvCanc { opacity: 0.45; text-decoration: line-through; }
+.agC0 { background: #3D6FB6; }
+.agC1 { background: #157A53; }
+.agC2 { background: #A2477F; }
+.agC3 { background: #A85A12; }
+.agC4 { background: #6A4FB3; }
+.agC5 { background: #0F7676; }
+.agC6 { background: #B23C3C; }
+.agC7 { background: #4F6178; }
+.agNow { position: absolute; left: -1px; right: 0; height: 2px; background: var(--rd); z-index: 1; pointer-events: none; }
+.agNow::before { content: ''; position: absolute; left: -6px; top: -5px; width: 12px; height: 12px; border-radius: 50%; background: var(--rd); }
+.agLegend { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 18px; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--ln2); font-size: 13px; color: var(--tx2); }
+.agLegendItem { display: inline-flex; align-items: center; }
+.agSw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin-right: 7px; flex-shrink: 0; }
+.agHint { color: var(--tx3); }
+.agMsg { margin: 10px 0 0; font-size: 13px; color: var(--tx3); }
+.agStrip { display: flex; justify-content: space-between; border-bottom: 1px solid var(--ln2); padding: 2px 0 6px; }
+.agStripDay { flex: 1; display: flex; flex-direction: column; align-items: center; border: 0; background: transparent; color: var(--tx3); font: 11px var(--font-sans); cursor: pointer; padding: 2px 0; border-radius: 8px; }
+.agStripDay .agNum { width: 30px; height: 30px; font-size: 15px; font-weight: 600; }
+.agPicked .agNum { background: var(--ac2); outline: 2px solid var(--acDeep); }
+.agIsToday.agPicked .agNum { background: var(--acDeep); outline: 0; }
+.agFab { position: fixed; right: 18px; bottom: 22px; z-index: 5; width: 56px; height: 56px; border-radius: 16px; border: 0; background: var(--p1); color: var(--acDeep); font-size: 30px; line-height: 1; box-shadow: 0 4px 14px rgba(15, 27, 45, 0.3); cursor: pointer; }
+.agFab:disabled { opacity: 0.5; }
+/* Detalle de una clase (clic en la grilla). */
+.pkWhen { font-size: 15px; color: var(--tx); }
+.pkCanc { text-decoration: line-through; color: var(--tx3); }
+.pkLink { font-size: 14px; font-weight: 600; color: var(--ac); }
+.agNarrow { padding: 0 10px 90px; --agGutter: 46px; }
+.agNarrow .agTop { flex-wrap: nowrap; gap: 8px; padding: 10px 0 8px; }
+.agNarrow .agTitle { font-size: 18px; margin: 0; }
+
 @media (max-width: 640px) {
   .tcWhen { min-width: 0; flex: 1 1 60%; }
   .tcInput { min-width: 0; width: 100%; }

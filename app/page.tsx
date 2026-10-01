@@ -10,6 +10,7 @@ import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
 import ZoomRoomCard from './ZoomRoomCard'
+import MyAgenda from './MyAgenda'
 import StudentApp from './StudentApp'
 import VoiceBoostControl from './VoiceBoostControl'
 import PlayerDock, { type DockClock } from './PlayerDock'
@@ -57,8 +58,10 @@ export default function Player() {
   const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student' | 'agenda'>('load')
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; email: string } | null>(null)
+  // A dónde vuelve la pantalla del alumno: a "Mis alumnos" o a "Mi agenda" (G2).
+  const [studentFrom, setStudentFrom] = useState<'users' | 'agenda'>('users')
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -1209,6 +1212,17 @@ export default function Player() {
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 520 }}>
                   {/* Mi sala de Zoom (calendario, G0) */}
                   <ZoomRoomCard />
+                  {/* Mi agenda (calendario, G2): todas las clases de la semana */}
+                  <div className={styles.dropzone} style={{ cursor: 'default' }}>
+                    <div className={styles.dzIcon}>
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                        <rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" />
+                      </svg>
+                    </div>
+                    <div className={styles.dzTitle}>Mi agenda</div>
+                    <div className={styles.dzSub}>Todas tus clases de la semana. Hacé clic en un horario libre para crear una.</div>
+                    <button className={styles.restoreBtn} onClick={() => setScreen('agenda')}>Ver mi agenda</button>
+                  </div>
                   {/* ① Mis alumnos (flujo principal) */}
                   <div className={styles.dropzone} style={{ cursor: 'default' }}>
                     <div className={styles.dzIcon}>
@@ -1343,7 +1357,7 @@ export default function Player() {
             {userRole && (
               <UsersPanel
                 role={userRole}
-                onOpenStudent={(id, email) => { setSelectedStudent({ id, email }); setScreen('student') }}
+                onOpenStudent={(id, email) => { setSelectedStudent({ id, email }); setStudentFrom('users'); setScreen('student') }}
               />
             )}
           </div>
@@ -1355,7 +1369,9 @@ export default function Player() {
         // más alta que el celular, y centrada sin scroll quedaba cortada arriba y abajo.
         <div className={`${styles.loadScreen} ${styles.lightScope}`} style={{ justifyContent: 'flex-start', overflowY: 'auto', paddingTop: 56 }}>
           <div style={{ position: 'absolute', top: 16, right: 16 }}>
-            <button className={styles.tbBtn} onClick={() => setScreen('users')}>← Volver a alumnos</button>
+            <button className={styles.tbBtn} onClick={() => setScreen(studentFrom)}>
+              {studentFrom === 'agenda' ? '← Volver a mi agenda' : '← Volver a alumnos'}
+            </button>
           </div>
           <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Alumno</div>
           <div style={{ width: '100%', maxWidth: 760 }}>
@@ -1365,6 +1381,16 @@ export default function Player() {
               onOpenVideo={openFromLibrary}
             />
           </div>
+        </div>
+      )}
+
+      {screen === 'agenda' && (
+        // Mi agenda (G2): ancho completo, arriba y con scroll (la grilla es más alta que la pantalla).
+        <div className={`${styles.loadScreen} ${styles.lightScope}`} style={{ justifyContent: 'flex-start', alignItems: 'stretch', overflowY: 'auto', padding: 0, gap: 0 }}>
+          <MyAgenda
+            onBack={() => setScreen('load')}
+            onOpenStudent={(id, email) => { setSelectedStudent({ id, email }); setStudentFrom('agenda'); setScreen('student') }}
+          />
         </div>
       )}
 
