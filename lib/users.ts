@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { and, eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { users } from '@/lib/db/schema'
 import type { Role } from '@/lib/db/schema'
@@ -62,4 +62,13 @@ export async function listAllUsers(): Promise<PublicUser[]> {
 // no depende de ningún parámetro del cliente.
 export async function listStudentsOf(teacherId: string): Promise<PublicUser[]> {
   return db.select(PUBLIC_COLS).from(users).where(eq(users.teacherId, teacherId))
+}
+
+// "Mi agenda" (G2): los alumnos de ESTE profe con su nombre (el de Google, si ya entró)
+// para nombrarlos en la grilla. Mismo filtro server-side que listStudentsOf.
+export async function listStudentNames(teacherId: string): Promise<{ id: string; name: string | null; email: string | null }[]> {
+  return db
+    .select({ id: users.id, name: users.name, email: users.email })
+    .from(users)
+    .where(and(eq(users.teacherId, teacherId), eq(users.role, 'alumno')))
 }

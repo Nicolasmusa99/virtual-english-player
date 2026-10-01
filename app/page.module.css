@@ -19,7 +19,8 @@
 .loadScreen { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; background: var(--p1); padding: 20px; }
 /* Inicio con sesión (G0): centrado si entra; si es más alto que la pantalla (celular),
    arranca arriba y se scrollea — centrado sin scroll quedaba cortado arriba y abajo. */
-.loadScroll { justify-content: safe center; overflow-y: auto; }
+/* padding-top: si no entra y arranca arriba, el logo no queda debajo de la fila de botones (G2). */
+.loadScroll { justify-content: safe center; overflow-y: auto; padding-top: 64px; }
 @media (max-width: 640px) { .loadScroll { justify-content: flex-start; padding-top: 72px; } }
 .logo { font-family: var(--font-mono); font-size: 13px; color: var(--tx2); letter-spacing: 0.5px; display: flex; align-items: center; gap: 7px; margin-bottom: 4px; }
 .logoDot { width: 7px; height: 7px; border-radius: 50%; background: var(--ac); flex-shrink: 0; }
