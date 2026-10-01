@@ -22,6 +22,14 @@ export function isWeekday(x: unknown): x is number {
   return Number.isInteger(x) && (x as number) >= 0 && (x as number) <= 6
 }
 
+// Días de la semana de un horario que se repite (G1: "martes y jueves"): una lista de
+// 1 a 7 días 0..6 sin repetir. Devuelve la lista ordenada, o null si no sirve.
+export function normalizeWeekdays(x: unknown): number[] | null {
+  if (!Array.isArray(x) || x.length === 0 || x.length > 7 || !x.every(isWeekday)) return null
+  const set = [...new Set(x as number[])].sort((a, b) => a - b)
+  return set.length === x.length ? set : null
+}
+
 // 'HH:MM' (24 h) → minutos desde 00:00. Cualquier otra cosa → null.
 export function parseTime(x: unknown): number | null {
   if (typeof x !== 'string') return null
@@ -41,8 +49,9 @@ export function isDateStr(x: unknown): x is string {
   return t.getUTCFullYear() === y && t.getUTCMonth() === m - 1 && t.getUTCDate() === d
 }
 
-// Link de la clase: SOLO https de Zoom, Google Meet o Teams (sin usuario/clave en
-// la URL). '' / null → null (sin link). Otra cosa → { ok: false }.
+// Link https de Zoom, Google Meet o Teams (sin usuario/clave en la URL). '' / null →
+// null (sin link). Otra cosa → { ok: false }. Desde G1 las clases usan SOLO Zoom
+// (normalizeZoomRoomUrl); esta queda como base de esa validación.
 const MEET_HOSTS_EXACT = ['meet.google.com', 'teams.microsoft.com', 'teams.live.com', 'zoom.us']
 const MEET_HOSTS_SUFFIX = ['.zoom.us'] // us02web.zoom.us, etc.
 export const MAX_MEET_URL = 500
@@ -58,7 +67,9 @@ export function normalizeMeetUrl(x: unknown): { ok: true; url: string | null } |
   return allowed ? { ok: true, url: u.href } : { ok: false }
 }
 
-// "Mi sala de Zoom": como normalizeMeetUrl pero SOLO Zoom (zoom.us o *.zoom.us).
+// SOLO Zoom (zoom.us o *.zoom.us): "Mi sala de Zoom" y, desde G1, el link de cada clase
+// (el dueño decidió que se usa solo Zoom). Los links viejos de Meet/Teams que ya estén
+// guardados se siguen mostrando; al editarlos hay que poner uno de Zoom.
 export function normalizeZoomRoomUrl(x: unknown): { ok: true; url: string | null } | { ok: false } {
   const r = normalizeMeetUrl(x)
   if (!r.ok || r.url === null) return r
@@ -117,7 +128,7 @@ export function weekdayOf(date: string): number {
 
 export type SeriesRow = {
   id: string
-  weekday: number
+  weekdays: number[] // 0 = domingo … 6 = sábado (G1: uno o varios días)
   startMinute: number
   durationMin: number
   startsOn: string
@@ -156,9 +167,10 @@ export function expandSeries(s: SeriesRow, from: Date, to: Date): Date[] {
   let day = s.startsOn > addDays(dateInTz(from), -1) ? s.startsOn : addDays(dateInTz(from), -1)
   const last = addDays(dateInTz(to), 1)
   const end = s.endsOn && s.endsOn < last ? s.endsOn : last
-  day = addDays(day, (s.weekday - weekdayOf(day) + 7) % 7)
+  const days = new Set(s.weekdays)
   const out: Date[] = []
-  for (let i = 0; day <= end && i < 110; i++, day = addDays(day, 7)) {
+  for (let i = 0; day <= end && i < 770; i++, day = addDays(day, 1)) {
+    if (!days.has(weekdayOf(day))) continue
     const start = zonedToUtc(day, s.startMinute)
     if (overlaps(start, s.durationMin, from, to)) out.push(start)
   }
@@ -168,8 +180,24 @@ export function expandSeries(s: SeriesRow, from: Date, to: Date): Date[] {
 // ¿`instant` es una clase real de la serie? (para aceptar una excepción)
 export function isOccurrence(s: SeriesRow, instant: Date): boolean {
   const day = dateInTz(instant)
-  if (weekdayOf(day) !== s.weekday || day < s.startsOn || (s.endsOn && day > s.endsOn)) return false
+  if (!s.weekdays.includes(weekdayOf(day)) || day < s.startsOn || (s.endsOn && day > s.endsOn)) return false
   return zonedToUtc(day, s.startMinute).getTime() === instant.getTime()
+}
+
+// ─── Editar / cancelar "esta y las siguientes" (G1, como Google Calendar) ───
+//
+// El horario viejo TERMINA el día anterior a la clase elegida (o a la nueva fecha, si
+// es antes) y, al editar, arranca un horario nuevo. Las excepciones del viejo desde ese
+// día en adelante se borran (esas clases pasan a ser del horario nuevo). Si la clase
+// elegida es la primera del horario, "esta y las siguientes" = "todas".
+export type SplitPlan = { kind: 'all' } | { kind: 'split'; oldEndsOn: string; cutFrom: Date }
+
+export function planSplit(series: SeriesRow, occurrence: Date, newStartsOn?: string): SplitPlan {
+  const occDay = dateInTz(occurrence)
+  const from = newStartsOn && newStartsOn < occDay ? newStartsOn : occDay
+  const oldEndsOn = addDays(from, -1)
+  if (oldEndsOn < series.startsOn) return { kind: 'all' }
+  return { kind: 'split', oldEndsOn, cutFrom: zonedToUtc(from, 0) }
 }
 
 // Todas las clases entre [from, to), ordenadas: las del horario fijo (salvo las que
@@ -247,7 +275,7 @@ export function classToStudentJson(c: ClassItem) {
 
 export function seriesToJson(s: SeriesRow) {
   return {
-    id: s.id, weekday: s.weekday, time: formatTime(s.startMinute), durationMin: s.durationMin,
+    id: s.id, weekdays: s.weekdays, time: formatTime(s.startMinute), durationMin: s.durationMin,
     startsOn: s.startsOn, endsOn: s.endsOn, meetUrl: s.meetUrl,
   }
 }

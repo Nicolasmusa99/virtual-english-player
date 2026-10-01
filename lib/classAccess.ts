@@ -20,6 +20,8 @@ export const CLASS_ERRORS = {
   noTeacher: 'El alumno no tiene profe asignado',
   classNotFound: 'Clase no encontrada',
   forbidden: 'No autorizado',
+  // G1: las clases usan SOLO Zoom (decisión del dueño). Mismo texto que "Mi sala de Zoom".
+  zoomOnly: 'Tiene que ser un link de Zoom (https://…zoom.us/…)',
 } as const
 
 // ¿`me` puede agendar clases a `student`? → a nombre de qué profe.

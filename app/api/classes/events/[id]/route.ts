@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/authz'
 import { getStudentById } from '@/lib/users'
 import { CLASS_ERRORS, isUuid, rowScopeFor } from '@/lib/classAccess'
 import { deleteEvent, getEvent, updateEvent } from '@/lib/classes'
-import { isDateStr, isDurationOk, normalizeMeetUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
+import { isDateStr, isDurationOk, normalizeZoomRoomUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
 import type { ClassStatus, Role } from '@/lib/db/schema'
 
 // Calendario (C1) — una clase suelta o una excepción.
@@ -45,8 +45,8 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     patch.durationMin = b.durationMin
   }
   if ('meetUrl' in b) {
-    const link = normalizeMeetUrl(b.meetUrl)
-    if (!link.ok) return err(400, 'El link tiene que ser de Zoom, Google Meet o Teams (https)')
+    const link = normalizeZoomRoomUrl(b.meetUrl)
+    if (!link.ok) return err(400, CLASS_ERRORS.zoomOnly)
     patch.meetUrl = link.url
   }
   if ('status' in b) {

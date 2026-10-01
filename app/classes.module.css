@@ -38,19 +38,55 @@
 .k_cancelada { background: var(--rd2); color: var(--rd); border: 1px solid var(--rd3); }
 .tcWas { font-size: 11px; color: var(--tx3); }
 
-.tcForm { background: var(--p3); border: 1px solid var(--ac3); border-radius: 10px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; margin: 4px 0 8px; }
-.tcFormTitle { font-size: 12.5px; font-weight: 600; color: var(--tx); }
-.tcFields { display: flex; flex-wrap: wrap; gap: 10px; }
-.tcField { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--tx3); }
-.tcFieldWide { flex: 1 1 280px; }
+/* Campo de texto (lo usa "Mi sala de Zoom", ZoomRoomCard). */
 .tcInput { height: 32px; border: 1px solid var(--ln2); border-radius: 6px; background: var(--p1); color: var(--tx); font: 12.5px var(--font-sans); padding: 0 10px; min-width: 110px; }
 .tcInput:focus { outline: 2px solid var(--ac3); border-color: var(--ac); }
-.tcBtns { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .tcPrimary { padding: 6px 14px; border-radius: 6px; border: 0; background: var(--acDeep); color: #fff; font: 500 12px var(--font-sans); cursor: pointer; min-height: 30px; }
 .tcPrimary:hover { background: var(--acDeepHover); }
 .tcPrimary:disabled { opacity: 0.6; cursor: wait; }
 .tcHint { font-size: 11px; color: var(--tx3); }
 .tcError { font-size: 12px; color: var(--rd); background: var(--rd2); border: 1px solid var(--rd3); border-radius: 8px; padding: 8px 12px; }
+
+/* G1 — ventanas "Nueva / Editar clase" y "¿Solo esta, esta y las siguientes, o todas?"
+   (estilo Google Calendar). Viven dentro de .lightScope: mismos tokens. */
+.cdBackdrop { position: fixed; inset: 0; z-index: 100; background: rgba(15, 27, 45, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 16px; overflow-y: auto; }
+.cdBox { width: 100%; max-width: 620px; background: var(--p1); border-radius: 16px; box-shadow: 0 18px 50px rgba(15, 27, 45, 0.28); padding: 20px 24px 18px; outline: none; }
+.cdWide { max-width: 720px; }
+.cdHead { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
+.cdTitle { flex: 1; margin: 0 0 6px; font-size: 20px; font-weight: 600; color: var(--tx); padding-bottom: 6px; border-bottom: 2px solid var(--ac); }
+.cdX { border: 0; background: transparent; font-size: 26px; line-height: 1; color: var(--tx3); cursor: pointer; padding: 2px 6px; border-radius: 6px; }
+.cdX:hover { background: var(--p3); color: var(--tx); }
+.cdLine { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+.cdIco { width: 24px; flex-shrink: 0; text-align: center; font-size: 16px; color: var(--tx3); }
+.cdField { display: flex; flex-direction: column; gap: 4px; }
+.cdSr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.cdLbl { font-size: 12px; color: var(--tx3); }
+.cdInput { height: 38px; border: 1px solid transparent; border-radius: 8px; background: var(--p3); color: var(--tx); font: 14px var(--font-sans); padding: 0 12px; }
+.cdInput:hover { background: var(--p4); }
+.cdInput:focus { outline: 2px solid var(--ac); outline-offset: 0; background: var(--p1); border-color: var(--ac3); }
+.cdDash { color: var(--tx3); }
+.cdDur { font: 12px var(--font-mono); color: var(--ac); }
+.cdChips { display: flex; gap: 6px; flex-wrap: wrap; }
+.cdChip { width: 38px; height: 38px; border-radius: 50%; border: 1px solid var(--ln2); background: transparent; color: var(--tx2); font: 500 12.5px var(--font-sans); cursor: pointer; }
+.cdChip:hover { background: var(--p3); }
+.cdChipOn { background: var(--acDeep); border-color: var(--acDeep); color: #fff; }
+.cdChipOn:hover { background: var(--acDeepHover); }
+.cdZ { width: 24px; height: 24px; flex-shrink: 0; border-radius: 6px; background: #2D8CFF; color: #fff; font: 700 13px var(--font-sans); display: grid; place-items: center; }
+.cdRoom { font-size: 14px; font-weight: 600; color: var(--tx); }
+.cdUrl { font: 12px var(--font-mono); color: var(--tx3); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cdSp { flex: 1; }
+.cdLinkBox { flex: 1; display: flex; align-items: flex-end; gap: 8px; flex-wrap: wrap; }
+.cdLinkBox .cdField { flex: 1 1 260px; }
+.cdTz { margin: 14px 0 0 32px; font-size: 12px; color: var(--tx3); }
+.cdBtns { display: flex; justify-content: flex-end; gap: 10px; margin-top: 16px; }
+.cdBtns .tcBtn, .cdBtns .tcPrimary { min-height: 38px; padding: 8px 18px; font-size: 13px; }
+.cdRadios { display: flex; flex-direction: column; gap: 12px; margin: 14px 0 6px; }
+.cdRadio { display: flex; align-items: center; gap: 10px; font-size: 15px; color: var(--tx); cursor: pointer; }
+.cdRadio input { width: 18px; height: 18px; accent-color: var(--acDeep); margin: 0; }
+.cdRadioOff { opacity: 0.45; cursor: default; }
+.cdDangerBtn { min-height: 38px; padding: 8px 18px; border-radius: 6px; border: 0; background: var(--rd); color: #fff; font: 500 13px var(--font-sans); cursor: pointer; }
+.cdDangerBtn:hover { filter: brightness(0.95); }
+.cdDangerBtn:disabled { opacity: 0.6; cursor: wait; }
 
 /* "Mi sala de Zoom" (G0) — tarjeta del inicio del profe. */
 .zr { width: 100%; border: 1px solid var(--ac3); background: var(--ac2); border-radius: 14px; padding: 16px 18px; display: flex; gap: 14px; align-items: flex-start; text-align: left; }
@@ -62,9 +98,15 @@
 
 @media (max-width: 640px) {
   .tcWhen { min-width: 0; flex: 1 1 60%; }
-  .tcFieldWide { flex-basis: 100%; }
   .tcInput { min-width: 0; width: 100%; }
-  .tcField { flex: 1 1 40%; }
+  .cdBackdrop { padding: 0; align-items: stretch; }
+  .cdBox { max-width: none; min-height: 100%; border-radius: 0; padding: 16px 16px 20px; }
+  .cdLine { margin-left: 0; }
+  .cdIco { display: none; }
+  .cdTz { margin-left: 0; }
+  .cdChip { width: 36px; height: 36px; }
+  .cdDateField { flex: 1 1 100%; }
+  .cdDateField .cdInput { width: 100%; }
   .zrRow { flex-wrap: wrap; }
   .zrRow .tcPrimary { width: 100%; }
 }
