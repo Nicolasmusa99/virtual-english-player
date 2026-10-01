@@ -121,9 +121,14 @@ describe('lado profe', () => {
   it('formularios en hora de Buenos Aires; títulos', () => {
     expect(formDate(Z('2026-09-30T02:30:00Z'))).toBe('2026-09-29')
     expect(formTime(Z('2026-09-30T02:30:00Z'))).toBe('23:30')
-    expect(seriesTitle(2, '18:00')).toBe('Todos los martes · 18:00')
-    expect(seriesTitle(6, '10:00')).toBe('Todos los sábados · 10:00')
-    expect(seriesTitle(0, '10:00')).toBe('Todos los domingos · 10:00')
+    expect(seriesTitle([2], '18:00')).toBe('Todos los martes · 18:00')
+    expect(seriesTitle([6], '10:00')).toBe('Todos los sábados · 10:00')
+    expect(seriesTitle([0], '10:00')).toBe('Todos los domingos · 10:00')
+    // G1: varios días, de lunes a domingo
+    expect(seriesTitle([4, 2], '18:00')).toBe('Todos los martes y jueves · 18:00')
+    expect(seriesTitle([5, 1, 3], '18:00')).toBe('Todos los lunes, miércoles y viernes · 18:00')
+    expect(seriesTitle([0, 6], '10:00')).toBe('Todos los sábados y domingos · 10:00')
+    expect(seriesTitle([0, 1, 2, 3, 4, 5, 6], '07:00')).toBe('Todos los días · 07:00')
     expect(dayMonth('2026-09-01')).toBe('1/9')
   })
 })

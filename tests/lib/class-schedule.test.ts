@@ -2,7 +2,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   addDays, buildSchedule, CLASS_TZ, dateInTz, expandSeries, formatTime, isDateStr, isDurationOk,
-  isOccurrence, isWeekday, minuteInTz, normalizeMeetUrl, normalizeZoomRoomUrl, parseRange, parseTime, weekdayOf, zonedToUtc,
+  isOccurrence, isWeekday, minuteInTz, normalizeMeetUrl, normalizeWeekdays, normalizeZoomRoomUrl, parseRange, parseTime,
+  planSplit, seriesToJson, weekdayOf, zonedToUtc,
   type EventRow, type SeriesRow,
 } from '@/lib/classSchedule'
 
@@ -10,7 +11,7 @@ const Z = (iso: string) => new Date(iso)
 
 // Serie: martes 18:00 (BA) = 21:00 UTC, 60 min, desde el martes 29/9/2026.
 const TUE: SeriesRow = {
-  id: 's-tue', weekday: 2, startMinute: 18 * 60, durationMin: 60,
+  id: 's-tue', weekdays: [2], startMinute: 18 * 60, durationMin: 60,
   startsOn: '2026-09-29', endsOn: null, meetUrl: 'https://meet.google.com/abc-defg-hij',
 }
 
@@ -219,5 +220,78 @@ describe('normalizeZoomRoomUrl — "Mi sala de Zoom": solo Zoom', () => {
   it('rechaza Meet/Teams (no es una sala de Zoom) y todo lo inválido', () => {
     for (const u of ['https://meet.google.com/abc', 'https://teams.microsoft.com/x', 'http://zoom.us/j/1', 'https://evilzoom.us/j/1', 'https://zoom.us.evil.com/j', 42])
       expect(normalizeZoomRoomUrl(u), String(u)).toEqual({ ok: false })
+  })
+})
+
+// ─── G1: varios días + "esta y las siguientes" ──────────────────────────────
+
+describe('normalizeWeekdays (G1: "martes y jueves")', () => {
+  it('ordena y acepta de 1 a 7 días', () => {
+    expect(normalizeWeekdays([4, 2])).toEqual([2, 4])
+    expect(normalizeWeekdays([0])).toEqual([0])
+    expect(normalizeWeekdays([6, 5, 4, 3, 2, 1, 0])).toEqual([0, 1, 2, 3, 4, 5, 6])
+  })
+  it('rechaza vacío, repetidos, fuera de rango y no-listas', () => {
+    for (const bad of [[], [2, 2], [7], [-1], [2.5], ['2'], 2, null, undefined, [0, 1, 2, 3, 4, 5, 6, 0]])
+      expect(normalizeWeekdays(bad), JSON.stringify(bad)).toBeNull()
+  })
+})
+
+// Martes y jueves 18:00 (BA) desde el martes 29/9/2026.
+const TUE_THU: SeriesRow = { ...TUE, id: 's-tt', weekdays: [2, 4] }
+
+describe('horario en varios días', () => {
+  it('expandSeries: martes y jueves, en orden', () => {
+    const got = expandSeries(TUE_THU, Z('2026-09-28T00:00:00Z'), Z('2026-10-12T00:00:00Z')).map((d) => d.toISOString())
+    expect(got).toEqual([
+      '2026-09-29T21:00:00.000Z', '2026-10-01T21:00:00.000Z', // mar 29/9, jue 1/10
+      '2026-10-06T21:00:00.000Z', '2026-10-08T21:00:00.000Z', // mar 6/10, jue 8/10
+    ])
+  })
+  it('expandSeries respeta inicio y fin aunque caigan a mitad de semana', () => {
+    const s = { ...TUE_THU, startsOn: '2026-10-01', endsOn: '2026-10-06' }
+    const got = expandSeries(s, Z('2026-09-01T00:00:00Z'), Z('2026-11-01T00:00:00Z')).map((d) => d.toISOString())
+    expect(got).toEqual(['2026-10-01T21:00:00.000Z', '2026-10-06T21:00:00.000Z'])
+  })
+  it('isOccurrence acepta cualquiera de sus días (y no otro día ni otra hora)', () => {
+    expect(isOccurrence(TUE_THU, Z('2026-10-01T21:00:00Z'))).toBe(true) // jueves
+    expect(isOccurrence(TUE_THU, Z('2026-10-06T21:00:00Z'))).toBe(true) // martes
+    expect(isOccurrence(TUE_THU, Z('2026-10-07T21:00:00Z'))).toBe(false) // miércoles
+    expect(isOccurrence(TUE_THU, Z('2026-10-01T22:00:00Z'))).toBe(false) // otra hora
+  })
+  it('una semana entera: todos los días', () => {
+    const s = { ...TUE, weekdays: [0, 1, 2, 3, 4, 5, 6] }
+    expect(expandSeries(s, Z('2026-10-05T00:00:00Z'), Z('2026-10-12T00:00:00Z'))).toHaveLength(7)
+  })
+  it('seriesToJson manda weekdays', () => {
+    expect(seriesToJson(TUE_THU)).toMatchObject({ weekdays: [2, 4], time: '18:00' })
+  })
+})
+
+describe('planSplit — "esta y las siguientes" (como Google)', () => {
+  it('desde una clase del medio: el viejo termina el día anterior y se cortan sus excepciones desde ese día', () => {
+    expect(planSplit(TUE, Z('2026-10-13T21:00:00Z'))).toEqual({
+      kind: 'split', oldEndsOn: '2026-10-12', cutFrom: Z('2026-10-13T03:00:00Z'), // 00:00 del 13 en BA
+    })
+  })
+  it('si el horario nuevo arranca ANTES (se movió para atrás), el viejo termina antes de esa fecha', () => {
+    expect(planSplit(TUE, Z('2026-10-13T21:00:00Z'), '2026-10-12')).toMatchObject({ kind: 'split', oldEndsOn: '2026-10-11' })
+  })
+  it('si arranca DESPUÉS, el corte sigue siendo la clase elegida', () => {
+    expect(planSplit(TUE, Z('2026-10-13T21:00:00Z'), '2026-10-15')).toMatchObject({ kind: 'split', oldEndsOn: '2026-10-12' })
+  })
+  it('desde la PRIMERA clase del horario: es lo mismo que "todas"', () => {
+    expect(planSplit(TUE, Z('2026-09-29T21:00:00Z'))).toEqual({ kind: 'all' })
+    expect(planSplit(TUE, Z('2026-10-06T21:00:00Z'), '2026-09-20')).toEqual({ kind: 'all' })
+  })
+  it('después del corte, el viejo no tiene clases desde ese día y el nuevo sí (sin pisarse)', () => {
+    const plan = planSplit(TUE, Z('2026-10-13T21:00:00Z'))
+    if (plan.kind !== 'split') throw new Error('esperaba split')
+    const old = { ...TUE, endsOn: plan.oldEndsOn }
+    const neu: SeriesRow = { ...TUE, id: 's-new', startsOn: '2026-10-13', startMinute: 19 * 60 }
+    const all = buildSchedule([old, neu], [], Z('2026-10-01T00:00:00Z'), Z('2026-10-25T00:00:00Z'))
+    expect(all.map((c) => `${c.seriesId}@${c.startsAt.toISOString()}`)).toEqual([
+      's-tue@2026-10-06T21:00:00.000Z', 's-new@2026-10-13T22:00:00.000Z', 's-new@2026-10-20T22:00:00.000Z',
+    ])
   })
 })

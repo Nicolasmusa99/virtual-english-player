@@ -14,8 +14,14 @@ export type EventFull = EventRow & { teacherId: string; studentId: string }
 
 const SERIES_COLS = {
   id: classSeries.id, teacherId: classSeries.teacherId, studentId: classSeries.studentId,
-  weekday: classSeries.weekday, startMinute: classSeries.startMinute, durationMin: classSeries.durationMin,
-  startsOn: classSeries.startsOn, endsOn: classSeries.endsOn, meetUrl: classSeries.meetUrl,
+  weekday: classSeries.weekday, weekdays: classSeries.weekdays, startMinute: classSeries.startMinute,
+  durationMin: classSeries.durationMin, startsOn: classSeries.startsOn, endsOn: classSeries.endsOn,
+  meetUrl: classSeries.meetUrl,
+}
+type SeriesDbRow = Omit<SeriesFull, 'weekdays'> & { weekday: number; weekdays: number[] | null }
+// Fila de la base → serie. Una fila vieja sin `weekdays` (antes de 0004) es [weekday].
+function toSeries({ weekday, weekdays, ...r }: SeriesDbRow): SeriesFull {
+  return { ...r, weekdays: weekdays && weekdays.length ? [...weekdays].sort((a, b) => a - b) : [weekday] }
 }
 const EVENT_COLS = {
   id: classEvents.id, teacherId: classEvents.teacherId, studentId: classEvents.studentId,
@@ -28,7 +34,7 @@ const DAY = 86_400_000
 // Las clases del alumno CON ESTE PROFE entre [from, to). Solo lectura.
 export async function getSchedule(studentId: string, teacherId: string, from: Date, to: Date): Promise<ClassItem[]> {
   const pair = and(eq(classSeries.studentId, studentId), eq(classSeries.teacherId, teacherId))
-  const series = await db.select(SERIES_COLS).from(classSeries).where(pair)
+  const series = (await db.select(SERIES_COLS).from(classSeries).where(pair)).map(toSeries)
   // Margen de un día hacia atrás: una clase larga que empezó antes de `from` sigue en curso.
   // Las excepciones se traen también por su ORIGINAL, para esconder el martes que se movió.
   const lo = new Date(from.getTime() - DAY)
@@ -61,7 +67,7 @@ export function withRoomLink(classes: ClassItem[], roomUrl: string | null): Clas
 // terminan DESPUÉS de hoy (`today` en 'YYYY-MM-DD' de CLASS_TZ). Uno que termina hoy
 // o antes ya no se muestra como horario (sus clases siguen en la lista / el mes).
 export async function listActiveSeries(studentId: string, teacherId: string, today: string): Promise<SeriesFull[]> {
-  return db
+  const rows = await db
     .select(SERIES_COLS)
     .from(classSeries)
     .where(
@@ -72,28 +78,61 @@ export async function listActiveSeries(studentId: string, teacherId: string, tod
       )
     )
     .orderBy(asc(classSeries.weekday), asc(classSeries.startMinute))
+  return rows.map(toSeries)
 }
 
-export async function createSeries(data: {
-  teacherId: string; studentId: string; weekday: number; startMinute: number; durationMin: number
+export type NewSeries = {
+  teacherId: string; studentId: string; weekdays: number[]; startMinute: number; durationMin: number
   startsOn: string; endsOn: string | null; meetUrl: string | null; createdBy: string
-}): Promise<SeriesFull> {
-  const [row] = await db.insert(classSeries).values(data).returning(SERIES_COLS)
-  return row
+}
+// `weekday` (columna vieja) = el primer día: el código anterior a G1 lo sigue entendiendo.
+const seriesValues = (d: NewSeries) => ({ ...d, weekday: d.weekdays[0] })
+
+// Crear un horario. Con `replacesEventId`: en el MISMO paso borra esa clase suelta (al
+// editar una clase suelta y ponerle "Se repite", pasa a ser este horario).
+export async function createSeries(data: NewSeries, replacesEventId?: string): Promise<SeriesFull> {
+  const insert = db.insert(classSeries).values(seriesValues(data)).returning(SERIES_COLS)
+  if (!replacesEventId) return toSeries((await insert)[0])
+  const [[row]] = await db.batch([insert, db.delete(classEvents).where(eq(classEvents.id, replacesEventId))])
+  return toSeries(row)
 }
 
 export async function getSeries(id: string): Promise<SeriesFull | null> {
   const [row] = await db.select(SERIES_COLS).from(classSeries).where(eq(classSeries.id, id))
-  return row ?? null
+  return row ? toSeries(row) : null
 }
 
-// Solo se edita el FIN, el link y la duración. Cambiar día/hora = terminar esta serie
-// y crear otra (así las clases pasadas y sus excepciones quedan como estaban).
-export async function updateSeries(
-  id: string, patch: { endsOn?: string | null; meetUrl?: string | null; durationMin?: number }
+export type SeriesPatch = {
+  weekdays?: number[]; startMinute?: number; durationMin?: number
+  startsOn?: string; endsOn?: string | null; meetUrl?: string | null
+}
+
+// "Todas las clases" (como Google): cambia el horario entero, también las pasadas. Si
+// cambia CUÁNDO es (días, hora o duración), sus excepciones (movidas/canceladas) se
+// descartan; si solo cambia el fin o el link, se conservan.
+export async function updateSeriesAll(id: string, patch: SeriesPatch): Promise<SeriesFull | null> {
+  const set = patch.weekdays ? { ...patch, weekday: patch.weekdays[0] } : patch
+  const update = db.update(classSeries).set(set).where(eq(classSeries.id, id)).returning(SERIES_COLS)
+  const resetsTimes = patch.weekdays !== undefined || patch.startMinute !== undefined || patch.durationMin !== undefined
+  if (!resetsTimes) return ((r) => (r ? toSeries(r) : null))((await update)[0])
+  const [[row]] = await db.batch([update, db.delete(classEvents).where(eq(classEvents.seriesId, id))])
+  return row ? toSeries(row) : null
+}
+
+// "Esta y las siguientes": el horario viejo termina `oldEndsOn` (y pierde sus
+// excepciones desde `cutFrom`) y, si viene `next`, arranca el horario nuevo. Todo en
+// un solo paso (si algo falla, no cambia nada).
+export async function splitSeries(
+  id: string, oldEndsOn: string, cutFrom: Date, next?: NewSeries
 ): Promise<SeriesFull | null> {
-  const [row] = await db.update(classSeries).set(patch).where(eq(classSeries.id, id)).returning(SERIES_COLS)
-  return row ?? null
+  const end = db.update(classSeries).set({ endsOn: oldEndsOn }).where(eq(classSeries.id, id)).returning(SERIES_COLS)
+  const cut = db.delete(classEvents).where(and(eq(classEvents.seriesId, id), gte(classEvents.originalStartsAt, cutFrom)))
+  if (!next) {
+    await db.batch([end, cut])
+    return null
+  }
+  const [, , [row]] = await db.batch([end, cut, db.insert(classSeries).values(seriesValues(next)).returning(SERIES_COLS)])
+  return toSeries(row)
 }
 
 export async function deleteSeries(id: string): Promise<boolean> {

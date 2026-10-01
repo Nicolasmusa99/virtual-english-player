@@ -8,6 +8,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   timestamp,
   unique,
@@ -198,7 +199,10 @@ export const classSeries = pgTable(
     studentId: uuid('student_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    weekday: integer('weekday').notNull(), // 0 = domingo … 6 = sábado
+    weekday: integer('weekday').notNull(), // 0 = domingo … 6 = sábado (el primero de `weekdays`)
+    // G1 (drizzle/0004_class_weekdays.sql): uno o varios días ("martes y jueves").
+    // NULL solo en filas viejas sin migrar: se lee como [weekday].
+    weekdays: smallint('weekdays').array(),
     startMinute: integer('start_minute').notNull(), // minutos desde 00:00 (18:00 → 1080)
     durationMin: integer('duration_min').notNull(),
     startsOn: date('starts_on', { mode: 'string' }).notNull(), // 'YYYY-MM-DD', inclusive

@@ -154,9 +154,16 @@ export function classKind(c: TeacherClass): ClassKind {
 export const formDate = (t: Date) => dateInTz(t, CLASS_TZ)
 export const formTime = (t: Date) => hhmm(t, CLASS_TZ)
 
-// 'Todos los martes · 18:00' / 'Todos los sábados · 10:00'
-export const seriesTitle = (weekday: number, time: string) =>
-  `Todos los ${WEEKDAYS[weekday]}${weekday === 0 || weekday === 6 ? 's' : ''} · ${time}`
+// 'Todos los martes · 18:00' / 'Todos los martes y jueves · 18:00' /
+// 'Todos los lunes, miércoles y viernes · 18:00' / 'Todos los días · 18:00' (G1: varios días)
+const plural = (d: number) => `${WEEKDAYS[d]}${d === 0 || d === 6 ? 's' : ''}`
+export function seriesTitle(weekdays: number[], time: string): string {
+  const days = [...new Set(weekdays)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)) // de lunes a domingo
+  if (days.length === 7) return `Todos los días · ${time}`
+  const names = days.map(plural)
+  const list = names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`
+  return `Todos los ${list} · ${time}`
+}
 
 // '1/9' a partir de 'YYYY-MM-DD'
 export function dayMonth(day: string): string {

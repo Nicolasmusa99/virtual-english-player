@@ -3,11 +3,11 @@ import { requireRole } from '@/lib/authz'
 import { getStudentById } from '@/lib/users'
 import { CLASS_ERRORS, classScopeFor, isUuid, rowScopeFor } from '@/lib/classAccess'
 import { createSingleClass, getSeries, upsertException } from '@/lib/classes'
-import { isDateStr, isDurationOk, isOccurrence, normalizeMeetUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
+import { isDateStr, isDurationOk, isOccurrence, normalizeZoomRoomUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
 
 // Calendario (C1) — clases SUELTAS y EXCEPCIONES del horario fijo.
 // POST /api/classes/events
-//   Clase suelta:        { studentId, date: 'YYYY-MM-DD', time: 'HH:MM', durationMin, meetUrl? }
+//   Clase suelta:        { studentId, date: 'YYYY-MM-DD', time: 'HH:MM', durationMin, meetUrl? (Zoom) }
 //   Cancelar un martes:  { seriesId, originalStartsAt: ISO, action: 'cancel' }
 //   Mover un martes:     { seriesId, originalStartsAt: ISO, action: 'move', date, time, durationMin?, meetUrl? }
 // Fecha y hora en hora de Buenos Aires. `originalStartsAt` es el startsAt que devolvió
@@ -15,7 +15,6 @@ import { isDateStr, isDurationOk, isOccurrence, normalizeMeetUrl, parseTime, zon
 // Cancelar/mover es idempotente por (serie, original): repetirlo reemplaza la excepción.
 
 const err = (status: 400 | 401 | 403 | 404, msg: string) => NextResponse.json({ error: msg }, { status })
-const BAD_LINK = 'El link tiene que ser de Zoom, Google Meet o Teams (https)'
 
 export async function POST(req: NextRequest) {
   const gate = await requireRole('admin', 'profesor')
@@ -26,8 +25,8 @@ export async function POST(req: NextRequest) {
   if (!body || typeof body !== 'object') return err(400, 'Body inválido')
   const { studentId, seriesId, originalStartsAt, action, date, time, durationMin, meetUrl } = body as Record<string, unknown>
 
-  const link = normalizeMeetUrl(meetUrl)
-  if (!link.ok) return err(400, BAD_LINK)
+  const link = normalizeZoomRoomUrl(meetUrl)
+  if (!link.ok) return err(400, CLASS_ERRORS.zoomOnly)
 
   // ── Excepción de una clase del horario fijo ──
   if (seriesId !== undefined) {
