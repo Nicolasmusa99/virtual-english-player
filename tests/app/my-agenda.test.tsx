@@ -187,6 +187,14 @@ describe('MyAgenda — detalle de una clase', () => {
     expect(dlg).toHaveTextContent('Se repite')
     expect(within(dlg).getByRole('link', { name: A.enterZoom })).toHaveAttribute('href', ZOOM)
     expect(dlg).toHaveTextContent(A.room)
+    // G3: "Copiar invitación" con el nombre del alumno, el día y la sala
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    await click(within(dlg).getByRole('button', { name: 'Copiar invitación' }))
+    const text = (writeText.mock.calls[0] as unknown as [string])[0]
+    expect(text).toMatch(/^¡Hola Martina! Te paso los datos de tu clase/)
+    expect(text).toContain('Martes 29 de septiembre, de 18:00 a 19:00')
+    expect(text).toContain(ZOOM)
   })
 
   it('Editar → la ventana de G1 con el alumno fijo → "Solo esta clase" mueve solo esa', async () => {

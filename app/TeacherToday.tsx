@@ -3,10 +3,12 @@
 // raya amarilla de "ahora" entre las que pasaron y las que vienen; la próxima con
 // "Entrar a Zoom". Al costado, la semana en corto. Crear / editar / restaurar usan las
 // mismas ventanas que la agenda (useClassEditor). Todo en hora de Argentina.
+// G3 liviano: "Copiar invitación" en cada clase que viene (para mandarla por WhatsApp).
 import { Fragment, useEffect, useMemo, useState } from 'react'
 import styles from './aula.module.css'
 import { AulaPage } from './AulaShell'
 import ZoomRoomStatus from './ZoomRoomStatus'
+import CopyInvite from './CopyInvite'
 import { useClassEditor } from './useClassEditor'
 import { useWeekAgenda, type AgendaClass } from './useWeekAgenda'
 import { CLASS_TZ, dateInTz } from '@/lib/classSchedule'
@@ -14,6 +16,7 @@ import { classKind, hhmm, meetLabel } from '@/lib/classView'
 import { dayLong, studentLabels, weekDays, weekStartOf } from '@/lib/agendaView'
 import { durationLabel } from '@/lib/classDraft'
 import { nextIndex, nowLineIndex, todaySummary, untilLabel } from '@/lib/todayView'
+import { classInvite } from '@/lib/invite'
 
 export const TODAY_TEXTS = {
   title: (day: string) => `Hoy, ${day}`,
@@ -63,6 +66,7 @@ export default function TeacherToday({ onOpenStudent, onOpenAgenda }: {
   const lead = ready ? todaySummary(todays, now, (i) => labels.get(todays[i].studentId)?.label ?? '') : T.loading
   const noStudents = ready && data?.students.length === 0
   const emailOf = (c: AgendaClass) => data?.students.find((s) => s.id === c.studentId)?.email ?? ''
+  const realName = (c: AgendaClass) => data?.students.find((s) => s.id === c.studentId)?.name ?? null
 
   const nowLine = (
     <li className={styles.nowline} aria-label={T.now(hhmm(now, CLASS_TZ))} data-testid="now-line">
@@ -84,6 +88,12 @@ export default function TeacherToday({ onOpenStudent, onOpenAgenda }: {
         <div>
           <div className={styles.who}>{nameOf(c)}</div>
           <div className={`${styles.what} ${isNext ? styles.whatNext : ''}`}>{what}</div>
+          {kind !== 'cancelada' && !ended && link && (
+            <div className={styles.invite}>
+              <CopyInvite text={classInvite({ name: realName(c), startsAt: c.startsAt, durationMin: c.durationMin, url: link })}
+                className={styles.txtBtn} okClassName={styles.zsOk} />
+            </div>
+          )}
         </div>
         <div className={styles.acts}>
           {kind === 'cancelada' && (

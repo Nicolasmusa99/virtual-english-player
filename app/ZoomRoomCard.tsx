@@ -9,7 +9,7 @@ import styles from './classes.module.css'
 
 export const ZOOM_TEXTS = {
   title: 'Mi sala de Zoom',
-  sub: 'Tu link personal de Zoom. Se usa solo en todas tus clases: no lo pegás nunca más.',
+  sub: 'Las clases de Virtual English duran una hora completa. Pegá el link de la sala de tu cuenta Zoom Pro y todas tus clases quedan listas.',
   label: 'Link de tu sala de Zoom',
   ph: 'https://us02web.zoom.us/j/…',
   save: 'Guardar',

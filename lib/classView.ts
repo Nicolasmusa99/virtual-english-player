@@ -174,13 +174,15 @@ export const formTime = (t: Date) => hhmm(t, CLASS_TZ)
 // 'Todos los martes a las 18:00' / 'Todos los martes y jueves a las 18:00' /
 // 'Todos los lunes, miércoles y viernes a las 18:00' / 'Todos los días a las 18:00' (G1: varios días)
 const plural = (d: number) => `${WEEKDAYS[d]}${d === 0 || d === 6 ? 's' : ''}`
-export function seriesTitle(weekdays: number[], time: string): string {
+// 'Todos los martes y jueves' / 'Todos los días' (G3: también lo usa la invitación)
+export function seriesDays(weekdays: number[]): string {
   const days = [...new Set(weekdays)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)) // de lunes a domingo
-  if (days.length === 7) return `Todos los días a las ${time}`
+  if (days.length === 7) return 'Todos los días'
   const names = days.map(plural)
   const list = names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`
-  return `Todos los ${list} a las ${time}`
+  return `Todos los ${list}`
 }
+export const seriesTitle = (weekdays: number[], time: string) => `${seriesDays(weekdays)} a las ${time}`
 
 // '1/9' a partir de 'YYYY-MM-DD'
 export function dayMonth(day: string): string {

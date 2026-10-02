@@ -8,6 +8,7 @@
 // G2: lo de crear/editar/cancelar vive en useClassEditor (lo comparte con "Mi agenda").
 // Rediseño (fase 5): sin recuadros ni etiquetas en mayúsculas; filas como en "Hoy", fechas
 // con palabras y "Hoy" resaltado en amarillo (el "ahora").
+// G3 liviano: "Copiar invitación" del horario que se repite (para mandarla una vez).
 import { useCallback, useEffect, useState } from 'react'
 import styles from './classes.module.css'
 import { CLASS_TZ, dateInTz } from '@/lib/classSchedule'
@@ -16,6 +17,8 @@ import {
   type TeacherClass,
 } from '@/lib/classView'
 import { EDITOR_TEXTS, useClassEditor, type Series } from './useClassEditor'
+import CopyInvite from './CopyInvite'
+import { seriesInvite } from '@/lib/invite'
 
 export const TEACHER_CLASS_TEXTS = {
   title: 'Clases',
@@ -94,6 +97,7 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
             {data.series.length === 0 && <div className={styles.tcHint}>{T.noFixed}</div>}
             {data.series.map((s) => {
               const link = linkLabel(s.meetUrl, data.zoomUrl)
+              const url = s.meetUrl ?? data.zoomUrl
               const span = s.startsOn > today && s.endsOn ? T.between(dayMonthLong(s.startsOn), dayMonthLong(s.endsOn))
                 : s.startsOn > today || !s.endsOn ? T.since(dayMonthLong(s.startsOn)) : T.until(dayMonthLong(s.endsOn))
               return (
@@ -102,6 +106,10 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
                     <b>{seriesTitle(s.weekdays, s.time)}</b>
                     <span className={styles.tcMeta}>{[T.minutes(s.durationMin), span, link && T.via(link)].filter(Boolean).join(', ')}</span>
                   </div>
+                  {url && (
+                    <CopyInvite className={styles.cdTxtBtn} okClassName={styles.zrOk}
+                      text={seriesInvite({ weekdays: s.weekdays, time: s.time, durationMin: s.durationMin, url })} />
+                  )}
                   <button type="button" className={styles.tcBtn} onClick={() => editor.editSeries(studentId, s)} disabled={busy}>{T.edit}</button>
                 </div>
               )

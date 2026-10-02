@@ -81,6 +81,18 @@ describe('TeacherClasses — lo que se ve', () => {
     expect(screen.getByTestId('series-row')).toHaveTextContent('60 minutos, del 6 de octubre al 7 de octubre')
   })
 
+  it('G3: el horario que se repite tiene "Copiar invitación" (días, horario y link)', async () => {
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    await mount()
+    await click(within(screen.getByTestId('series-row')).getByRole('button', { name: 'Copiar invitación' }))
+    expect(writeText).toHaveBeenCalledTimes(1)
+    const text = (writeText.mock.calls[0] as unknown as [string])[0]
+    expect(text).toMatch(/^¡Hola! Te paso los datos de tus clases de Virtual English:/)
+    expect(text).toContain('📅 Todos los martes, de 18:00 a 19:00 (hora de Argentina)')
+    expect(text).toContain('👉 Entrá a Zoom: https://')
+  })
+
   it('un link viejo de Meet se sigue mostrando como tal', async () => {
     data = { series: [{ ...SERIES, meetUrl: OLD_MEET }], classes: [] }
     await mount()
