@@ -48,7 +48,7 @@ export default function ExercisesWindow() {
         className={styles.lightScope}
         style={{
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          height: '100vh', background: 'var(--p1)', fontFamily: 'monospace', color: 'var(--tx2)', fontSize: 13,
+          height: '100vh', background: 'var(--p1)', fontFamily: 'var(--font-sans)', color: 'var(--tx2)', fontSize: 16,
         }}
       >
         Esperando datos del reproductor…

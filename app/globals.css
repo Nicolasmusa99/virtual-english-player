@@ -27,11 +27,8 @@
   /* Rojo aclarado para leerse sobre la tinta */
   --rd:#F08A84; --rd2:rgba(240,138,132,0.12); --rd3:rgba(240,138,132,0.32);
 }
-/* El video va sobre negro (letterbox). Un solo tipo de letra: los nombres viejos de
-   variables (--font-mono / --font-public-sans) apuntan a la misma familia mientras las
-   fases 2–5 los van reemplazando. */
+/* El video va sobre negro (letterbox). Un solo tipo de letra (--font-sans, next/font). */
 html, body { height: 100%; overflow: hidden; background: #000; color: var(--tx); font-family: var(--font-sans, 'Atkinson Hyperlegible Next', system-ui, sans-serif); font-size: 13px; -webkit-font-smoothing: antialiased; }
-body { --font-mono: var(--font-sans); --font-public-sans: var(--font-sans); }
 ::-webkit-scrollbar { width: 2px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
