@@ -50,7 +50,7 @@ export const TEACHER_CLASS_TEXTS = {
 const linkLabel = (url: string | null, room: string | null) => (url ? meetLabel(url) : room ? TEACHER_CLASS_TEXTS.room : null)
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-export default function TeacherClasses({ studentId }: { studentId: string }) {
+export default function TeacherClasses({ studentId, studentName = null }: { studentId: string; studentName?: string | null }) {
   const T = TEACHER_CLASS_TEXTS
   const [data, setData] = useState<{ series: Series[]; classes: TeacherClass[]; zoomUrl: string | null } | null>(null)
   const [loadError, setLoadError] = useState(false)
@@ -108,7 +108,7 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
                   </div>
                   {url && (
                     <CopyInvite className={styles.cdTxtBtn} okClassName={styles.zrOk}
-                      text={seriesInvite({ weekdays: s.weekdays, time: s.time, durationMin: s.durationMin, url })} />
+                      text={seriesInvite({ name: studentName, weekdays: s.weekdays, time: s.time, durationMin: s.durationMin, url })} />
                   )}
                   <button type="button" className={styles.tcBtn} onClick={() => editor.editSeries(studentId, s)} disabled={busy}>{T.edit}</button>
                 </div>

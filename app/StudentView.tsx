@@ -25,9 +25,12 @@ const NIVEL: Record<string, string> = { beginner: 'Beginner', medium: 'Medium', 
 
 export default function StudentView({
   studentId,
+  studentName = null,
   onOpenVideo,
 }: {
   studentId: string
+  /** Para saludar con el nombre en la invitación del horario. */
+  studentName?: string | null
   onOpenVideo: (videoId: string) => void
 }) {
   const [assigned, setAssigned] = useState<AssignedRow[]>([])
@@ -82,7 +85,7 @@ export default function StudentView({
   return (
     <div>
 
-      <TeacherClasses studentId={studentId} />
+      <TeacherClasses studentId={studentId} studentName={studentName} />
 
       <h2 className={styles.secTitle}>Material</h2>
 

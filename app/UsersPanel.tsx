@@ -2,9 +2,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import styles from './page.module.css'
 import type { Role } from '@/lib/db/schema'
+import { NAME_ERROR, NAME_MAX, normalizePersonName } from '@/lib/personName'
 
 interface UserRow {
   id: string
+  name: string | null
   email: string | null
   role: Role | null
   teacherId: string | null
@@ -17,12 +19,14 @@ const FILTER_LABEL = { all: 'Todos', admin: 'Admins', profesor: 'Profes', alumno
 
 // Fase 3a — cara visible de /api/users (Fase 2). Solo consume GET/POST existentes;
 // la seguridad real vive en el backend. El `role` decide qué vista mostrar.
-export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpenStudent?: (id: string, email: string) => void }) {
+// Nombre y apellido (obligatorio en el alta): el alumno se ve así en la agenda y en la invitación.
+export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpenStudent?: (id: string, email: string, name: string | null) => void }) {
   const [users, setUsers] = useState<UserRow[]>([])
   const [loading, setLoading] = useState(true)
   const [loadError, setLoadError] = useState('')
 
   // form crear
+  const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [newRole, setNewRole] = useState<Role>('alumno')
   const [teacherId, setTeacherId] = useState('') // '' = sin profe (teacherId null)
@@ -50,26 +54,28 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
   useEffect(() => { load() }, [])
 
   const teachers = useMemo(() => users.filter(u => u.role === 'profesor'), [users])
-  const emailById = useMemo(
-    () => Object.fromEntries(users.map(u => [u.id, u.email])) as Record<string, string | null>,
+  const labelById = useMemo(
+    () => Object.fromEntries(users.map(u => [u.id, u.name || u.email])) as Record<string, string | null>,
     [users]
   )
 
   const filtered = useMemo(() => users.filter(u => {
     if (roleFilter !== 'all' && u.role !== roleFilter) return false
-    if (q && !(u.email ?? '').toLowerCase().includes(q.toLowerCase())) return false
+    if (q && !`${u.name ?? ''} ${u.email ?? ''}`.toLowerCase().includes(q.toLowerCase())) return false
     return true
   }), [users, q, roleFilter])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setFormError(''); setOkMsg('')
+    const fullName = normalizePersonName(name)
+    if (!fullName) { setFormError(NAME_ERROR); return }
     const mail = email.trim()
     if (!isValidEmail(mail)) { setFormError('Ingresá un email válido.'); return }
 
     // El rol a crear sale del rol del creador: un profesor solo crea alumnos.
     const roleToCreate: Role = role === 'profesor' ? 'alumno' : newRole
-    const body: Record<string, unknown> = { email: mail, role: roleToCreate }
+    const body: Record<string, unknown> = { name: fullName, email: mail, role: roleToCreate }
     if (role === 'admin' && roleToCreate === 'alumno' && teacherId) body.teacherId = teacherId
 
     setSubmitting(true)
@@ -81,8 +87,8 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
       })
       const data = await res.json().catch(() => ({}))
       if (res.status === 201) {
-        setOkMsg(`Usuario creado: ${data.email ?? mail}`)
-        setEmail(''); setTeacherId(''); setNewRole('alumno')
+        setOkMsg(`Usuario creado: ${data.name ?? fullName}`)
+        setName(''); setEmail(''); setTeacherId(''); setNewRole('alumno')
         await load()
       } else if (res.status === 409) {
         setFormError('Ya existe un usuario con ese email.')
@@ -111,12 +117,14 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
               <option value="profesor">Profesor</option>
               <option value="alumno">Alumno</option>
             </select>
-            <input className={styles.usersInput} type="email" placeholder="email@ejemplo.com"
+            <input className={styles.usersInput} placeholder="Nombre y apellido" aria-label="Nombre y apellido" maxLength={NAME_MAX}
+              value={name} onChange={e => setName(e.target.value)} />
+            <input className={styles.usersInput} type="email" placeholder="email@ejemplo.com" aria-label="Email"
               value={email} onChange={e => setEmail(e.target.value)} />
             {newRole === 'alumno' && (
               <select className={styles.usersInput} value={teacherId} onChange={e => setTeacherId(e.target.value)}>
                 <option value="">Sin profe</option>
-                {teachers.map(t => <option key={t.id} value={t.id}>{t.email}</option>)}
+                {teachers.map(t => <option key={t.id} value={t.id}>{t.name || t.email}</option>)}
               </select>
             )}
             <button className={styles.restoreBtn} type="submit" disabled={submitting}>{submitting ? 'Creando…' : 'Crear'}</button>
@@ -133,7 +141,9 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
       {role === 'profesor' && (
         <form className={styles.usersForm} onSubmit={submit}>
           <div className={styles.usersFormRow}>
-            <input className={styles.usersInput} type="email" placeholder="email del alumno"
+            <input className={styles.usersInput} placeholder="Nombre y apellido" aria-label="Nombre y apellido" maxLength={NAME_MAX}
+              value={name} onChange={e => setName(e.target.value)} />
+            <input className={styles.usersInput} type="email" placeholder="Email del alumno" aria-label="Email del alumno"
               value={email} onChange={e => setEmail(e.target.value)} />
             <button className={styles.restoreBtn} type="submit" disabled={submitting}>{submitting ? 'Creando…' : 'Crear alumno'}</button>
           </div>
@@ -145,7 +155,7 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
 
       {/* BÚSQUEDA + FILTRO */}
       <div className={styles.usersToolbar}>
-        <input className={styles.usersSearch} placeholder="Buscar por email…" value={q} onChange={e => setQ(e.target.value)} />
+        <input className={styles.usersSearch} placeholder="Buscar por nombre o email…" aria-label="Buscar" value={q} onChange={e => setQ(e.target.value)} />
         {role === 'admin' && (
           <div className={styles.usersFilters}>
             {(['all', 'admin', 'profesor', 'alumno'] as const).map(r => (
@@ -178,14 +188,18 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
             {filtered.map(u => (
               <div key={u.id} className={styles.row}>
                 <span className={styles.rowText}>
-                  <span className={styles.rowName}>{u.email}</span>
-                  {u.role === 'alumno' && role === 'admin' && (
-                    <span className={styles.usersMeta}>Profe: {u.teacherId ? (emailById[u.teacherId] ?? 'sin profe') : 'sin profe'}</span>
-                  )}
+                  <span className={styles.rowName}>{u.name || u.email}</span>
+                  {(() => {
+                    const meta = [
+                      u.name ? u.email : u.role === 'alumno' ? 'Sin nombre: agregalo desde su pantalla' : null,
+                      u.role === 'alumno' && role === 'admin' ? `profe: ${u.teacherId ? (labelById[u.teacherId] ?? 'sin profe') : 'sin profe'}` : null,
+                    ].filter(Boolean).join(', ')
+                    return meta ? <span className={styles.usersMeta}>{meta}</span> : null
+                  })()}
                 </span>
                 <span className={`${styles.chip} ${styles.chipSrt}`}>{u.role ? ROLE_LABEL[u.role] : ''}</span>
                 {u.role === 'alumno' && onOpenStudent && (
-                  <button className={styles.tbBtn} onClick={() => onOpenStudent(u.id, u.email ?? '')}>Abrir</button>
+                  <button className={styles.tbBtn} onClick={() => onOpenStudent(u.id, u.email ?? '', u.name)}>Abrir</button>
                 )}
               </div>
             ))}

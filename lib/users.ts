@@ -6,6 +6,7 @@ import type { Role } from '@/lib/db/schema'
 // Solo campos públicos — nunca exponemos tokens/sesiones ni datos internos.
 const PUBLIC_COLS = {
   id: users.id,
+  name: users.name,
   email: users.email,
   role: users.role,
   teacherId: users.teacherId,
@@ -13,6 +14,7 @@ const PUBLIC_COLS = {
 
 export type PublicUser = {
   id: string
+  name: string | null
   email: string | null
   role: Role | null
   teacherId: string | null
@@ -49,9 +51,14 @@ export async function setZoomUrl(userId: string, zoomUrl: string | null): Promis
   await db.update(users).set({ zoomUrl }).where(eq(users.id, userId))
 }
 
-export async function insertUser(data: { email: string; role: Role; teacherId: string | null }): Promise<PublicUser> {
+export async function insertUser(data: { name: string; email: string; role: Role; teacherId: string | null }): Promise<PublicUser> {
   const [row] = await db.insert(users).values(data).returning(PUBLIC_COLS)
   return row
+}
+
+// "Cambiar nombre" (pantalla del alumno). Quién puede lo decide la ruta (PATCH /api/users/[id]).
+export async function setUserName(id: string, name: string): Promise<void> {
+  await db.update(users).set({ name }).where(eq(users.id, id))
 }
 
 export async function listAllUsers(): Promise<PublicUser[]> {
