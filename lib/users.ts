@@ -56,7 +56,8 @@ export async function insertUser(data: { name: string; email: string; role: Role
   return row
 }
 
-// "Cambiar nombre" (pantalla del alumno). Quién puede lo decide la ruta (PATCH /api/users/[id]).
+// "Cambiar nombre" (pantalla del alumno; profes y admins desde "Usuarios"). Quién puede lo
+// decide la ruta (PATCH /api/users/[id]).
 export async function setUserName(id: string, name: string): Promise<void> {
   await db.update(users).set({ name }).where(eq(users.id, id))
 }

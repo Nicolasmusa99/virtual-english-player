@@ -1341,7 +1341,7 @@ export default function Player() {
                   <StudentView studentId={selectedStudent.id} studentName={selectedStudent.name} onOpenVideo={openFromLibrary} />
                 </div>
                 {editingName && (
-                  <StudentNameDialog studentId={selectedStudent.id} name={selectedStudent.name} onClose={() => setEditingName(false)}
+                  <StudentNameDialog userId={selectedStudent.id} name={selectedStudent.name} onClose={() => setEditingName(false)}
                     onSaved={(name) => { setSelectedStudent((s) => (s ? { ...s, name } : s)); setEditingName(false) }} />
                 )}
               </AulaPage>
