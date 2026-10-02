@@ -17,8 +17,9 @@ export const weekStartOf = (day: string) => addDays(day, -((weekdayOf(day) + 6) 
 export const weekDays = (start: string) => Array.from({ length: 7 }, (_, i) => addDays(start, i))
 
 // Instantes [lunes 00:00, lunes siguiente 00:00) en hora de Argentina (lo que se pide a la API).
-export function weekRange(start: string): { from: Date; to: Date } {
-  return { from: zonedToUtc(start, 0, CLASS_TZ), to: zonedToUtc(addDays(start, 7), 0, CLASS_TZ) }
+// El alumno pide su semana en la hora de SU dispositivo (tz).
+export function weekRange(start: string, tz: string = CLASS_TZ): { from: Date; to: Date } {
+  return { from: zonedToUtc(start, 0, tz), to: zonedToUtc(addDays(start, 7), 0, tz) }
 }
 
 // '28 sep – 4 oct 2026' · '5 – 11 oct 2026' · '28 dic 2026 – 3 ene 2027'

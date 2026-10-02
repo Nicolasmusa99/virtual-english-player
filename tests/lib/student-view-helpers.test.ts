@@ -4,7 +4,8 @@ import { describe, it, expect, vi } from 'vitest'
 vi.mock('@/lib/db', () => ({ db: {} })) // el import de tipos arrastra lib/assignments
 
 import {
-  assignedAgo, displayVideoName, durationLabel, firstName, levelLabel, phraseAt,
+  assignedAgo, displayVideoName, durationLabel, firstName, isNewAssignment, lastStartedIndex, levelLabel, newestFirst, phraseAt,
+  phraseEndAt, phraseIndexAt, phraseStartAt, phraseTarget,
   progressPct, SEEK_STEP, stepSeek, stepVolume, timeAtX, typeLabel, volumeBarsOn, VOLUME_BARS,
 } from '@/lib/studentView'
 
@@ -23,6 +24,56 @@ describe('displayVideoName', () => {
     expect(displayVideoName('clase.3.webm')).toBe('clase.3')
     expect(displayVideoName('Mr. Bean')).toBe('Mr. Bean')
     expect(displayVideoName('.mp4')).toBe('.mp4')
+  })
+
+  it('solo extensiones de video: un nombre escrito por el admin queda igual', () => {
+    expect(displayVideoName('Song vol.2')).toBe('Song vol.2')
+    expect(displayVideoName('Comercial del auto')).toBe('Comercial del auto')
+    expect(displayVideoName('Let It Be.MKV')).toBe('Let It Be')
+  })
+})
+
+describe('player para practicar: de frase en frase', () => {
+  const P = [{ start: 1, end: 3, text: 'a' }, { start: 4, end: 6, text: 'b' }, { start: 8, end: 9, text: 'c' }]
+  it('phraseIndexAt: la que suena (con el delay), -1 en un silencio', () => {
+    expect(phraseIndexAt(P, 2, 0)).toBe(0)
+    expect(phraseIndexAt(P, 3.5, 0)).toBe(-1)
+    expect(phraseIndexAt(P, 3.5, 1)).toBe(0)
+    expect(phraseIndexAt(P, 8.5, 0)).toBe(2)
+  })
+  it('lastStartedIndex: la última que ya empezó (justo al principio ya cuenta)', () => {
+    expect(lastStartedIndex(P, 0, 0)).toBe(-1)
+    expect(lastStartedIndex(P, 3.5, 0)).toBe(0)
+    expect(lastStartedIndex(P, 4, 0)).toBe(1)
+    expect(lastStartedIndex(P, 3.99, 0)).toBe(1) // margen chico
+    expect(lastStartedIndex(P, 20, 0)).toBe(2)
+  })
+  it('phraseTarget: anterior / repetir / siguiente', () => {
+    expect([0, 2, 5, 8.5].map((t) => phraseTarget(P, t, 0, 'next'))).toEqual([0, 1, 2, null])
+    expect([0, 2, 5, 8.5].map((t) => phraseTarget(P, t, 0, 'prev'))).toEqual([0, 0, 0, 1])
+    expect([0, 2, 5, 8.5].map((t) => phraseTarget(P, t, 0, 'repeat'))).toEqual([0, 0, 1, 2])
+    expect(phraseTarget([], 3, 0, 'next')).toBeNull()
+  })
+  it('phraseStartAt / phraseEndAt: en el tiempo del video, nunca negativo', () => {
+    expect(phraseStartAt(P[1], 0.5)).toBe(4.5)
+    expect(phraseEndAt(P[1], 0.5)).toBe(6.5)
+    expect(phraseStartAt(P[0], -2)).toBe(0)
+  })
+})
+
+describe('isNewAssignment y newestFirst — "Nuevo" y lo último primero', () => {
+  const now = new Date(2026, 9, 6, 12, 0) // martes 6/10, hora local
+  it('"Nuevo" = asignado en los últimos 7 días de calendario', () => {
+    expect(isNewAssignment(new Date(2026, 9, 6, 8, 0), now)).toBe(true)  // hoy
+    expect(isNewAssignment(new Date(2026, 8, 30, 23, 59), now)).toBe(true) // hace 6 días
+    expect(isNewAssignment(new Date(2026, 8, 29, 23, 59), now)).toBe(false) // hace 7 días
+    expect(isNewAssignment('nada', now)).toBe(false)
+  })
+  it('ordena por fecha de asignación, lo último primero; sin fecha válida al final', () => {
+    const a = { id: 'a', assignedAt: '2026-09-01T12:00:00Z' }
+    const b = { id: 'b', assignedAt: '2026-10-05T12:00:00Z' }
+    const c = { id: 'c', assignedAt: 'nada' }
+    expect(newestFirst([a, c, b]).map((x) => x.id)).toEqual(['b', 'a', 'c'])
   })
 })
 

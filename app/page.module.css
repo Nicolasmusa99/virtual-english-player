@@ -42,6 +42,11 @@
 .progSub { font-size: 15px; color: var(--tx3); margin-bottom: 16px; line-height: 1.5; min-height: 16px; }
 .progBarWrap { height: 3px; background: var(--p4); border-radius: 2px; overflow: hidden; margin-bottom: 14px; }
 .progBarFill { height: 100%; background: var(--ac); border-radius: 2px; transition: width 0.5s ease; }
+/* "Nombre del video" mientras se transcribe (vista del alumno v2) */
+.progName { display: flex; flex-direction: column; gap: 6px; margin: 4px 0 16px; padding-top: 14px; border-top: 1px solid var(--ln2); }
+.progName .usersInput { width: 100%; }
+.progNameLbl { font-size: 14px; color: var(--tx2); }
+.progNameHint { font-size: 14px; color: var(--tx3); line-height: 1.4; overflow-wrap: anywhere; }
 .stepList { display: flex; flex-direction: column; gap: 7px; }
 .stepItem { display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--tx3); }
 .stepDot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex-shrink: 0; opacity: 0.4; }

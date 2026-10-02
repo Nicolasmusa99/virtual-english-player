@@ -25,6 +25,11 @@ describe('semanas de lunes a domingo', () => {
     expect(from.toISOString()).toBe('2026-09-28T03:00:00.000Z')
     expect(to.toISOString()).toBe('2026-10-05T03:00:00.000Z')
   })
+  it('weekRange: el alumno la pide en la hora de SU dispositivo', () => {
+    const { from, to } = weekRange('2026-09-28', 'Europe/Madrid')
+    expect(from.toISOString()).toBe('2026-09-27T22:00:00.000Z')
+    expect(to.toISOString()).toBe('2026-10-04T22:00:00.000Z')
+  })
   it('weekTitle: como Google ("28 sep – 4 oct 2026")', () => {
     expect(weekTitle('2026-09-28')).toBe('28 sep – 4 oct 2026')
     expect(weekTitle('2026-10-05')).toBe('5 – 11 oct 2026')

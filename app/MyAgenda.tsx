@@ -52,8 +52,9 @@ const NARROW = '(max-width: 700px)'
 const pad = (n: number) => String(n).padStart(2, '0')
 const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
-// Celular: un día por vez. (Sin matchMedia —tests— se ve la semana.)
-function useNarrow(): boolean {
+// Celular: un día por vez. (Sin matchMedia —tests— se ve la semana.) También lo usa el
+// calendario del alumno (StudentWeek).
+export function useNarrow(): boolean {
   const [narrow, setNarrow] = useState(false)
   useEffect(() => {
     if (typeof window === 'undefined' || !window.matchMedia) return

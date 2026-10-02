@@ -1,106 +1,108 @@
-/* Vista del ALUMNO (fase vista-alumno; rediseño fase 4 "la sala y el aula").
+/* Vista del ALUMNO (fase vista-alumno; rediseño fase 4 "la sala y el aula"; vista del alumno v2).
    El inicio es el AULA de día (.lightScope de page.module.css: tinta, Azul VE, pizarra,
    tiza); el player es la SALA oscura (tokens de :root en globals.css), como el del profe.
-   Una sola familia (--font-sans). El amarillo marca solo "hoy" / "ahora". */
+   Una sola familia (--font-sans). El amarillo marca solo "hoy" / "ahora".
+   v2: barra con Inicio y Calendario (abajo en el celular), inicio en dos columnas, "Nuevo"
+   en el material, estados vacíos sin cajas, y el calendario semanal (la grilla de "Mi agenda"
+   de classes.module.css; acá solo lo propio del alumno: colores, sin crear, el aviso). */
 
 /* ═════ Inicio ═════ */
 .home { position: fixed; inset: 0; overflow-y: auto; background: var(--p1); color: var(--tinta); font: 15px/1.45 var(--font-sans); display: flex; flex-direction: column; }
-.hBar { display: flex; align-items: center; justify-content: space-between; padding: 14px 40px; border-bottom: 1.5px solid var(--tiza); flex-shrink: 0; }
-.hLogo { height: 56px; width: auto; display: block; }
-.hOut { height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; }
+/* Barra: logo, Inicio / Calendario, el nombre y Salir. */
+.hBar { display: flex; align-items: center; gap: 12px 28px; padding: 12px 40px; border-bottom: 1.5px solid var(--tiza); flex-shrink: 0; }
+.hLogo { height: 48px; width: auto; display: block; }
+.hTabs { display: flex; gap: 4px; }
+.hTab { height: 40px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: var(--pizarra); font: 500 15px var(--font-sans); cursor: pointer; }
+.hTab:hover { color: var(--tinta); background: var(--p2); }
+.hTabOn, .hTabOn:hover { background: var(--tiza); color: var(--tinta); font-weight: 700; }
+.hSp { flex: 1; }
+.hMe { min-width: 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--pizarra); }
+.hOut { height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; flex-shrink: 0; }
 .hOut:hover { border-color: var(--pizarra); }
-.hBody { width: 100%; max-width: 800px; margin: 0 auto; padding: 44px 24px 56px; }
+.hBody { width: 100%; max-width: 1200px; margin: 0 auto; padding: 40px 40px 56px; }
+.wkBody { width: 100%; max-width: 1320px; margin: 0 auto; }
 .hello { margin: 0; font-size: 40px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--tinta); }
 .helloSub { max-width: 64ch; margin: 8px 0 32px; font-size: 17px; color: var(--pizarra); }
 .sTitle { margin: 0 0 14px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--tinta); }
+.srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* Dos columnas: el material a la izquierda, las clases a la derecha. */
+.cols { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 0 56px; align-items: start; }
+.mat, .aside { min-width: 0; }
 
 /* Material: tarjetas con la miniatura grande (16:9), el nombre y una línea de datos. */
-.list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px 20px; list-style: none; margin: 0; padding: 0; }
+.list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; list-style: none; margin: 0; padding: 0; }
 .card { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 0; border: 0; background: transparent; cursor: pointer; text-align: left; font: inherit; color: inherit; }
 .card:disabled { opacity: 0.6; cursor: wait; }
-.thumb { width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; background: linear-gradient(150deg, var(--tinta), var(--azul)); display: grid; place-items: center; color: #fff; margin-bottom: 10px; transition: filter 0.15s; }
+.thumb { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; background: linear-gradient(150deg, var(--tinta), var(--azul)); display: grid; place-items: center; color: #fff; margin-bottom: 10px; transition: filter 0.15s; }
 .card:hover .thumb { filter: brightness(1.12); }
 .card:focus-visible { outline: 2px solid var(--azul); outline-offset: 4px; border-radius: 4px; }
-.cTitle { display: block; font-size: 16px; font-weight: 700; color: var(--tinta); line-height: 1.3; overflow-wrap: anywhere; }
+/* "Nuevo": asignado en los últimos 7 días. Etiqueta blanca (el amarillo es solo "ahora"). */
+.newTag { position: absolute; top: 10px; left: 10px; padding: 3px 8px; border-radius: 3px; background: #fff; color: var(--azul); font: 700 13px var(--font-sans); }
+.cTitle { display: block; font-size: 17px; font-weight: 700; color: var(--tinta); line-height: 1.3; overflow-wrap: anywhere; }
 .card:hover .cTitle { text-decoration: underline; }
 .cMeta { display: block; margin-top: 3px; font-size: 14px; color: var(--pizarra); }
 .cWhen { display: block; margin-top: 1px; font-size: 14px; color: var(--pizarra); }
 
-.state { border: 1.5px solid var(--tiza); border-radius: 12px; padding: 32px 24px; text-align: center; }
-.stateIcon { width: 48px; height: 48px; border-radius: 12px; background: var(--tiza); display: grid; place-items: center; margin: 0 auto 12px; color: var(--tinta); }
-.stateTitle { font-size: 17px; font-weight: 700; margin-bottom: 4px; color: var(--tinta); }
-.stateSub { font-size: 15px; color: var(--pizarra); }
+/* Vacíos y errores: un aviso entre dos líneas, sin cajas vacías. */
+.empty { max-width: 560px; padding: 18px 0; border-top: 1.5px solid var(--tiza); border-bottom: 1.5px solid var(--tiza); }
+.emTitle { font-size: 18px; font-weight: 700; color: var(--tinta); }
+.emSub { margin-top: 4px; font-size: 15px; color: var(--pizarra); line-height: 1.45; }
 .stateBtn { margin-top: 14px; height: 40px; padding: 0 16px; border-radius: 4px; border: 0; background: var(--azul); color: #fff; font: 500 15px var(--font-sans); cursor: pointer; }
 .stateBtn:hover { background: var(--azulHover); }
-.notice { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1.5px solid rgba(185, 58, 51, 0.3); background: rgba(185, 58, 51, 0.06); color: var(--tinta); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; font-size: 15px; }
+.notice { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1.5px solid rgba(185, 58, 51, 0.3); background: rgba(185, 58, 51, 0.06); color: var(--tinta); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 15px; }
 .noticeClose { border: 0; background: transparent; color: var(--azul); font: 500 14px var(--font-sans); cursor: pointer; flex-shrink: 0; }
 .opening { margin: 0 0 12px; font-size: 15px; color: var(--pizarra); }
 
-/* ═════ Tus clases ═════ */
-.clSection { margin-bottom: 44px; }
+/* ═════ Tu próxima clase ═════ */
+.cl { margin-bottom: 40px; }
+.aside .cl { margin-bottom: 0; }
 .clMsg { margin: 0 0 12px; font-size: 15px; color: var(--pizarra); }
 .clLinkBtn { border: 0; background: transparent; color: var(--azul); font: inherit; cursor: pointer; padding: 0; }
 .clLinkBtn:hover { text-decoration: underline; }
+.clGrid { display: flex; flex-direction: column; }
+/* Sin material: la tarjeta y las siguientes, una al lado de la otra. */
+.clWide .clGrid { display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 0 48px; align-items: start; }
+.clWide .clList { margin-top: 0; }
 /* La próxima clase: el único recuadro de la página (es lo que importa). */
-.clNext { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 28px; padding: 24px 28px; border: 1.5px solid var(--tinta); border-radius: 12px; margin-bottom: 8px; }
-.clWhenBox { min-width: 0; }
-.clDay { font-size: 18px; color: var(--tinta); white-space: nowrap; }
-.clDay b { font-weight: 700; }
+.clNext { padding: 20px 22px; border: 1.5px solid var(--tinta); border-radius: 6px; }
+.clDay { font-size: 16px; color: var(--pizarra); }
+.clDay b { font-weight: 700; color: var(--tinta); }
 .now { background: var(--amarillo); color: var(--tinta); padding: 1px 6px; border-radius: 2px; font-weight: 700; }
-.clTime { margin-top: 4px; font-size: 48px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--tinta); }
-.clInfo { min-width: 0; }
-.clLbl { font-size: 19px; font-weight: 700; color: var(--tinta); }
-.clMeta { margin-top: 2px; font-size: 15px; color: var(--pizarra); }
+.clTime { margin: 6px 0 8px; font-size: 48px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--tinta); }
+.clWith { font-size: 16px; color: var(--tinta); }
+.clCount { margin-top: 4px; font-size: 15px; font-weight: 700; color: var(--tinta); }
 .clMoved { margin-top: 4px; font-size: 15px; color: var(--tinta); }
 .clTz { margin-top: 4px; font-size: 14px; color: var(--pizarra); }
 .clEnter { height: 52px; padding: 0 24px; border-radius: 4px; background: var(--azul); color: #fff; font: 700 17px var(--font-sans); display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; text-decoration: none; }
 .clEnter:hover { background: var(--azulHover); }
 .clEnter:focus-visible { outline: 2px solid var(--azul); outline-offset: 3px; }
-.clEnterSm { height: 40px; padding: 0 16px; font-size: 15px; }
+.clEnterSm { height: 44px; padding: 0 20px; font-size: 15px; }
+.clBlock { display: flex; width: 100%; margin-top: 16px; }
 .clNoLink { font-size: 15px; color: var(--pizarra); }
 /* Las que siguen: filas con línea, sin recuadro. */
-.clList { list-style: none; margin: 24px 0 8px; padding: 0; border-top: 1.5px solid var(--tiza); }
-.clRow { display: grid; grid-template-columns: 220px 140px minmax(0, 1fr); align-items: baseline; gap: 12px; padding: 14px 2px; border-bottom: 1.5px solid var(--tiza); font-size: 16px; }
+.clList { list-style: none; margin: 18px 0 0; padding: 0; border-top: 1.5px solid var(--tiza); }
+.clRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; padding: 11px 0; border-bottom: 1.5px solid var(--tiza); font-size: 15px; }
 .clRowDate { color: var(--tinta); }
-.clRowTime { color: var(--tinta); font-variant-numeric: tabular-nums; }
+.clRowTime { color: var(--pizarra); font-variant-numeric: tabular-nums; }
 .clRowCanc .clRowDate, .clRowCanc .clRowTime { text-decoration: line-through; color: var(--pizarra); }
-.clStrike { text-decoration: line-through; color: var(--pizarra); }
-.clNote { font-size: 15px; color: var(--pizarra); text-align: right; }
-.clNoteCanc { font-size: 15px; color: var(--rojo); text-align: right; }
-.clMonthBtn { margin-top: 4px; border: 0; background: transparent; padding: 6px 2px; color: var(--azul); font: 500 15px var(--font-sans); cursor: pointer; }
-.clMonthBtn:hover { text-decoration: underline; }
-.clLinkBtn:focus-visible, .clMonthBtn:focus-visible, .hOut:focus-visible, .stateBtn:focus-visible, .noticeClose:focus-visible, .moBack:focus-visible, .moArrow:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.clNote { grid-column: 1 / -1; font-size: 14px; color: var(--pizarra); }
+.clNoteCanc { grid-column: 1 / -1; font-size: 14px; color: var(--rojo); }
+.clCalBtn { margin-top: 10px; border: 0; background: transparent; padding: 6px 2px; color: var(--azul); font: 500 15px var(--font-sans); cursor: pointer; }
+.clCalBtn:hover { text-decoration: underline; }
+.clLinkBtn:focus-visible, .clCalBtn:focus-visible, .hOut:focus-visible, .hTab:focus-visible, .stateBtn:focus-visible, .noticeClose:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
 
-/* ═════ Ver el mes ═════ */
-.moWrap { margin-bottom: 24px; }
-.moHead { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.moBack { border: 0; background: transparent; padding: 6px 2px; color: var(--azul); font: 500 15px var(--font-sans); cursor: pointer; }
-.moName { flex: 1; margin: 0; font-size: 28px; font-weight: 800; letter-spacing: -0.02em; text-align: center; color: var(--tinta); }
-.moArrow { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font-size: 18px; cursor: pointer; }
-.moArrow:hover { border-color: var(--pizarra); }
-.moGrid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border-top: 1.5px solid var(--tiza); border-left: 1.5px solid var(--tiza); }
-.moDow { padding: 8px 0; text-align: center; font-size: 14px; color: var(--pizarra); border-right: 1.5px solid var(--tiza); border-bottom: 1.5px solid var(--tiza); }
-.moDay { position: relative; min-height: 84px; border: 0; border-right: 1.5px solid var(--tiza); border-bottom: 1.5px solid var(--tiza); background: transparent; padding: 6px 7px; display: flex; flex-direction: column; align-items: stretch; gap: 4px; font: inherit; color: inherit; text-align: left; cursor: pointer; }
-.moDay:hover { background: var(--p2); }
-.moDay:focus-visible { outline: 2px solid var(--azul); outline-offset: -2px; }
-.moOut { cursor: default; background: var(--p2); }
-.moOut:hover { background: var(--p2); }
-.moNum { font-size: 15px; color: var(--tinta); font-variant-numeric: tabular-nums; }
-.moPast .moNum { color: var(--pizarra); }
-/* Hoy: el número resaltado en amarillo (el "ahora"). */
-.moToday .moNum { align-self: flex-start; background: var(--amarillo); color: var(--tinta); font-weight: 700; padding: 0 6px; border-radius: 2px; }
-.moSel { box-shadow: inset 0 0 0 2px var(--azul); }
-/* Muestra de la leyenda: va antes que .moEvPast/.moEvCanc para que esos colores la pisen. */
-.moSw { width: 12px; height: 12px; border-radius: 3px; display: inline-block; background: var(--azul); border: 1px solid rgba(20, 40, 75, 0.3); }
-.moEv { font-size: 13px; padding: 2px 6px; border-radius: 3px; background: var(--azul); color: #fff; font-variant-numeric: tabular-nums; }
-.moEvPast { background: var(--tiza); color: var(--pizarra); }
-.moEvCanc { background: rgba(185, 58, 51, 0.08); color: var(--rojo); text-decoration: line-through; }
-.moLegend { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; margin-top: 12px; font-size: 14px; color: var(--pizarra); }
-.moLegend span { display: inline-flex; gap: 7px; align-items: center; }
-.moDetail { margin-top: 18px; padding-top: 14px; border-top: 1.5px solid var(--tinta); display: flex; flex-direction: column; gap: 12px; }
-.moDetailDay { font-size: 19px; font-weight: 700; color: var(--tinta); }
-.moDetailRow { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
-.moDetailWhen { flex: 1; display: flex; gap: 12px; align-items: baseline; flex-wrap: wrap; font-size: 17px; color: var(--tinta); font-variant-numeric: tabular-nums; }
+/* ═════ Calendario (la grilla de "Mi agenda"; lo propio del alumno) ═════ */
+.wk .wkCol { cursor: default; }
+.wk .wkNext { background: var(--azul); color: #fff; }
+.wk .wkPast { background: var(--tiza); color: var(--pizarra); }
+.wk .wkCanc { background: #fff; color: var(--rojo); box-shadow: inset 0 0 0 1.5px var(--rojo); text-decoration: line-through; }
+/* Semana (o día) sin clases: el aviso, sobre la grilla. */
+.wk .wkNote { position: absolute; z-index: 2; top: 72px; left: calc(var(--agGutter) + (100% - var(--agGutter)) / 2); transform: translateX(-50%); width: min(440px, calc(100% - var(--agGutter) - 24px)); padding: 14px 18px; background: #fff; border: 1.5px solid var(--tiza); border-radius: 6px; }
+.wk .wkNote .clCalBtn { margin-top: 6px; }
+/* Celular: un puntito debajo de los días de la semana que tienen clase. */
+.wkDot { width: 5px; height: 5px; border-radius: 50%; background: transparent; }
+.wkDotOn { background: var(--azul); }
 
 /* ═════ Player (la sala) ═════ */
 .player { position: fixed; inset: 0; display: flex; flex-direction: column; background: var(--p1); color: var(--tx); font-family: var(--font-sans); }
@@ -109,6 +111,9 @@
 .back:hover { background: var(--p3); }
 .back:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
 .pTitle { font-size: 18px; font-weight: 700; color: var(--tx); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+/* Vista del alumno v2: el video y sus controles a la izquierda, el guion a la derecha. */
+.pMain { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 340px; }
+.pLeft { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .pStage { flex: 1; min-height: 0; background: #000; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
 .video { width: 100%; height: 100%; object-fit: contain; background: #000; display: block; }
 /* Mismo subtítulo que la clase (page.module.css .subOverlay/.subBox): blanco (US-014). */
@@ -124,13 +129,15 @@
 .knob { position: absolute; top: 50%; width: 18px; height: 18px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 3px var(--ac3); transform: translate(-50%, -50%); pointer-events: none; }
 .seek:focus-visible .knob { outline: 2px solid var(--ac); outline-offset: 3px; }
 
-.ctrls { flex-shrink: 0; display: flex; align-items: center; justify-content: center; gap: 24px; padding: 12px 18px 18px; }
+.ctrls { flex-shrink: 0; display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 12px 18px; padding: 12px 18px 18px; }
+.brk { display: none; }
 /* Cada control: arriba un lugar fijo de 60 px (Play) con el botón centrado; abajo el nombre. */
 .grp { display: grid; grid-template-rows: 60px auto; justify-items: center; align-items: center; }
 .lbl { margin-top: 6px; font-size: 13px; color: var(--tx2); }
 .cBtn { width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); display: grid; place-items: center; cursor: pointer; transition: background 0.12s, transform 0.08s; }
 .cBtn:hover { background: var(--p3); }
 .cBtn:active { transform: scale(0.96); }
+.cBtn:disabled { opacity: 0.35; cursor: default; transform: none; }
 .cBtn:focus-visible, .volBtn:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
 .playBtn { width: 60px; height: 60px; border: 0; background: var(--acDeep); color: #fff; }
 .playBtn:hover { background: var(--acDeepHover); }
@@ -146,35 +153,70 @@
 .ccBtn { font: 700 14px var(--font-sans); }
 .ccOn { background: var(--ac2); border-color: var(--ac); color: var(--ac); }
 .ccOn:hover { background: var(--ac3); }
+/* La frase que suena, en la barra de tiempo: amarillo (el "ahora"). */
+.trackNow { position: absolute; top: -3px; bottom: -3px; border-radius: 2px; background: var(--amarillo); pointer-events: none; }
+
+/* Guion: las frases del video; la que suena en amarillo con texto tinta; tocar una va ahí. */
+.script { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--p2); border-left: 1px solid var(--ln2); }
+.scriptHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 16px 18px 10px; }
+.scriptTitle { margin: 0; font-size: 17px; font-weight: 700; color: var(--tx); }
+.scriptCount { font-size: 14px; color: var(--tx2); font-variant-numeric: tabular-nums; }
+.scriptList { flex: 1; min-height: 0; overflow-y: auto; list-style: none; margin: 0; padding: 0; }
+.phr { width: 100%; display: flex; align-items: baseline; gap: 12px; padding: 11px 18px; border: 0; border-top: 1px solid var(--ln); background: transparent; color: var(--tx); font: 16px/1.4 var(--font-sans); text-align: left; cursor: pointer; }
+.phr:hover { background: var(--p3); }
+.phr:focus-visible { outline: 2px solid var(--ac); outline-offset: -2px; }
+.phrNow, .phrNow:hover { background: var(--amarillo); color: var(--tinta); font-weight: 700; }
+.phrAt { flex-shrink: 0; width: 38px; font-size: 13px; font-weight: 400; color: var(--tx3); font-variant-numeric: tabular-nums; }
+.phrNow .phrAt { color: var(--tinta); }
+.phrText { min-width: 0; overflow-wrap: anywhere; }
+.scriptEmpty { margin: 0; padding: 4px 18px; font-size: 15px; color: var(--tx2); }
+.scriptKeys { margin: 0; padding: 12px 18px 16px; border-top: 1px solid var(--ln2); font-size: 13px; line-height: 1.45; color: var(--tx3); }
 
 /* ═════ Celular ═════ */
 @media (max-width: 760px) {
-  .list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .clNext { grid-template-columns: minmax(0, 1fr); gap: 14px; padding: 20px; }
-  .clNext .clEnter, .clNext .clNoLink { width: 100%; }
+  .hBody { padding: 28px 24px 48px; }
+  /* Una columna: la próxima clase primero (sin clases, el material primero). */
+  .cols { display: flex; flex-direction: column; align-items: stretch; }
+  .aside { order: -1; margin-bottom: 36px; }
+  .colsMatFirst .aside { order: 0; margin: 36px 0 0; }
+  .clWide .clGrid { display: flex; flex-direction: column; }
+  .clWide .clList { margin-top: 18px; }
+}
+@media (max-width: 900px) {
+  /* Player: el guion va debajo del video (y se desplaza solo él). */
+  .pMain { display: flex; flex-direction: column; }
+  .pStage { flex: 0 0 auto; aspect-ratio: 16 / 9; }
+  .script { flex: 1; min-height: 160px; border-left: 0; border-top: 1px solid var(--ln2); }
+  .scriptKeys { display: none; }
 }
 @media (max-width: 640px) {
-  .hBar { padding: 10px 16px; }
-  .hLogo { height: 44px; }
+  /* Las pestañas Inicio y Calendario van abajo, como en la app del profe. */
+  .home { padding-bottom: 62px; }
+  .hBar { gap: 12px; padding: 8px 16px; }
+  .hLogo { height: 40px; }
+  .hMe { display: none; }
+  .hTabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: 62px; background: #fff; border-top: 1.5px solid var(--tiza); }
+  .hTab { height: 100%; border-radius: 0; font-size: 14px; }
+  .hTab:hover { background: transparent; }
+  .hTabOn, .hTabOn:hover { background: transparent; box-shadow: inset 0 3px 0 var(--azul); }
   .hBody { padding: 22px 16px 36px; }
   .hello { font-size: 30px; }
   .helloSub { font-size: 16px; margin-bottom: 24px; }
+  .sTitle { font-size: 19px; }
   .list { grid-template-columns: minmax(0, 1fr); }
+  .clNext { padding: 16px; }
   .clTime { font-size: 44px; }
-  .clRow { grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; }
-  .clNote, .clNoteCanc { grid-column: 1 / -1; text-align: left; }
-  .pStage { flex: 0 0 auto; aspect-ratio: 16 / 9; }
+  .wk .wkNote { top: 24px; }
   .subBox { font-size: 16px; padding: 6px 12px 8px; }
   .timeRow { padding: 8px 16px 0; }
-  .ctrls { flex-wrap: wrap; gap: 14px; padding: 14px 10px 20px; }
+  .ctrls { gap: 8px 12px; padding: 10px 10px 14px; }
   .sep { display: none; }
-  .volGrp { flex-basis: 100%; order: 1; } /* celu: play, stop y CC arriba; volumen abajo */
-  .moName { font-size: 20px; }
-  .moDay { min-height: 52px; padding: 4px 3px; align-items: center; }
-  .moToday .moNum { align-self: center; }
-  .moEv { width: 7px; height: 7px; padding: 0; border-radius: 50%; }
-  .moEvCanc { background: var(--rojo); }
-  .moEvPast { background: var(--pizarra); opacity: 0.5; }
-  .moEvText { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  .moDetail .clEnter { width: 100%; }
+  /* celu: Anterior, Repetir, Play y Siguiente arriba; Stop, Más lento y CC abajo; el volumen al final */
+  .grp { order: 2; grid-template-rows: 52px auto; }
+  .grpMain { order: 0; }
+  .brk { display: block; flex-basis: 100%; height: 0; order: 1; }
+  .volGrp { flex-basis: 100%; order: 3; }
+  .cBtn { width: 44px; height: 44px; }
+  .playBtn { width: 52px; height: 52px; }
+  .lbl { font-size: 12px; }
 }

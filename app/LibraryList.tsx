@@ -1,6 +1,8 @@
 'use client'
 import { useState } from 'react'
 import styles from './page.module.css'
+import aula from './aula.module.css'
+import VideoNameDialog from './VideoNameDialog'
 import type { Role, SharedType, SharedLevel } from '@/lib/db/schema'
 
 export interface LibraryVideoRow {
@@ -20,6 +22,7 @@ export const NIVEL_LABEL: Record<SharedLevel, string> = { beginner: 'Beginner', 
 // fila. Solo el admin ve los controles (un profe no puede publicar; el backend
 // además lo rechaza server-side). Consume /api/videos/[id]/share; onChanged
 // refetchea el listado del padre. Rediseño (fase 5): filas del aula (sin bandas de color).
+// Vista del alumno v2: "Cambiar nombre" (solo admin) — el nombre que ven profes y alumnos.
 export default function LibraryList({ videos, role, onOpen, onDelete, onChanged }: {
   videos: LibraryVideoRow[]
   role: Role | null
@@ -33,6 +36,7 @@ export default function LibraryList({ videos, role, onOpen, onDelete, onChanged 
   const [nivel, setNivel] = useState<SharedLevel | ''>('')
   const [busyId, setBusyId] = useState<string | null>(null)
   const [confirmDel, setConfirmDel] = useState<LibraryVideoRow | null>(null)
+  const [renaming, setRenaming] = useState<LibraryVideoRow | null>(null)
   const [error, setError] = useState('')
 
   function openForm(v: LibraryVideoRow) {
@@ -85,6 +89,7 @@ export default function LibraryList({ videos, role, onOpen, onDelete, onChanged 
             <span className={styles.rowText}>
               <span className={styles.rowName}>{v.originalName}</span>
               <span className={styles.usersMeta}>{v.phraseCount} frases{expired ? ', expirado' : ''}</span>
+              {isAdmin && <span><button type="button" className={aula.txtBtn} onClick={() => setRenaming(v)}>Cambiar nombre</button></span>}
             </span>
             <div className={styles.libChips}>
               {isAdmin && (published
@@ -128,6 +133,11 @@ export default function LibraryList({ videos, role, onOpen, onDelete, onChanged 
           </div>
         )
       })}
+
+      {renaming && (
+        <VideoNameDialog videoId={renaming.id} name={renaming.originalName}
+          onSaved={() => { setRenaming(null); onChanged() }} onClose={() => setRenaming(null)} />
+      )}
 
       {/* Aviso al eliminar un publicado. Orden deliberado: la opción segura
           (Despublicar) es la primaria; la destructiva va segunda y neutra. */}

@@ -23,6 +23,7 @@ import { ExercisesChannel } from '@/lib/exercisesChannel'
 import { resolveScope } from '@/lib/exercises'
 import { extrapolateTime } from '@/lib/playerTimeline'
 import { sessionKey, saveSession, loadSession } from '@/lib/session'
+import { cleanVideoName, normalizeVideoName, VIDEO_NAME_MAX } from '@/lib/videoName'
 import type { SessionData } from '@/lib/session'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
@@ -41,6 +42,7 @@ export default function Player() {
   const vidRef  = useRef<HTMLVideoElement>(null)
   const listRef = useRef<HTMLDivElement>(null)
   const abortRef = useRef<AbortController | null>(null)
+  const uploadNameRef = useRef('')   // lo último que escribió el admin (lo lee transcribe() al terminar)
   const srtReloadRef   = useRef<HTMLInputElement>(null)
   const exitPendingRef = useRef<(() => void) | null>(null)
 
@@ -72,6 +74,7 @@ export default function Player() {
   const [progress, setProgress]           = useState(0)
   const [errorMsg, setErrorMsg]           = useState('')
   const [videoFileName, setVideoFileName] = useState('')
+  const [uploadName, setUploadName]       = useState('')   // "Nombre del video" mientras se transcribe
   const [videoUrl, setVideoUrl]           = useState('')   // objectURL local (File en memoria)
   const [storageUrl, setStorageUrl]       = useState('')   // URL del Blob (fallback cuando no hay File local)
   const [srtSource, setSrtSource]         = useState('')
@@ -705,13 +708,17 @@ export default function Player() {
     let interval: ReturnType<typeof setInterval> | null = null
     let createdVideoId: string | null = null
     let succeeded = false
+    // El nombre que ven profes y alumnos: arranca con el del archivo limpio y el admin lo
+    // puede cambiar mientras se transcribe (se guarda al terminar, paso 7).
+    const proposedName = cleanVideoName(videoFile.name)
+    setUploadName(proposedName); uploadNameRef.current = proposedName
 
     try {
       // 1) Crear la fila del video (valida cuota → 413 legítimo si no hay espacio)
       const createRes = await fetch('/api/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ originalName: videoFile.name, sizeBytes: videoFile.size, mimeType: videoFile.type }),
+        body: JSON.stringify({ originalName: proposedName, sizeBytes: videoFile.size, mimeType: videoFile.type }),
         signal: ac.signal,
       })
       const createData = await createRes.json()
@@ -786,6 +793,22 @@ export default function Player() {
       } catch (e) {
         console.error('[transcribe] No se pudo guardar la sesión en la biblioteca:', e)
         alert('El video se subió y transcribió bien, y el .srt ya se descargó. Pero no se pudo guardar la sesión en tu biblioteca: si abrís este video desde la biblioteca más tarde, puede aparecer sin subtítulos.')
+      }
+
+      // 7) El nombre que escribió el admin mientras se transcribía, si lo cambió. Si falla,
+      //    queda el del archivo limpio (se corrige con "Cambiar nombre" en Mi biblioteca).
+      const finalName = normalizeVideoName(uploadNameRef.current)
+      if (finalName && finalName !== proposedName) {
+        try {
+          const nameRes = await fetch(`/api/videos/${createdVideoId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ originalName: finalName }),
+          })
+          if (!nameRes.ok) throw new Error(`HTTP ${nameRes.status}`)
+        } catch (e) {
+          console.error('[transcribe] No se pudo guardar el nombre del video:', e)
+        }
       }
 
       // Guardamos la URL del Blob como fallback (reabrir/recargar). NO reemplaza el objectURL local:
@@ -908,7 +931,7 @@ export default function Player() {
       const createRes = await fetch('/api/videos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ originalName: file.name, sizeBytes: file.size, mimeType: file.type }),
+        body: JSON.stringify({ originalName: cleanVideoName(file.name), sizeBytes: file.size, mimeType: file.type }),
       })
       const createData = await createRes.json()
       if (!createRes.ok) {
@@ -1257,6 +1280,16 @@ export default function Player() {
                       <div className={styles.progBarWrap}>
                         <div className={styles.progBarFill} style={{ width: progress + '%' }} />
                       </div>
+                      <label className={styles.progName}>
+                        <span className={styles.progNameLbl}>Nombre del video (así lo ven los profes y los alumnos)</span>
+                        <input className={styles.usersInput} value={uploadName} maxLength={VIDEO_NAME_MAX} autoComplete="off"
+                          onChange={e => { setUploadName(e.target.value); uploadNameRef.current = e.target.value }} />
+                        <span className={styles.progNameHint}>
+                          {normalizeVideoName(uploadName)
+                            ? `El archivo era "${videoFileName}". El nombre se guarda al terminar.`
+                            : 'Si lo dejás vacío, queda el nombre del archivo.'}
+                        </span>
+                      </label>
                       <div className={styles.stepList}>
                         {STEP_ORDER.filter(s => s !== 'done').map(s => {
                           const si = STEP_ORDER.indexOf(step), ti = STEP_ORDER.indexOf(s)

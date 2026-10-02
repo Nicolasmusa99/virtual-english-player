@@ -40,6 +40,12 @@ export async function getStudentById(id: string): Promise<{ id: string; role: Ro
   return row ?? null
 }
 
+// Vista del alumno v2: el nombre de SU profe ("con Laura Sosa"). Solo el nombre, sin mail.
+export async function getUserName(id: string): Promise<string | null> {
+  const [row] = await db.select({ name: users.name }).from(users).where(eq(users.id, id))
+  return row?.name ?? null
+}
+
 // "Mi sala de Zoom" (calendario, G0). Solo la lee/escribe el propio usuario (la ruta
 // usa el id de la sesión) y la lee el calendario del alumno (la de SU profe).
 export async function getZoomUrl(userId: string): Promise<string | null> {
