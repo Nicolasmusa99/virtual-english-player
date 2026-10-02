@@ -1,7 +1,9 @@
 'use client'
 // Calendario (G0) — "Mi sala de Zoom" en el inicio del PROFE: su link personal de Zoom,
 // que usan solas todas sus clases sin link propio. Habla solo con /api/me/zoom (siempre
-// el usuario de la sesión).
+// el usuario de la sesión). Rediseño (fase 2): vive en una ventana que abre
+// ZoomRoomStatus; `onSaved` le avisa el link nuevo (o null si lo quitó). Fase 5: sin el
+// cuadradito "Z" (el título de la ventana ya dice qué es).
 import { useEffect, useState, type FormEvent } from 'react'
 import styles from './classes.module.css'
 
@@ -16,7 +18,7 @@ export const ZOOM_TEXTS = {
   error: 'No se pudo guardar.',
 } as const
 
-export default function ZoomRoomCard() {
+export default function ZoomRoomCard({ onSaved }: { onSaved?: (zoomUrl: string | null) => void } = {}) {
   const [value, setValue] = useState('')
   const [loaded, setLoaded] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -42,6 +44,7 @@ export default function ZoomRoomCard() {
       if (!res.ok) { setMsg({ ok: false, text: typeof d?.error === 'string' ? d.error : ZOOM_TEXTS.error }); return }
       setValue(d?.zoomUrl ?? '')
       setMsg({ ok: true, text: d?.zoomUrl ? ZOOM_TEXTS.saved : ZOOM_TEXTS.removed })
+      onSaved?.(d?.zoomUrl ?? null)
     } catch {
       setMsg({ ok: false, text: ZOOM_TEXTS.error })
     } finally {
@@ -51,7 +54,6 @@ export default function ZoomRoomCard() {
 
   return (
     <form className={styles.zr} onSubmit={save} aria-label={ZOOM_TEXTS.title}>
-      <span className={styles.zrIcon} aria-hidden="true">Z</span>
       <div className={styles.zrBody}>
         <div className={styles.zrTitle}>{ZOOM_TEXTS.title}</div>
         <div className={styles.tcHint}>{ZOOM_TEXTS.sub}</div>

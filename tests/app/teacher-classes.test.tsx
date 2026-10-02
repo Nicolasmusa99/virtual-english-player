@@ -60,8 +60,8 @@ describe('TeacherClasses — lo que se ve', () => {
   it('pide las clases de ESE alumno y muestra el horario que se repite', async () => {
     await mount()
     expect(fetchMock.mock.calls[0][0]).toBe(`/api/classes?studentId=${ST}`)
-    expect(screen.getByTestId('series-row')).toHaveTextContent('Todos los martes · 18:00')
-    expect(screen.getByTestId('series-row')).toHaveTextContent('60 min · desde el 1/9')
+    expect(screen.getByTestId('series-row')).toHaveTextContent('Todos los martes a las 18:00')
+    expect(screen.getByTestId('series-row')).toHaveTextContent('60 minutos, desde el 1 de septiembre, en Zoom')
     expect(screen.getByTestId('series-row')).toHaveTextContent('Zoom')
     expect(screen.getByText(T.tzNote)).toBeInTheDocument()
     // G1: un solo botón para crear, y ya no hay "Terminar"
@@ -72,13 +72,13 @@ describe('TeacherClasses — lo que se ve', () => {
   it('G1: un horario de varios días se nombra con todos sus días', async () => {
     data = { series: [{ ...SERIES, weekdays: [2, 4] }], classes: [] }
     await mount()
-    expect(screen.getByTestId('series-row')).toHaveTextContent('Todos los martes y jueves · 18:00')
+    expect(screen.getByTestId('series-row')).toHaveTextContent('Todos los martes y jueves a las 18:00')
   })
 
   it('un horario que todavía no empezó y ya tiene fin dice "del … al …"', async () => {
     data = { series: [{ ...SERIES, startsOn: '2026-10-06', endsOn: '2026-10-07' }], classes: [] }
     await mount()
-    expect(screen.getByTestId('series-row')).toHaveTextContent('60 min · del 6/10 al 7/10')
+    expect(screen.getByTestId('series-row')).toHaveTextContent('60 minutos, del 6 de octubre al 7 de octubre')
   })
 
   it('un link viejo de Meet se sigue mostrando como tal', async () => {
@@ -90,10 +90,12 @@ describe('TeacherClasses — lo que se ve', () => {
   it('cada clase con su tipo y sus botones', async () => {
     await mount()
     const texts = screen.getAllByTestId('class-row').map((r) => r.textContent)
-    expect(texts[0]).toMatch(/^Hoy, Mar 29\/9 · 18:00–19:00HoySe repiteEditarCancelar$/)
-    expect(texts[1]).toMatch(/Vie 2\/10 · 10:30–11:15Una vezZoomEditarCancelar$/)
-    expect(texts[2]).toMatch(/Mar 6\/10 · 18:00–19:00CanceladaRestaurar$/)
-    expect(texts[3]).toMatch(/Jue 15\/10 · 17:00–18:30Cambió de díaera el mar 13\/10EditarCancelar$/)
+    // Rediseño (fase 5): fechas con palabras, sin "·"; "Hoy" resaltado (mark) en vez de etiqueta aparte
+    expect(texts[0]).toMatch(/^Hoy martes 29 de septiembre18:00–19:00Se repiteEditarCancelar$/)
+    expect(texts[1]).toMatch(/^Viernes 2 de octubre10:30–11:15Una vez, en ZoomEditarCancelar$/)
+    expect(texts[2]).toMatch(/^Martes 6 de octubre18:00–19:00CanceladaRestaurar$/)
+    expect(texts[3]).toMatch(/^Jueves 15 de octubre17:00–18:30Cambió de día, era el martes 13 de octubreEditarCancelar$/)
+    expect(within(screen.getAllByTestId('class-row')[0]).getByText('Hoy').tagName).toBe('MARK')
   })
 
   it('error al cargar → mensaje + Reintentar', async () => {
@@ -213,7 +215,7 @@ describe('"+ Nueva clase" (ventana tipo Google)', () => {
 describe('Editar una clase que se repite → "Solo esta / Esta y las siguientes / Todas"', () => {
   async function editTue20(mod: (box: HTMLElement) => void) {
     await mount()
-    await click(within(row(/Mar 20\/10/)).getByRole('button', { name: T.edit }))
+    await click(within(row(/Martes 20 de octubre/)).getByRole('button', { name: T.edit }))
     const box = dialog(D.edit)
     expect(within(box).getByLabelText(D.date)).toHaveValue('2026-10-20')
     expect(within(box).getByLabelText(D.start)).toHaveValue('18:00')
@@ -269,7 +271,7 @@ describe('Editar una clase que se repite → "Solo esta / Esta y las siguientes 
 
   it('una clase MOVIDA: precarga la nueva fecha y usa el martes ORIGINAL como clase del horario', async () => {
     await mount()
-    await click(within(row(/Jue 15\/10/)).getByRole('button', { name: T.edit }))
+    await click(within(row(/Jueves 15 de octubre/)).getByRole('button', { name: T.edit }))
     const box = dialog(D.edit)
     expect(within(box).getByLabelText(D.date)).toHaveValue('2026-10-15')
     expect(within(box).getByLabelText(D.end)).toHaveValue('18:30')
@@ -297,7 +299,7 @@ describe('Editar una clase que se repite → "Solo esta / Esta y las siguientes 
 describe('Cancelar', () => {
   it('una clase que se repite → pregunta el alcance', async () => {
     await mount()
-    await click(within(row(/Mar 20\/10/)).getByRole('button', { name: T.cancel }))
+    await click(within(row(/Martes 20 de octubre/)).getByRole('button', { name: T.cancel }))
     const box = dialog(D.scopeCancel)
     expect(box).toHaveTextContent(D.onlyCancelHint)
     expect(box).toHaveTextContent(D.followingCancelHint)
@@ -308,9 +310,9 @@ describe('Cancelar', () => {
 
   it('esta y las siguientes / todas → DELETE con alcance', async () => {
     await mount()
-    await click(within(row(/Mar 20\/10/)).getByRole('button', { name: T.cancel }))
+    await click(within(row(/Martes 20 de octubre/)).getByRole('button', { name: T.cancel }))
     await scope(D.following, 'cancel')
-    await click(within(row(/Jue 15\/10/)).getByRole('button', { name: T.cancel }))
+    await click(within(row(/Jueves 15 de octubre/)).getByRole('button', { name: T.cancel }))
     await scope(D.all, 'cancel')
     expect(writes()).toEqual([
       [`/api/classes/series/${SER}?scope=following&occurrence=2026-10-20T21%3A00%3A00.000Z`, 'DELETE', undefined],
@@ -320,7 +322,7 @@ describe('Cancelar', () => {
 
   it('"Volver" no cancela nada', async () => {
     await mount()
-    await click(within(row(/Mar 20\/10/)).getByRole('button', { name: T.cancel }))
+    await click(within(row(/Martes 20 de octubre/)).getByRole('button', { name: T.cancel }))
     await click(within(dialog(D.scopeCancel)).getByRole('button', { name: D.back }))
     expect(writes()).toEqual([])
   })
@@ -328,15 +330,15 @@ describe('Cancelar', () => {
   it('una clase suelta → confirmación simple y queda cancelada', async () => {
     await mount()
     vi.mocked(window.confirm).mockReturnValueOnce(false)
-    await click(within(row(/Vie 2\/10/)).getByRole('button', { name: T.cancel }))
+    await click(within(row(/Viernes 2 de octubre/)).getByRole('button', { name: T.cancel }))
     expect(writes()).toEqual([])
-    await click(within(row(/Vie 2\/10/)).getByRole('button', { name: T.cancel }))
+    await click(within(row(/Viernes 2 de octubre/)).getByRole('button', { name: T.cancel }))
     expect(writes()).toEqual([['/api/classes/events/e-suelta', 'PATCH', { status: 'cancelled' }]])
   })
 
   it('Restaurar una cancelada del horario = borrar la excepción', async () => {
     await mount()
-    await click(within(row(/Mar 6\/10/)).getByRole('button', { name: T.restore }))
+    await click(within(row(/Martes 6 de octubre/)).getByRole('button', { name: T.restore }))
     expect(writes()).toEqual([['/api/classes/events/e-canc', 'DELETE', undefined]])
   })
 })
@@ -344,7 +346,7 @@ describe('Cancelar', () => {
 describe('Editar una clase suelta', () => {
   it('sin repetir → PATCH de esa clase', async () => {
     await mount()
-    await click(within(row(/Vie 2\/10/)).getByRole('button', { name: T.edit }))
+    await click(within(row(/Viernes 2 de octubre/)).getByRole('button', { name: T.edit }))
     const box = dialog(D.edit)
     expect(within(box).getByLabelText(D.start)).toHaveValue('10:30')
     expect(within(box).getByLabelText(D.end)).toHaveValue('11:15')
@@ -355,7 +357,7 @@ describe('Editar una clase suelta', () => {
 
   it('ponerle "Se repite" → crea el horario y reemplaza la suelta', async () => {
     await mount()
-    await click(within(row(/Vie 2\/10/)).getByRole('button', { name: T.edit }))
+    await click(within(row(/Viernes 2 de octubre/)).getByRole('button', { name: T.edit }))
     const box = dialog(D.edit)
     change(within(box).getByLabelText(D.repeat), 'weekly')
     await click(within(box).getByRole('button', { name: D.save }))
@@ -369,7 +371,7 @@ describe('Editar una clase suelta', () => {
 describe('Solo habla con /api/classes/**', () => {
   it('ningún pedido sale de ahí', async () => {
     await mount()
-    await click(within(row(/Mar 20\/10/)).getByRole('button', { name: T.cancel }))
+    await click(within(row(/Martes 20 de octubre/)).getByRole('button', { name: T.cancel }))
     await scope(D.following, 'cancel')
     expect(fetchMock.mock.calls.every(([u]) => String(u).startsWith('/api/classes'))).toBe(true)
   })

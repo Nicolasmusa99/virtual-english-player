@@ -6,7 +6,7 @@
 // Quién puede tocar qué lo decide el servidor (lib/classAccess.ts).
 import { useState } from 'react'
 import { CLASS_TZ, dateInTz, weekdayOf } from '@/lib/classSchedule'
-import { formDate, formTime, shortDate, type TeacherClass } from '@/lib/classView'
+import { formDate, formTime, longDate, type TeacherClass } from '@/lib/classView'
 import { addMinutes, draftWeekdays, repeatChanged, seriesBody, singleBody, type ClassDraft } from '@/lib/classDraft'
 import { ClassDialog, ScopeDialog, type Scope, type StudentOption } from './ClassDialog'
 
@@ -97,7 +97,7 @@ export function useClassEditor({ zoomUrl, series, reload, students }: {
   }
   function cancel(studentId: string, c: TeacherClass) {
     if (c.seriesId) { show({ kind: 'scopeCancel', studentId, c }); return }
-    if (!window.confirm(EDITOR_TEXTS.confirmCancel(shortDate(new Date(c.startsAt), CLASS_TZ).toLowerCase()))) return
+    if (!window.confirm(EDITOR_TEXTS.confirmCancel(longDate(new Date(c.startsAt), CLASS_TZ)))) return
     run(() => send(`/api/classes/events/${c.eventId}`, 'PATCH', { status: 'cancelled' }))
   }
   function restore(c: TeacherClass) {

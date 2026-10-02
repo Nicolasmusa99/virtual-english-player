@@ -31,7 +31,7 @@ async function openStageWithMock(container: HTMLElement) {
   const mockStage = new StageChannel()
   mockStage.onMessage(msg => panelCmds.push(msg as Record<string, unknown>))
   const stageBtn = Array.from(container.querySelectorAll('button'))
-    .find(b => /abrir stage/i.test(b.textContent ?? ''))
+    .find(b => /abrir ventana para zoom/i.test(b.textContent ?? ''))
   await act(async () => { fireEvent.click(stageBtn!); await tick(50) })
   await act(async () => { mockStage.send({ type: 'ready' }); await tick(50) })
   return { mockStage, panelCmds }

@@ -67,7 +67,7 @@ describe('page.tsx: el alumno entra a SU vista y a nada del profe', () => {
     const { container } = render(<Player />)
     await flush()
     expect(screen.getByRole('heading', { name: 'Hola, Martina' })).toBeInTheDocument()
-    for (const teacherThing of [/Armar ejercicios/, /Mi biblioteca/, /Biblioteca compartida/, /Usuarios/, /Arrastrá el video/, /Mis alumnos/]) {
+    for (const teacherThing of [/Armar ejercicios/, /Mi biblioteca/, /Biblioteca compartida/, /Usuarios/, /Arrastrá el video/, /Mis alumnos/, /Tus clases de hoy/, /Subir video/]) {
       expect(container.textContent).not.toMatch(teacherThing)
     }
     expect(container.querySelector('input[type="file"]')).toBeNull()
@@ -79,7 +79,7 @@ describe('page.tsx: el alumno entra a SU vista y a nada del profe', () => {
     useSessionMock.mockReturnValue({ data: { user: { name: 'Profe', email: 'p@x.com', role: 'profesor' } }, status: 'authenticated' })
     const { container } = render(<Player />)
     await flush()
-    expect(container.textContent).toMatch(/Mis alumnos/)
+    expect(container.textContent).toMatch(/Tus clases de hoy/) // rediseño: el inicio del profe es "Hoy"
     expect(screen.queryByRole('heading', { name: /^Hola/ })).toBeNull()
     expect(calledUrls().some((u) => u.startsWith('/api/student/'))).toBe(false)
   })

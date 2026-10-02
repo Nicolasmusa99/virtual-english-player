@@ -74,7 +74,7 @@ describe('Fix stage + biblioteca', () => {
     mockStage.onMessage(msg => panelCmds.push(msg as Record<string, unknown>))
 
     const stageBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /abrir stage/i.test(b.textContent ?? ''))
+      .find(b => /abrir ventana para zoom/i.test(b.textContent ?? ''))
     expect(stageBtn).not.toBeUndefined()
 
     await act(async () => { fireEvent.click(stageBtn!); await tick(50) })
@@ -96,7 +96,7 @@ describe('Fix stage + biblioteca', () => {
     await navigateToPlayerViaLibrary(container)
 
     const stageBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /abrir stage/i.test(b.textContent ?? ''))
+      .find(b => /abrir ventana para zoom/i.test(b.textContent ?? ''))
     expect(stageBtn).not.toBeUndefined()
     expect((stageBtn as HTMLButtonElement).disabled).toBe(false)
   })
@@ -119,7 +119,7 @@ describe('Fix stage + biblioteca', () => {
     mockStage.onMessage(msg => panelCmds.push(msg as Record<string, unknown>))
 
     const stageBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /abrir stage/i.test(b.textContent ?? ''))
+      .find(b => /abrir ventana para zoom/i.test(b.textContent ?? ''))
     await act(async () => { fireEvent.click(stageBtn!); await tick(50) })
     await act(async () => { mockStage.send({ type: 'ready' }); await tick(100) })
 

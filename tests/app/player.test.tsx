@@ -37,7 +37,7 @@ describe('Player — TC-088: sin doble playback en modo stage', () => {
     await loadIntoPlayerScreen(container)
 
     // Rojo: el botón no existe hasta que implementemos US-038 en app/page.tsx
-    expect(queryByText(/abrir stage/i)).not.toBeNull()
+    expect(queryByText(/abrir ventana para zoom/i)).not.toBeNull()
   })
 
   // TC-088b: RED — al hacer click en "Abrir stage", el video local pierde su src
@@ -46,7 +46,7 @@ describe('Player — TC-088: sin doble playback en modo stage', () => {
     await loadIntoPlayerScreen(container)
 
     const video = container.querySelector('video')!
-    const openBtn = queryByText(/abrir stage/i)
+    const openBtn = queryByText(/abrir ventana para zoom/i)
 
     // Si el botón no existe (estado rojo) el test falla aquí de todos modos
     expect(openBtn).not.toBeNull()
@@ -58,5 +58,38 @@ describe('Player — TC-088: sin doble playback en modo stage', () => {
 
     // El video local no debe reproducir: src debe estar vacío
     expect(video.getAttribute('src')).toBeFalsy()
+  })
+})
+
+// Rediseño (fase 3): pestañas Guion / Ajustes / Ejercicios. "Sonido" vive en Ajustes y
+// queda MONTADO aunque se mire otra pestaña: si se desmonta, desconecta el ecualizador
+// del video (antes pasaba al ir a Ejercicios).
+describe('Player — pestañas del panel (rediseño fase 3)', () => {
+  beforeEach(() => { vi.spyOn(window, 'open').mockReturnValue({} as Window) })
+  afterEach(() => { vi.restoreAllMocks() })
+
+  const tab = (c: HTMLElement, id: string) => c.querySelector(`[data-testid="tab-${id}"]`) as HTMLButtonElement
+  const sound = (c: HTMLElement) => c.querySelector('[data-testid="sound-state"]')
+  const visible = (el: Element | null) => !!el && !el.closest('[hidden]')
+
+  it('Guion, Ajustes y Ejercicios; "Sonido" y el desfase están en Ajustes', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayerScreen(container)
+    expect([tab(container, 'player'), tab(container, 'settings'), tab(container, 'exercises')].map(t => t.textContent)).toEqual(['Guion', 'Ajustes', 'Ejercicios'])
+    expect(tab(container, 'player')).toHaveAttribute('aria-selected', 'true')
+    expect(visible(sound(container))).toBe(false)
+    await act(async () => { fireEvent.click(tab(container, 'settings')); await tick(30) })
+    expect(visible(sound(container))).toBe(true)
+    expect(container.textContent).toContain('Desfase de subtítulos')
+  })
+
+  it('en Ejercicios, "Sonido" sigue montado (el ecualizador no se desconecta)', async () => {
+    const { container } = render(<Player />)
+    await loadIntoPlayerScreen(container)
+    await act(async () => { fireEvent.click(tab(container, 'exercises')); await tick(30) })
+    expect(sound(container)).not.toBeNull()
+    expect(visible(sound(container))).toBe(false)
+    await act(async () => { fireEvent.click(tab(container, 'player')); await tick(30) })
+    expect(container.querySelector('[data-testid="phrase-counter"]')).not.toBeNull()
   })
 })

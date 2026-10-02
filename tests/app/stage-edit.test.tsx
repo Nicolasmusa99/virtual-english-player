@@ -32,7 +32,7 @@ async function openStageWithMock(container: HTMLElement) {
   mockStage.onMessage(msg => panelCmds.push(msg as Record<string, unknown>))
 
   const stageBtn = Array.from(container.querySelectorAll('button'))
-    .find(b => /abrir stage/i.test(b.textContent ?? ''))
+    .find(b => /abrir ventana para zoom/i.test(b.textContent ?? ''))
   await act(async () => {
     fireEvent.click(stageBtn!)
     await tick(50)
@@ -403,13 +403,13 @@ describe('US-033 — Todas ✓ / Ninguna', () => {
     await loadIntoPlayer(container)
 
     // ROJO: botón "Todas ✓" no existe todavía
-    expect(btn(container, 'Todas ✓')).not.toBeUndefined()
+    expect(btn(container, 'Elegir todas')).not.toBeUndefined()
 
     await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
-    expect(container.textContent).toContain('0 sel.')
+    expect(container.textContent).toContain('0 elegidas')
 
-    await act(async () => { fireEvent.click(btn(container, 'Todas ✓')!); await tick(50) })
-    expect(container.textContent).toContain('2 sel.')
+    await act(async () => { fireEvent.click(btn(container, 'Elegir todas')!); await tick(50) })
+    expect(container.textContent).toContain('2 elegidas')
   })
 
   // TC-077b: "Todas ✓" re-habilita el botón Práctica (disabled cuando selPhrases.length=0)
@@ -420,7 +420,7 @@ describe('US-033 — Todas ✓ / Ninguna', () => {
     await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
     expect(btn(container, 'Práctica')?.disabled).toBe(true)
 
-    await act(async () => { fireEvent.click(btn(container, 'Todas ✓')!); await tick(50) })
+    await act(async () => { fireEvent.click(btn(container, 'Elegir todas')!); await tick(50) })
     expect(btn(container, 'Práctica')?.disabled).toBe(false)
   })
 
@@ -434,7 +434,7 @@ describe('US-033 — Todas ✓ / Ninguna', () => {
 
     await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
 
-    expect(container.textContent).toContain('0 sel.')
+    expect(container.textContent).toContain('0 elegidas')
     expect(btn(container, 'Práctica')?.disabled).toBe(true)
   })
 
@@ -443,13 +443,13 @@ describe('US-033 — Todas ✓ / Ninguna', () => {
     const { container } = render(<Player />)
     await loadIntoPlayer(container)
 
-    expect(container.textContent).toContain('2 sel.')
+    expect(container.textContent).toContain('2 elegidas')
     await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
-    expect(container.textContent).toContain('0 sel.')
-    await act(async () => { fireEvent.click(btn(container, 'Todas ✓')!); await tick(50) })
-    expect(container.textContent).toContain('2 sel.')
+    expect(container.textContent).toContain('0 elegidas')
+    await act(async () => { fireEvent.click(btn(container, 'Elegir todas')!); await tick(50) })
+    expect(container.textContent).toContain('2 elegidas')
     await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(50) })
-    expect(container.textContent).toContain('0 sel.')
+    expect(container.textContent).toContain('0 elegidas')
   })
 
   // TC-078c: filtro 'sel' activo + "Ninguna" → lista muestra "Sin frases"
@@ -460,7 +460,7 @@ describe('US-033 — Todas ✓ / Ninguna', () => {
     // Activar filtro 'sel'
     await act(async () => {
       const selFilterBtn = Array.from(container.querySelectorAll('button'))
-        .find(b => b.textContent?.trim() === 'Sel.')
+        .find(b => b.textContent?.trim() === 'Elegidas')
       fireEvent.click(selFilterBtn!)
       await tick(50)
     })

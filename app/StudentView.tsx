@@ -5,6 +5,7 @@ import TeacherClasses from './TeacherClasses'
 
 // Cara visible de /api/assignments (lado alumno). Solo consume endpoints ya
 // scopeados por el backend; la seguridad real vive allá. NO toca captions.
+// Rediseño (fase 5): el material en filas del aula y las tarjetas con miniatura.
 interface AssignedRow {
   videoId: string
   originalName: string
@@ -24,11 +25,9 @@ const NIVEL: Record<string, string> = { beginner: 'Beginner', medium: 'Medium', 
 
 export default function StudentView({
   studentId,
-  studentEmail,
   onOpenVideo,
 }: {
   studentId: string
-  studentEmail: string
   onOpenVideo: (videoId: string) => void
 }) {
   const [assigned, setAssigned] = useState<AssignedRow[]>([])
@@ -81,12 +80,11 @@ export default function StudentView({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className={styles.dzSub}>Alumno: <strong>{studentEmail}</strong></div>
+    <div>
 
       <TeacherClasses studentId={studentId} />
 
-      <div className={styles.dzSub} style={{ margin: '14px 0 0', fontSize: 15, fontWeight: 600, color: 'var(--tx)' }}>Material</div>
+      <h2 className={styles.secTitle}>Material</h2>
 
       {/* ── Material asignado ── */}
       {error && <div className={styles.errorBox}>{error}</div>}
@@ -95,12 +93,12 @@ export default function StudentView({
       ) : assigned.length === 0 ? (
         <div className={styles.progSub}>Este alumno todavía no tiene material asignado.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div className={styles.list}>
           {assigned.map((a) => (
-            <div key={a.videoId} className={styles.restoreBanner} style={a.active ? undefined : { opacity: 0.55 }}>
-              <span className={styles.restoreBannerText}>
-                {a.originalName}
-                {!a.active && <span className={styles.usersMeta}> · no disponible</span>}
+            <div key={a.videoId} className={`${styles.row} ${a.active ? '' : styles.rowOff}`}>
+              <span className={styles.rowText}>
+                <span className={styles.rowName}>{a.originalName}</span>
+                {!a.active && <span className={styles.usersMeta}>No disponible</span>}
               </span>
               {a.sharedType && <span className={`${styles.chip} ${styles.chipTipo}`}>{TIPO[a.sharedType]}</span>}
               {a.sharedLevel && <span className={`${styles.chip} ${styles.chipNivel}`}>{NIVEL[a.sharedLevel]}</span>}
@@ -113,10 +111,10 @@ export default function StudentView({
 
       {/* ── Asignar material ── */}
       {!pickerOpen ? (
-        <button className={styles.restoreBtn} onClick={openPicker}>+ Asignar material</button>
+        <button className={styles.tbBtn} style={{ marginTop: 16 }} onClick={openPicker}>+ Asignar material</button>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          <div className={styles.dzSub}>Biblioteca compartida</div>
+        <div>
+          <h3 className={styles.subTitle}>Biblioteca compartida</h3>
           {sharedError && (
             <div className={styles.errorBox}>{sharedError} <button className={styles.tbBtn} onClick={loadShared}>Reintentar</button></div>
           )}
@@ -130,18 +128,19 @@ export default function StudentView({
                 const isA = assignedIds.has(v.id)
                 return (
                   <div key={v.id} className={styles.sharedCard}>
-                    <div className={styles.sharedThumb}>{v.sharedType === 'cancion' ? '🎵' : '🎬'}</div>
+                    <div className={styles.sharedThumb}><svg className={styles.thumbIco} viewBox="0 0 24 24" aria-hidden="true"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg></div>
                     <div className={styles.sharedName}>{v.originalName}</div>
                     <div className={styles.libChips}>
                       {v.sharedType && <span className={`${styles.chip} ${styles.chipTipo}`}>{TIPO[v.sharedType]}</span>}
                       {v.sharedLevel && <span className={`${styles.chip} ${styles.chipNivel}`}>{NIVEL[v.sharedLevel]}</span>}
                     </div>
-                    <div>
+                    <div className={styles.libActions}>
+                      {isA && <span className={styles.rowOk}>Asignado</span>}
                       <button
                         className={isA ? styles.discardBtn : styles.restoreBtn}
                         disabled={busy[v.id]}
                         onClick={() => toggle(v.id, isA)}>
-                        {busy[v.id] ? '…' : isA ? '✓ Asignado — quitar' : 'Asignar'}
+                        {busy[v.id] ? '…' : isA ? 'Quitar' : 'Asignar'}
                       </button>
                     </div>
                   </div>
@@ -149,7 +148,7 @@ export default function StudentView({
               })}
             </div>
           )}
-          <button className={styles.tbBtn} onClick={() => setPickerOpen(false)}>Listo</button>
+          <button className={styles.tbBtn} style={{ marginTop: 20 }} onClick={() => setPickerOpen(false)}>Listo</button>
         </div>
       )}
     </div>

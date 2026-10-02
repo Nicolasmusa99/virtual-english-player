@@ -34,7 +34,7 @@ export function weekTitle(start: string): string {
 // Cabecera de cada día: { short: 'MAR', letter: 'M', num: 29 }.
 export function dayHead(day: string): { short: string; letter: string; num: number } {
   const name = WEEKDAYS[weekdayOf(day)]
-  return { short: name.slice(0, 3).toUpperCase(), letter: name[0].toUpperCase(), num: ymd(day)[2] }
+  return { short: cap(name.slice(0, 3)), letter: name[0].toUpperCase(), num: ymd(day)[2] }
 }
 
 // Vista de un día (celular): 'Martes 29'.

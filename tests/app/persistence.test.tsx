@@ -155,7 +155,7 @@ describe('Player — Bloque C persistencia', () => {
 
     // Click "← Cargar otro"
     const backBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+      .find(b => b.textContent?.trim() === 'Volver')
     expect(backBtn).not.toBeNull()
     await act(async () => { fireEvent.click(backBtn!); await tick(30) })
 
@@ -169,7 +169,7 @@ describe('Player — Bloque C persistencia', () => {
     await loadIntoPlayerScreen(container)
 
     const backBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+      .find(b => b.textContent?.trim() === 'Volver')
     await act(async () => { fireEvent.click(backBtn!); await tick(50) })
 
     expect(container.textContent).toMatch(/arrastrá el video/i)
@@ -185,7 +185,7 @@ describe('Player — Bloque C persistencia', () => {
     await act(async () => { fireEvent.click(plusBtn!); await tick(30) })
 
     const backBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+      .find(b => b.textContent?.trim() === 'Volver')
     await act(async () => { fireEvent.click(backBtn!); await tick(30) })
 
     const exitBtn = Array.from(container.querySelectorAll('button'))
@@ -206,7 +206,7 @@ describe('Player — Bloque C persistencia', () => {
     await act(async () => { fireEvent.click(plusBtn!); await tick(30) })
 
     const backBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /cargar otro/i.test(b.textContent ?? ''))
+      .find(b => b.textContent?.trim() === 'Volver')
     await act(async () => { fireEvent.click(backBtn!); await tick(30) })
 
     const cancelBtn = Array.from(container.querySelectorAll('button'))

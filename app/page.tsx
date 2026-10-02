@@ -9,7 +9,10 @@ import UsersPanel from './UsersPanel'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
-import ZoomRoomCard from './ZoomRoomCard'
+import AulaShell, { AULA_ICONS, AulaPage, type AulaNavItem } from './AulaShell'
+import TeacherToday from './TeacherToday'
+import ZoomRoomStatus from './ZoomRoomStatus'
+import aula from './aula.module.css'
 import MyAgenda from './MyAgenda'
 import StudentApp from './StudentApp'
 import VoiceBoostControl from './VoiceBoostControl'
@@ -60,8 +63,8 @@ export default function Player() {
   // ─── State ───────────────────────────────────────────────────────────────
   const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student' | 'agenda'>('load')
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; email: string } | null>(null)
-  // A dónde vuelve la pantalla del alumno: a "Mis alumnos" o a "Mi agenda" (G2).
-  const [studentFrom, setStudentFrom] = useState<'users' | 'agenda'>('users')
+  // A dónde vuelve la pantalla del alumno: a "Alumnos", a "Agenda" (G2) o a "Hoy" (rediseño).
+  const [studentFrom, setStudentFrom] = useState<'users' | 'agenda' | 'load'>('users')
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -114,7 +117,7 @@ export default function Player() {
   const [libraryLoading, setLibraryLoading] = useState(false)
   const [librarySaving, setLibrarySaving]   = useState(false)
   const [libraryError, setLibraryError]     = useState('')
-  const [panelTab, setPanelTab]             = useState<'player' | 'exercises'>('player')
+  const [panelTab, setPanelTab]             = useState<'player' | 'settings' | 'exercises'>('player')
 
   // ─── Hot refs ─────────────────────────────────────────────────────────────
   const phrasesRef   = useRef<Phrase[]>([])
@@ -1111,6 +1114,45 @@ export default function Player() {
     return <StudentApp name={sessionData?.user?.name ?? null} email={sessionData?.user?.email ?? null} />
   }
 
+  // ─── La sala (rediseño fase 3): debajo del título del video ───────────────────
+  const playerMeta = phrases.length === 0 ? '' : [
+    phrases.length === 1 ? '1 frase' : `${phrases.length} frases`,
+    srtSource.startsWith('Gemini') ? 'subtítulos de Gemini' : srtSource ? 'subtítulos de un archivo SRT' : '',
+  ].filter(Boolean).join(', ')
+
+  // ─── El aula (rediseño fase 2): secciones de la barra lateral según el rol ─────
+  type Screen = typeof screen
+  const AULA_SCREENS: Screen[] = ['load', 'library', 'exercises', 'users', 'shared', 'student', 'agenda']
+  const aulaNav: AulaNavItem[] = userRole === 'profesor' ? [
+    { id: 'load', label: 'Hoy', icon: AULA_ICONS.hoy },
+    { id: 'agenda', label: 'Agenda', icon: AULA_ICONS.agenda },
+    { id: 'users', label: 'Alumnos', icon: AULA_ICONS.alumnos },
+    { id: 'shared', label: 'Biblioteca', icon: AULA_ICONS.biblioteca },
+    { id: 'exercises', label: 'Ejercicios', icon: AULA_ICONS.ejercicios },
+  ] : userRole === 'admin' ? [
+    { id: 'load', label: 'Subir video', short: 'Subir', icon: AULA_ICONS.subir },
+    { id: 'library', label: 'Mi biblioteca', short: 'Mis videos', icon: AULA_ICONS.misVideos },
+    { id: 'shared', label: 'Biblioteca compartida', short: 'Compartida', icon: AULA_ICONS.biblioteca },
+    { id: 'users', label: 'Usuarios', icon: AULA_ICONS.alumnos },
+    { id: 'exercises', label: 'Ejercicios', icon: AULA_ICONS.ejercicios },
+  ] : [
+    { id: 'load', label: 'Biblioteca compartida', short: 'Biblioteca', icon: AULA_ICONS.biblioteca },
+    { id: 'exercises', label: 'Ejercicios', icon: AULA_ICONS.ejercicios },
+  ]
+  // La sección marcada: la del alumno es "Alumnos"; los videos subidos del profe, "Biblioteca".
+  const aulaCurrent = screen === 'student' ? 'users' : screen === 'library' && userRole === 'profesor' ? 'shared' : screen
+  function goAula(id: string) {
+    if (id === 'library') fetchLibrary()
+    if (id === 'exercises') capture('exercises_section_opened', { has_session: true })
+    setScreen(id as Screen)
+  }
+  function openStudent(id: string, email: string, from: 'users' | 'agenda' | 'load') {
+    setSelectedStudent({ id, email }); setStudentFrom(from); setScreen('student')
+  }
+  const STUDENT_BACK = { users: 'Alumnos', agenda: 'Agenda', load: 'Hoy' } as const
+  // Sin rol (no debería pasar el login): solo la biblioteca compartida.
+  const showShared = screen === 'shared' || (screen === 'load' && userRole !== 'admin' && userRole !== 'profesor')
+
   // ─── JSX ─────────────────────────────────────────────────────────────────
   return (
     <div className={styles.root}>
@@ -1139,287 +1181,197 @@ export default function Player() {
         </div>
       )}
 
-      {screen === 'load' && authStatus === 'authenticated' && (
-        <div className={`${styles.loadScreen} ${styles.lightScope} ${styles.loadScroll}`}>
-          <div style={{ position: 'absolute', top: 16, right: 16, display: 'flex', gap: 8 }}>
-            <button className={styles.tbBtn} onClick={() => {
-              setScreen('exercises')
-              capture('exercises_section_opened', { has_session: authStatus === 'authenticated' })
-            }}>Armar ejercicios</button>
-            {authStatus === 'authenticated' ? (
-              <>
-                <button className={styles.tbBtn} onClick={() => { setScreen('library'); fetchLibrary() }}>📚 Mi biblioteca</button>
-                {(userRole === 'admin' || userRole === 'profesor') && (
-                  <button className={styles.tbBtn} onClick={() => setScreen('shared')}>🌐 Biblioteca compartida</button>
-                )}
-                {(userRole === 'admin' || userRole === 'profesor') && (
-                  <button className={styles.tbBtn} onClick={() => setScreen('users')}>👥 Usuarios</button>
-                )}
-                <button className={styles.tbBtn} onClick={() => signOut()}>Salir</button>
-              </>
-            ) : (
-              <button className={styles.tbBtn} onClick={() => signIn('google')}>Iniciar sesión</button>
+      {/* EL AULA (rediseño fase 2): admin y profe navegan con la barra lateral (en el
+          celular, pestañas abajo). Afuera quedan la bienvenida, el player (la sala) y
+          la vista del alumno. */}
+      {authStatus === 'authenticated' && AULA_SCREENS.includes(screen) && (
+        <div className={styles.lightScope}>
+          <AulaShell items={aulaNav} current={aulaCurrent} onGo={goAula}
+            user={{ name: sessionData?.user?.name || sessionData?.user?.email || '', role: userRole === 'admin' ? 'Admin' : 'Profe' }}
+            onSignOut={() => signOut()}
+            footer={userRole === 'profesor' ? <ZoomRoomStatus /> : undefined}>
+
+            {screen === 'load' && userRole === 'profesor' && (
+              <TeacherToday onOpenStudent={(id, email) => openStudent(id, email, 'load')} onOpenAgenda={() => setScreen('agenda')} />
             )}
-          </div>
-          <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Player</div>
 
-          {!isTranscribing ? (
-            <>
-              {sizeWarn && (
-                <div data-testid="size-warn" className={styles.restoreBanner}>
-                  <span className={styles.restoreBannerText}>
-                    ⚠ {sizeWarn.file.name} dura {Math.round(sizeWarn.durationMin)} min — los videos de más de {DURATION_WARN_MIN} min pueden no completar la transcripción (límite del servidor).
-                  </span>
-                  <button className={styles.tbBtn}
-                    onClick={() => {
-                      capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.file.size / 1024 / 1024), duration_s: Math.round(sizeWarn.durationMin * 60), proceeded: true })
-                      setSizeWarn(null)
-                      transcribe(sizeWarn.file)
-                    }}>
-                    Continuar de todos modos
-                  </button>
-                  <button className={styles.discardBtn} onClick={handleSizeWarnDismiss}>Cancelar</button>
+            {screen === 'load' && userRole === 'admin' && (
+              <AulaPage title="Subir un video" lead="Gemini transcribe el audio y arma los subtítulos. El video queda en tu biblioteca.">
+                <div className={aula.upload}>
+                  {!isTranscribing ? (
+                    <>
+                    {sizeWarn && (
+                      <div data-testid="size-warn" className={styles.restoreBanner}>
+                        <span className={styles.restoreBannerText}>
+                          ⚠ {sizeWarn.file.name} dura {Math.round(sizeWarn.durationMin)} min — los videos de más de {DURATION_WARN_MIN} min pueden no completar la transcripción (límite del servidor).
+                        </span>
+                        <button className={styles.tbBtn}
+                          onClick={() => {
+                            capture('upload_size_warning_shown', { file_size_mb: Math.round(sizeWarn.file.size / 1024 / 1024), duration_s: Math.round(sizeWarn.durationMin * 60), proceeded: true })
+                            setSizeWarn(null)
+                            transcribe(sizeWarn.file)
+                          }}>
+                          Continuar de todos modos
+                        </button>
+                        <button className={styles.discardBtn} onClick={handleSizeWarnDismiss}>Cancelar</button>
+                      </div>
+                    )}
+                      <label
+                        className={styles.dropzone}
+                        onDragOver={e => { e.preventDefault(); e.currentTarget.setAttribute('data-drag', 'true') }}
+                        onDragLeave={e => e.currentTarget.removeAttribute('data-drag')}
+                        onDrop={e => { e.preventDefault(); e.currentTarget.removeAttribute('data-drag'); handleFiles(Array.from(e.dataTransfer.files)) }}
+                      >
+                        <input type="file" accept="video/*,.avi,.mp4,.mkv,.mov,.webm,.srt" multiple
+                          onChange={e => handleFiles(Array.from(e.target.files || []))} style={{ display: 'none' }} />
+                        <div className={styles.dzIcon}>
+                          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                            <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
+                          </svg>
+                        </div>
+                        <div className={styles.dzTitle}>Arrastrá el video aquí</div>
+                        <div className={styles.dzSub}>
+                          Gemini transcribe el audio automáticamente y genera el SRT.<br />
+                          Para reproducir en el navegador subí MP4 o WEBM — AVI/MKV se transcriben pero no se reproducen (convertilos a MP4).<br />
+                          También podés arrastrar video + SRT juntos si ya lo tenés.
+                        </div>
+                        <div className={styles.dzFormats}>
+                          {['MP4', 'WEBM', 'MOV', 'SRT'].map(f => (
+                            <span key={f} className={`${styles.fmt} ${['MP4', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
+                          ))}
+                        </div>
+                      </label>
+                      {errorMsg && <div className={styles.errorBox}>{errorMsg}</div>}
+                    </>
+                  ) : (
+                    <div className={styles.progressBox}>
+                      <div className={styles.progTitle}>{stepMsg || 'Procesando...'}</div>
+                      <div className={styles.progSub}>
+                        {step === 'uploading'    && 'El video se sube directo a tu biblioteca; no pasa por el servidor.'}
+                        {step === 'transcribing' && 'Gemini está analizando el audio y generando timestamps precisos...'}
+                        {step === 'parsing'      && 'Generando archivo SRT...'}
+                      </div>
+                      <div className={styles.progBarWrap}>
+                        <div className={styles.progBarFill} style={{ width: progress + '%' }} />
+                      </div>
+                      <div className={styles.stepList}>
+                        {STEP_ORDER.filter(s => s !== 'done').map(s => {
+                          const si = STEP_ORDER.indexOf(step), ti = STEP_ORDER.indexOf(s)
+                          const st = ti < si ? 'done' : ti === si ? 'active' : 'idle'
+                          return (
+                            <div key={s} className={`${styles.stepItem} ${styles['si_' + st]}`}>
+                              <span className={styles.stepDot} />{STEP_LABELS[s]}
+                            </div>
+                          )
+                        })}
+                      </div>
+                      <button className={styles.cancelBtn} onClick={cancelTranscription}>Cancelar</button>
+                    </div>
+                  )}
                 </div>
-              )}
-              {userRole === 'admin' ? (
-                <label
-                  className={styles.dropzone}
-                  onDragOver={e => { e.preventDefault(); e.currentTarget.setAttribute('data-drag', 'true') }}
-                  onDragLeave={e => e.currentTarget.removeAttribute('data-drag')}
-                  onDrop={e => { e.preventDefault(); e.currentTarget.removeAttribute('data-drag'); handleFiles(Array.from(e.dataTransfer.files)) }}
-                >
-                  <input type="file" accept="video/*,.avi,.mp4,.mkv,.mov,.webm,.srt" multiple
-                    onChange={e => handleFiles(Array.from(e.target.files || []))} style={{ display: 'none' }} />
-                  <div className={styles.dzIcon}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" /><line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                  </div>
-                  <div className={styles.dzTitle}>Arrastrá el video aquí</div>
-                  <div className={styles.dzSub}>
-                    Gemini transcribe el audio automáticamente y genera el SRT.<br />
-                    Para reproducir en el navegador subí MP4 o WEBM — AVI/MKV se transcriben pero no se reproducen (convertilos a MP4).<br />
-                    También podés arrastrar video + SRT juntos si ya lo tenés.
-                  </div>
-                  <div className={styles.dzFormats}>
-                    {['MP4', 'WEBM', 'MOV', 'SRT'].map(f => (
-                      <span key={f} className={`${styles.fmt} ${['MP4', 'SRT'].includes(f) ? styles.fmtHi : ''}`}>{f}</span>
-                    ))}
-                  </div>
-                </label>
-              ) : userRole === 'profesor' ? (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 12, width: '100%', maxWidth: 520 }}>
-                  {/* Mi sala de Zoom (calendario, G0) */}
-                  <ZoomRoomCard />
-                  {/* Mi agenda (calendario, G2): todas las clases de la semana */}
-                  <div className={styles.dropzone} style={{ cursor: 'default' }}>
-                    <div className={styles.dzIcon}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <rect x="3" y="4" width="18" height="17" rx="2" /><path d="M3 9h18M8 2v4M16 2v4" />
-                      </svg>
-                    </div>
-                    <div className={styles.dzTitle}>Mi agenda</div>
-                    <div className={styles.dzSub}>Todas tus clases de la semana. Hacé clic en un horario libre para crear una.</div>
-                    <button className={styles.restoreBtn} onClick={() => setScreen('agenda')}>Ver mi agenda</button>
-                  </div>
-                  {/* ① Mis alumnos (flujo principal) */}
-                  <div className={styles.dropzone} style={{ cursor: 'default' }}>
-                    <div className={styles.dzIcon}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" />
-                        <path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                      </svg>
-                    </div>
-                    <div className={styles.dzTitle}>Mis alumnos</div>
-                    <div className={styles.dzSub}>Abrí un alumno para ver y asignarle material de la biblioteca.</div>
-                    <button className={styles.restoreBtn} onClick={() => setScreen('users')}>Ver mis alumnos</button>
-                  </div>
-                  {/* ② Biblioteca compartida */}
-                  <div className={styles.dropzone} style={{ cursor: 'default' }}>
-                    <div className={styles.dzIcon}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <circle cx="12" cy="12" r="9" /><path d="M3 12h18" />
-                        <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" />
-                      </svg>
-                    </div>
-                    <div className={styles.dzTitle}>Biblioteca compartida</div>
-                    <div className={styles.dzSub}>Explorá el material publicado, reproducilo y editá tus captions (se guarda tu copia; el original queda intacto).</div>
-                    <button className={styles.restoreBtn} onClick={() => setScreen('shared')}>Ir a la biblioteca</button>
-                  </div>
-                </div>
-              ) : (
-                <div className={styles.dropzone} style={{ cursor: 'default' }}>
-                  <div className={styles.dzIcon}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <circle cx="12" cy="12" r="9" /><path d="M3 12h18" />
-                      <path d="M12 3a15 15 0 0 1 0 18a15 15 0 0 1 0-18z" />
-                    </svg>
-                  </div>
-                  <div className={styles.dzTitle}>Tomá material de la Biblioteca compartida</div>
-                  <div className={styles.dzSub}>
-                    El administrador publica los videos para tus clases. Explorá los disponibles,
-                    filtralos por tipo y nivel, y abrilos en el player.<br />
-                    Si editás las captions, se guarda tu propia copia — el original queda intacto.
-                  </div>
-                  <button className={styles.restoreBtn} onClick={() => setScreen('shared')}>
-                    Ir a la Biblioteca compartida
-                  </button>
-                </div>
-              )}
-              {errorMsg && <div className={styles.errorBox}>{errorMsg}</div>}
-            </>
-          ) : (
-            <div className={styles.progressBox}>
-              <div className={styles.progTitle}>{stepMsg || 'Procesando...'}</div>
-              <div className={styles.progSub}>
-                {step === 'uploading'    && 'El video se sube directo a tu biblioteca; no pasa por el servidor.'}
-                {step === 'transcribing' && 'Gemini está analizando el audio y generando timestamps precisos...'}
-                {step === 'parsing'      && 'Generando archivo SRT...'}
-              </div>
-              <div className={styles.progBarWrap}>
-                <div className={styles.progBarFill} style={{ width: progress + '%' }} />
-              </div>
-              <div className={styles.stepList}>
-                {STEP_ORDER.filter(s => s !== 'done').map(s => {
-                  const si = STEP_ORDER.indexOf(step), ti = STEP_ORDER.indexOf(s)
-                  const st = ti < si ? 'done' : ti === si ? 'active' : 'idle'
-                  return (
-                    <div key={s} className={`${styles.stepItem} ${styles['si_' + st]}`}>
-                      <span className={styles.stepDot} />{STEP_LABELS[s]}
-                    </div>
-                  )
-                })}
-              </div>
-              <button className={styles.cancelBtn} onClick={cancelTranscription}>Cancelar</button>
-            </div>
-          )}
-        </div>
-      )}
-
-      {screen === 'exercises' && (
-        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
-          <div style={{ position: 'absolute', top: 16, right: 16 }}>
-            <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
-          </div>
-          <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Ejercicios</div>
-          <div style={{ width: '100%', maxWidth: 500 }}>
-            <ExercisesPanel phrases={[]} videoFileName="" singleMode="topic" />
-          </div>
-        </div>
-      )}
-
-      {screen === 'library' && (
-        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
-          <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Player</div>
-          <div className={styles.dzSub} style={{ marginBottom: 16 }}>Mi biblioteca</div>
-          {libraryError && <div className={styles.errorBox}>{libraryError}</div>}
-          {libraryLoading ? (
-            <div className={styles.progSub}>Cargando...</div>
-          ) : libraryVideos.length === 0 ? (
-            <div className={styles.progSub}>Todavía no guardaste ningún video.</div>
-          ) : (
-            <LibraryList
-              videos={libraryVideos}
-              role={userRole}
-              onOpen={openFromLibrary}
-              onDelete={deleteFromLibrary}
-              onChanged={fetchLibrary}
-            />
-          )}
-          <button className={styles.tbBtn} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir nuevo video</button>
-        </div>
-      )}
-
-      {screen === 'shared' && (
-        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
-          <div style={{ position: 'absolute', top: 16, right: 16 }}>
-            <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
-          </div>
-          <div className={styles.logo}>
-            <span className={styles.logoDot} />Virtual English — Biblioteca compartida
-          </div>
-          <div style={{ width: '100%', maxWidth: 760 }}>
-            <SharedLibrary onOpen={openFromLibrary} assignable={userRole === 'admin' || userRole === 'profesor'} />
-          </div>
-        </div>
-      )}
-
-      {screen === 'users' && (
-        <div className={`${styles.loadScreen} ${styles.lightScope}`}>
-          <div style={{ position: 'absolute', top: 16, right: 16 }}>
-            <button className={styles.tbBtn} onClick={() => setScreen('load')}>← Volver</button>
-          </div>
-          <div className={styles.logo}>
-            <span className={styles.logoDot} />Virtual English — {userRole === 'admin' ? 'Usuarios' : 'Mis alumnos'}
-          </div>
-          <div style={{ width: '100%', maxWidth: 680 }}>
-            {userRole && (
-              <UsersPanel
-                role={userRole}
-                onOpenStudent={(id, email) => { setSelectedStudent({ id, email }); setStudentFrom('users'); setScreen('student') }}
-              />
+              </AulaPage>
             )}
-          </div>
-        </div>
-      )}
 
-      {screen === 'student' && selectedStudent && (
-        // Arriba y con scroll (no centrado): con la sección "Clases" la pantalla puede ser
-        // más alta que el celular, y centrada sin scroll quedaba cortada arriba y abajo.
-        <div className={`${styles.loadScreen} ${styles.lightScope}`} style={{ justifyContent: 'flex-start', overflowY: 'auto', paddingTop: 56 }}>
-          <div style={{ position: 'absolute', top: 16, right: 16 }}>
-            <button className={styles.tbBtn} onClick={() => setScreen(studentFrom)}>
-              {studentFrom === 'agenda' ? '← Volver a mi agenda' : '← Volver a alumnos'}
-            </button>
-          </div>
-          <div className={styles.logo}><span className={styles.logoDot} />Virtual English — Alumno</div>
-          <div style={{ width: '100%', maxWidth: 760 }}>
-            <StudentView
-              studentId={selectedStudent.id}
-              studentEmail={selectedStudent.email}
-              onOpenVideo={openFromLibrary}
-            />
-          </div>
-        </div>
-      )}
+            {screen === 'exercises' && (
+              <AulaPage title="Ejercicios" lead="Ejercicios sobre un tema, sin video. Los podés descargar en PDF para el alumno o para vos.">
+                <div style={{ maxWidth: 560 }}>
+                  <ExercisesPanel phrases={[]} videoFileName="" singleMode="topic" />
+                </div>
+              </AulaPage>
+            )}
 
-      {screen === 'agenda' && (
-        // Mi agenda (G2): ancho completo, arriba y con scroll (la grilla es más alta que la pantalla).
-        <div className={`${styles.loadScreen} ${styles.lightScope}`} style={{ justifyContent: 'flex-start', alignItems: 'stretch', overflowY: 'auto', padding: 0, gap: 0 }}>
-          <MyAgenda
-            onBack={() => setScreen('load')}
-            onOpenStudent={(id, email) => { setSelectedStudent({ id, email }); setStudentFrom('agenda'); setScreen('student') }}
-          />
+            {screen === 'library' && (
+              <AulaPage title={userRole === 'admin' ? 'Mi biblioteca' : 'Tus videos subidos'} lead="Los videos que subiste vos."
+                back={userRole === 'admin' ? undefined : { label: 'Biblioteca', onClick: () => setScreen('shared') }}>
+                {libraryError && <div className={styles.errorBox}>{libraryError}</div>}
+                {libraryLoading ? (
+                  <div className={styles.progSub}>Cargando...</div>
+                ) : libraryVideos.length === 0 ? (
+                  <div className={styles.progSub}>Todavía no guardaste ningún video.</div>
+                ) : (
+                  <LibraryList
+                    videos={libraryVideos}
+                    role={userRole}
+                    onOpen={openFromLibrary}
+                    onDelete={deleteFromLibrary}
+                    onChanged={fetchLibrary}
+                  />
+                )}
+                {userRole === 'admin' && (
+                  <button className={`${aula.btn} ${aula.btnSec}`} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir otro video</button>
+                )}
+              </AulaPage>
+            )}
+
+            {showShared && (
+              <AulaPage title={userRole === 'profesor' ? 'Biblioteca' : 'Biblioteca compartida'}
+                lead="El material publicado para las clases: abrilo en el player o asignáselo a un alumno.">
+                {userRole === 'profesor' && (
+                  <button className={aula.txtBtn} style={{ margin: '-18px 0 18px' }} onClick={() => { setScreen('library'); fetchLibrary() }}>Tus videos subidos</button>
+                )}
+                <div style={{ maxWidth: 760 }}>
+                  <SharedLibrary onOpen={openFromLibrary} assignable={userRole === 'admin' || userRole === 'profesor'} />
+                </div>
+              </AulaPage>
+            )}
+
+            {screen === 'users' && (
+              <AulaPage title={userRole === 'admin' ? 'Usuarios' : 'Alumnos'}
+                lead={userRole === 'admin' ? 'Creá usuarios y asigná cada alumno a su profe.' : 'Sumá alumnos y abrí uno para ver sus clases y asignarle material.'}>
+                <div style={{ maxWidth: 760 }}>
+                  {userRole && (
+                    <UsersPanel role={userRole} onOpenStudent={(id, email) => openStudent(id, email, 'users')} />
+                  )}
+                </div>
+              </AulaPage>
+            )}
+
+            {screen === 'student' && selectedStudent && (
+              <AulaPage title={selectedStudent.email} back={{ label: STUDENT_BACK[studentFrom], onClick: () => setScreen(studentFrom) }}>
+                <div style={{ maxWidth: 760 }}>
+                  <StudentView studentId={selectedStudent.id} onOpenVideo={openFromLibrary} />
+                </div>
+              </AulaPage>
+            )}
+
+            {screen === 'agenda' && (
+              <MyAgenda onOpenStudent={(id, email) => openStudent(id, email, 'agenda')} />
+            )}
+          </AulaShell>
         </div>
       )}
 
       {screen === 'player' && (
         <div className={styles.playerWrap}>
+          {/* LA SALA (rediseño fase 3): volver, qué video es, y las acciones. La principal es
+              abrir la ventana que se comparte en Zoom. */}
           <div className={styles.topbar}>
-            <div className={styles.tbLogo}><span className={styles.tbDot} />Virtual English</div>
-            <div className={styles.tbSep} />
-            <div className={styles.tbFile}>{videoFileName}</div>
+            <button className={styles.tbBack} onClick={handleExitAttempt}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M15 18l-6-6 6-6" /></svg>
+              Volver
+            </button>
+            <div className={styles.tbTitle}>
+              <div className={styles.tbFile}>{videoFileName}</div>
+              {playerMeta && <div className={styles.tbMeta}>{playerMeta}</div>}
+            </div>
             <div className={styles.tbRight}>
-              <span className={`${styles.chip} ${styles.chipFmt}`}>{videoFileName.split('.').pop()?.toUpperCase()}</span>
-              <span className={`${styles.chip} ${styles.chipSrt}`}>{srtSource}</span>
-              <span className={`${styles.chip} ${styles.chipZoom}`}><span className={styles.liveDot} />Zoom</span>
-              <button className={styles.tbBtn} onClick={downloadSRT}>↓ SRT</button>
-              <button className={styles.tbBtn} onClick={() => srtReloadRef.current?.click()}>↑ Cargar SRT</button>
+              <button className={styles.tbAct} onClick={downloadSRT}>Descargar SRT</button>
+              <button className={styles.tbAct} onClick={() => srtReloadRef.current?.click()}>Cargar SRT</button>
               {userRole === 'admin' && !libraryVideoIdRef.current && videoFileRef.current && (
-                <button className={styles.tbBtn} disabled={librarySaving} onClick={saveToLibrary}>
-                  {librarySaving ? 'Guardando...' : '📚 Guardar en biblioteca'}
+                <button className={styles.tbAct} disabled={librarySaving} onClick={saveToLibrary}>
+                  {librarySaving ? 'Guardando…' : 'Guardar en biblioteca'}
                 </button>
               )}
-              <button className={styles.tbBtn} data-testid="btn-open-exercises"
+              <button className={styles.tbAct} data-testid="btn-open-exercises"
                 disabled={phrases.length === 0}
                 onClick={exercisesOpen ? () => closeExercisesWindow(true) : openExercisesWindow}>
-                {exercisesOpen ? '✕ Cerrar generador' : '⊞ Abrir generador'}
+                {exercisesOpen ? 'Cerrar la ventana de ejercicios' : 'Ejercicios en otra ventana'}
               </button>
-              <button className={styles.tbBtn} disabled={!stageOpen && !videoUrl && !storageUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
-                {stageOpen ? '✕ Cerrar stage' : '▶ Abrir stage'}
+              <button className={`${styles.tbStage} ${stageOpen ? styles.tbStageOn : ''}`} disabled={!stageOpen && !videoUrl && !storageUrl} onClick={stageOpen ? () => closeStage(true) : openStage}>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="4" width="20" height="13" rx="2" /><path d="M8 21h8M12 17v4" /></svg>
+                {stageOpen ? 'Cerrar la ventana para Zoom' : 'Abrir ventana para Zoom'}
               </button>
-              <button className={styles.tbBtn} onClick={handleExitAttempt}>← Cargar otro</button>
             </div>
           </div>
 
@@ -1452,8 +1404,8 @@ export default function Player() {
             </div>
             <PlayerDock
               phrases={phrases} delay={delay} hideTexts={hideTexts} isPlaying={isPlaying} bufPct={bufPct}
-              speeds={SPEEDS} speedIdx={speedIdx} vol={vol} ccOn={ccOn}
-              readClock={readClock} onSeek={seekTo}
+              speeds={SPEEDS} speedIdx={speedIdx} vol={vol} ccOn={ccOn} curIdx={curIdx}
+              readClock={readClock} onSeek={seekTo} onRepeat={repeatPhrase}
               onJump={i => { jumpTo(i); capture('phrase_tick_clicked', { phrase_index: i }) }}
               onTogglePlay={togglePlay} onSkip={skip} onPrev={prevPhrase} onNext={nextPhrase} onSpeed={setSpd}
               onVol={v => { setVol(v); if (vidRef.current) vidRef.current.volume = v / 100 }}
@@ -1462,21 +1414,15 @@ export default function Player() {
             </div>
 
             <div className={styles.panel}>
-              <div style={{ display: 'flex', borderBottom: '1px solid var(--ln)', flexShrink: 0 }}>
-                {(['player', 'exercises'] as const).map(t => (
-                  <button key={t} data-testid={`tab-${t}`} onClick={() => setPanelTab(t)} style={{
-                    flex: 1, padding: '10px 0', border: 'none',
-                    borderBottom: panelTab === t ? '2px solid var(--ac)' : '2px solid transparent',
-                    background: 'transparent',
-                    color: panelTab === t ? 'var(--ac)' : 'var(--tx3)',
-                    fontSize: 11, fontWeight: 500, fontFamily: 'var(--font-mono)', cursor: 'pointer',
-                    letterSpacing: '1px', textTransform: 'uppercase' as const,
-                  }}>
-                    {t === 'player' ? 'Player' : 'Ejercicios'}
+              <div className={styles.tabs} role="tablist">
+                {(['player', 'settings', 'exercises'] as const).map(t => (
+                  <button key={t} role="tab" aria-selected={panelTab === t} data-testid={`tab-${t}`} onClick={() => setPanelTab(t)}
+                    className={`${styles.tab} ${panelTab === t ? styles.tabOn : ''}`}>
+                    {t === 'player' ? 'Guion' : t === 'settings' ? 'Ajustes' : 'Ejercicios'}
                   </button>
                 ))}
               </div>
-              {panelTab === 'exercises' ? (
+              {panelTab === 'exercises' && (
                 <div style={{ flex: 1, overflowY: 'auto' as const }}>
                   {exercisesOpen ? (
                     <div data-testid="exercises-open-hint" style={{ padding: 20, color: 'var(--tx3)', fontSize: 12, textAlign: 'center' as const }}>
@@ -1486,73 +1432,49 @@ export default function Player() {
                     <ExercisesPanel phrases={phrases} videoFileName={videoFileName} singleMode="video" />
                   )}
                 </div>
-              ) : (
-              <div className={styles.panelBody}>
+              )}
+              {/* Guion y Ajustes quedan montados aunque no se vean: "Sonido" desconecta el
+                  ecualizador del video si se desmonta. */}
+              <div className={styles.panelBody} hidden={panelTab !== 'player'}>
                 <div className={styles.section}>
-                  <div className={styles.secLabel}>Frase actual <span className={styles.phCtr}>{curIdx >= 0 ? `${curIdx + 1} / ${phrases.length}` : '— / —'}</span></div>
-                  <div className={styles.currPhrase}>{curIdx >= 0 ? phrases[curIdx]?.text : '—'}</div>
-                  <div className={styles.microGrid}>
-                    <button className={styles.mcBtn} onClick={repeatPhrase}>
-                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="17 1 21 5 17 9" /><path d="M3 11V9a4 4 0 0 1 4-4h14M7 23l-4-4 4-4" /><path d="M21 13v2a4 4 0 0 1-4 4H3" /></svg>
-                      Repetir frase<span className={styles.kc}>↓</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className={styles.section}>
-                  <div className={styles.secLabel}>Modo</div>
-                  <div className={styles.modeBtns}>
-                    <button className={`${styles.modeBtn} ${autoPause ? styles.modeBtnAct : ''}`}
+                  <div className={styles.modeBtns} role="group" aria-label="Modo">
+                    <button className={`${styles.modeBtn} ${autoPause ? styles.modeBtnAct : ''}`} aria-pressed={autoPause}
+                            title="Pausa al terminar cada frase"
                             onClick={() => { const next = !autoPause; setAutoPause(next); capture('autopause_toggled', { new_state: next ? 'on' : 'off' }) }}>Auto-pausa</button>
-                    <button className={`${styles.modeBtn} ${practiceMode ? styles.modeBtnAct : ''}`}
+                    <button className={`${styles.modeBtn} ${practiceMode ? styles.modeBtnAct : ''}`} aria-pressed={practiceMode}
+                            title="Pasa solo por las frases elegidas"
                             disabled={selPhrases.length === 0}
                             onClick={() => { const next = !practiceMode; setPracticeMode(next); capture('practice_mode_toggled', { new_state: next ? 'on' : 'off', selected_count: selPhrases.length }) }}>Práctica</button>
-                    <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`}
+                    <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`} aria-pressed={loopMode}
+                            title="Repite la frase actual sin parar"
                             onClick={() => { const next = !loopMode; setLoopMode(next); capture('phrase_loop_changed', { enabled: next }) }}>Loop</button>
-                    <button className={`${styles.modeBtn} ${hideTexts ? styles.modeBtnAct : ''}`}
+                    <button className={`${styles.modeBtn} ${hideTexts ? styles.modeBtnAct : ''}`} aria-pressed={hideTexts}
+                            title="Oculta el texto de las frases (para escuchar sin leer)"
                             onClick={() => { const next = !hideTexts; setHideTexts(next); capture('text_visibility_toggled', { hidden: next }) }}>Ocultar</button>
                   </div>
                 </div>
 
-                <div className={styles.section}>
-                  <div className={styles.secLabel}>Subtítulos · desfase</div>
-                  <div className={styles.delayRow}>
-                    <button className={styles.delayBtn} onClick={() => adjDelay(-0.5)}>−</button>
-                    <div className={styles.delayVal} style={{ color: delay === 0 ? 'var(--ac)' : delay > 0 ? 'var(--bl)' : 'var(--rd)' }}>
-                      {delay > 0 ? '+' : ''}{delay.toFixed(1)} s
-                    </div>
-                    <button className={styles.delayBtn} onClick={() => adjDelay(0.5)}>+</button>
-                    <span className={styles.delayReset} onClick={() => { setDelay(0); delayRef.current = 0; setIsDirty(true) }}>reset</span>
-                  </div>
-                </div>
-
-                <VoiceBoostControl videoRef={vidRef} stageOpen={stageOpen} />
-
                 <div className={styles.plWrap}>
                   <div className={styles.plHd}>
-                    <span>Secuencia <span className={styles.plCount}>{selPhrases.length} sel.</span></span>
-                    <div className={styles.plHdR}>
+                    <span data-testid="phrase-counter">{curIdx >= 0 ? `Frase ${curIdx + 1} de ${phrases.length}` : phrases.length === 1 ? '1 frase' : `${phrases.length} frases`}</span>
+                    <div className={styles.plHdR} role="group" aria-label="Ver">
                       {(['all', 'sel'] as const).map(f => (
-                        <button key={f} className={`${styles.plFilter} ${filter === f ? styles.plFilterAct : ''}`} onClick={() => setFilter(f)}>
-                          {f === 'all' ? 'Todas' : 'Sel.'}
+                        <button key={f} aria-pressed={filter === f} className={`${styles.plFilter} ${filter === f ? styles.plFilterAct : ''}`} onClick={() => setFilter(f)}>
+                          {f === 'all' ? 'Todas' : 'Elegidas'}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div className={styles.plHd2}>
+                      <span className={styles.plCount}>{selPhrases.length === 1 ? '1 elegida' : `${selPhrases.length} elegidas`}</span>
                       <button
-                        className={styles.plFilter}
+                        className={styles.plTool}
                         onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: true }))); setIsDirty(true); capture('phrases_bulk_selection', { action: 'select_all', total: phrasesRef.current.length }) }}
-                      >Todas ✓</button>
+                      >Elegir todas</button>
                       <button
-                        className={styles.plFilter}
+                        className={styles.plTool}
                         onClick={() => { setPhrases(prev => prev.map(p => ({ ...p, sel: false }))); setIsDirty(true); capture('phrases_bulk_selection', { action: 'deselect_all', total: phrasesRef.current.length }) }}
                       >Ninguna</button>
-                      <button
-                        className={styles.plFilter}
-                        onClick={addPhrase}
-                        disabled={editingIdx !== null}
-                      >Agregar frase</button>
                   </div>
                   <div ref={listRef} className={styles.pl}>
                     {showPhrases.length === 0 && <div className={styles.plEmpty}>Sin frases</div>}
@@ -1562,7 +1484,7 @@ export default function Player() {
                         <div key={oi} data-act={isAct}
                           className={`${styles.plItem} ${isAct ? styles.plAct : ''} ${p.sel ? styles.plSel : ''}`}
                           onClick={() => { if (editingIdx !== oi) jumpTo(oi) }}>
-                          <div className={styles.plN}>{p.sel ? si + 1 : '·'}</div>
+                          <div className={styles.plN}>{p.sel ? si + 1 : ''}</div>
                           <div className={styles.plB}>
                             <div className={styles.plT}>{fmtTime(p.start)}</div>
                             {editingIdx === oi ? (
@@ -1591,18 +1513,19 @@ export default function Player() {
                                 </div>
                                 {editingError && <div className={styles.plEditError}>{editingError}</div>}
                                 <div className={styles.plEditBtns}>
-                                  <button className={styles.plEditSave}   onClick={() => saveEdit(oi)}>✓</button>
-                                  <button className={styles.plEditCancel} onClick={cancelEdit}>✕</button>
+                                  <button className={styles.plEditSave}   onClick={() => saveEdit(oi)} aria-label="Guardar la frase">✓</button>
+                                  <button className={styles.plEditCancel} onClick={cancelEdit} aria-label="Cancelar">✕</button>
                                 </div>
                               </div>
                             ) : (
                               <div className={styles.plTxRow}>
                                 <div className={styles.plTx}>{hideTexts ? '' : p.text}</div>
-                                <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); startEdit(oi) }} title="Editar">
+                                <span className={styles.plActs}>
+                                <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); startEdit(oi) }} title="Editar" aria-label="Editar">
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
                                 </button>
                                 {p.text.length >= 2 && (
-                                  <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); splitPhraseAt(oi) }} title="Dividir">
+                                  <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); splitPhraseAt(oi) }} title="Dividir" aria-label="Dividir">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                                       <line x1="12" y1="3" x2="12" y2="21"/>
                                       <polyline points="7 8 12 3 17 8"/>
@@ -1611,38 +1534,55 @@ export default function Player() {
                                   </button>
                                 )}
                                 {oi < phrases.length - 1 && (
-                                  <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); mergeWithNext(oi) }} title="Unir con siguiente">
+                                  <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); mergeWithNext(oi) }} title="Unir con siguiente" aria-label="Unir con siguiente">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                                       <polyline points="17 8 12 3 7 8"/>
                                       <line x1="12" y1="3" x2="12" y2="21"/>
                                     </svg>
                                   </button>
                                 )}
-                                <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); deletePhrase(oi) }} title="Eliminar">
+                                <button className={styles.plEditBtn} onClick={e => { e.stopPropagation(); deletePhrase(oi) }} title="Eliminar" aria-label="Eliminar">
                                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
                                     <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/>
                                     <path d="M10 11v6M14 11v6"/><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
                                   </svg>
                                 </button>
+                                </span>
                               </div>
                             )}
                           </div>
-                          <div className={styles.plCk} onClick={e => { e.stopPropagation(); toggleSel(oi) }}>
+                          <div className={styles.plCk} role="checkbox" aria-checked={p.sel} aria-label={`Elegir la frase ${oi + 1}`}
+                            onClick={e => { e.stopPropagation(); toggleSel(oi) }}>
                             {p.sel && <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M20 6L9 17l-5-5" /></svg>}
                           </div>
                         </div>
                       )
                     })}
+                    <button className={`${styles.plTool} ${styles.plAdd}`} onClick={addPhrase} disabled={editingIdx !== null}>+ Agregar frase</button>
                   </div>
                 </div>
 
                 <div className={styles.kbHint}>
-                  {[['Spc', 'Play'], ['←', 'Frase ant.'], ['→', 'Frase sig.'], ['↓', 'Repetir'], ['↑', 'Sección']].map(([k, l]) => (
-                    <span key={k} className={styles.kbItem}><span className={styles.kbKey}>{k}</span>{l}</span>
+                  {[['Espacio', 'pausa'], ['←', 'anterior'], ['→', 'siguiente'], ['↓', 'repetir'], ['↑', 'retroceder un poco']].map(([k, l]) => (
+                    <span key={k} className={styles.kbItem}><kbd className={styles.kbKey}>{k}</kbd>{l}</span>
                   ))}
                 </div>
               </div>
-              )}
+              <div className={styles.panelBody} hidden={panelTab !== 'settings'}>
+                <VoiceBoostControl videoRef={vidRef} stageOpen={stageOpen} />
+
+                <div className={styles.section}>
+                  <div className={styles.delayRow}>
+                    <span className={styles.delayLbl}>Desfase de subtítulos</span>
+                    <button className={styles.delayBtn} aria-label="Subtítulos medio segundo antes" onClick={() => adjDelay(-0.5)}>−</button>
+                    <div className={styles.delayVal} style={{ color: delay === 0 ? 'var(--tx)' : delay > 0 ? 'var(--bl)' : 'var(--rd)' }}>
+                      {delay > 0 ? '+' : ''}{delay.toFixed(1)} s
+                    </div>
+                    <button className={styles.delayBtn} aria-label="Subtítulos medio segundo después" onClick={() => adjDelay(0.5)}>+</button>
+                    <button className={styles.delayReset} disabled={delay === 0} onClick={() => { setDelay(0); delayRef.current = 0; setIsDirty(true) }}>Volver a 0</button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

@@ -56,6 +56,23 @@ export function nextClassTitle(t: Date, now: Date, tz: string): string {
   return rel ? `${rel}, ${WEEKDAYS[weekdayOf(day)]} ${d} · ${hhmm(t, tz)}` : `${cap(longDate(t, tz))} · ${hhmm(t, tz)}`
 }
 
+// Rediseño (fase 4) — la tarjeta de la próxima clase del alumno, en partes:
+// { rel: 'Hoy', day: 'martes 29' } · { rel: null, day: 'Viernes 2 de octubre' }. "Hoy" va
+// resaltado en amarillo (el "ahora"); "Mañana" no.
+export function nextClassDay(t: Date, now: Date, tz: string): { rel: 'Hoy' | 'Mañana' | null; day: string } {
+  const rel = relativeDay(t, now, tz)
+  const day = dateInTz(t, tz)
+  return rel ? { rel, day: `${WEEKDAYS[weekdayOf(day)]} ${ymd(day)[2]}` } : { rel: null, day: cap(longDate(t, tz)) }
+}
+
+// 'Dura 60 minutos. Es por Zoom: entrás con el botón.' (sin link: solo la duración)
+export function classLengthNote(durationMin: number, url: string | null): string {
+  const dur = durationMin === 1 ? 'Dura 1 minuto.' : `Dura ${durationMin} minutos.`
+  const where = meetLabel(url)
+  if (!where) return dur
+  return where === 'Zoom' ? `${dur} Es por Zoom: entrás con el botón.` : `${dur} Es por ${where}.`
+}
+
 // La "hojita" del calendario de la tarjeta: { month: 'sep', day: 29 }.
 export function calendarLeaf(t: Date, tz: string): { month: string; day: number } {
   const [, m, d] = ymd(dateInTz(t, tz))
@@ -154,19 +171,25 @@ export function classKind(c: TeacherClass): ClassKind {
 export const formDate = (t: Date) => dateInTz(t, CLASS_TZ)
 export const formTime = (t: Date) => hhmm(t, CLASS_TZ)
 
-// 'Todos los martes · 18:00' / 'Todos los martes y jueves · 18:00' /
-// 'Todos los lunes, miércoles y viernes · 18:00' / 'Todos los días · 18:00' (G1: varios días)
+// 'Todos los martes a las 18:00' / 'Todos los martes y jueves a las 18:00' /
+// 'Todos los lunes, miércoles y viernes a las 18:00' / 'Todos los días a las 18:00' (G1: varios días)
 const plural = (d: number) => `${WEEKDAYS[d]}${d === 0 || d === 6 ? 's' : ''}`
 export function seriesTitle(weekdays: number[], time: string): string {
   const days = [...new Set(weekdays)].sort((a, b) => ((a + 6) % 7) - ((b + 6) % 7)) // de lunes a domingo
-  if (days.length === 7) return `Todos los días · ${time}`
+  if (days.length === 7) return `Todos los días a las ${time}`
   const names = days.map(plural)
   const list = names.length <= 1 ? names.join('') : `${names.slice(0, -1).join(', ')} y ${names[names.length - 1]}`
-  return `Todos los ${list} · ${time}`
+  return `Todos los ${list} a las ${time}`
 }
 
 // '1/9' a partir de 'YYYY-MM-DD'
 export function dayMonth(day: string): string {
   const [, m, d] = ymd(day)
   return `${d}/${m}`
+}
+
+// '1 de septiembre' a partir de 'YYYY-MM-DD' (rediseño: fechas con palabras en el aula)
+export function dayMonthLong(day: string): string {
+  const [, m, d] = ymd(day)
+  return `${d} de ${MONTHS[m - 1]}`
 }

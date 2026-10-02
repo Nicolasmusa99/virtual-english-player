@@ -60,7 +60,7 @@ describe('MyAgenda — la semana', () => {
     await mount()
     expect(gets()[0]).toBe('/api/classes/agenda?from=2026-09-28T03:00:00.000Z&to=2026-10-05T03:00:00.000Z')
     expect(screen.getByTestId('agenda-title')).toHaveTextContent('28 sep – 4 oct 2026')
-    expect(screen.getByLabelText('martes 29 de septiembre')).toHaveTextContent('MAR29')
+    expect(screen.getByLabelText('martes 29 de septiembre')).toHaveTextContent('Mar29')
   })
 
   it('cada clase en su día, con el nombre del alumno y la hora', async () => {
@@ -112,7 +112,7 @@ describe('MyAgenda — la semana', () => {
     data = { students: [], series: [], classes: [], zoomUrl: null }
     await mount()
     expect(screen.getByText(A.noStudents)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Crear/ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Nueva clase/ })).toBeDisabled()
   })
 
   it('si falla la carga, lo dice y deja reintentar', async () => {
@@ -151,7 +151,7 @@ describe('MyAgenda — crear', () => {
 
   it('el alumno se elige por su nombre completo; "Crear" arranca hoy', async () => {
     await mount()
-    await click(screen.getByRole('button', { name: /Crear/ }))
+    await click(screen.getByRole('button', { name: /Nueva clase/ }))
     const dlg = screen.getByRole('dialog', { name: D.create })
     expect((within(dlg).getByLabelText(D.date) as HTMLInputElement).value).toBe('2026-09-29')
     const opts = within(within(dlg).getByLabelText(D.student)).getAllByRole('option').map((o) => o.textContent)
@@ -183,7 +183,7 @@ describe('MyAgenda — detalle de una clase', () => {
     await mount()
     await click(block(/Martina/))
     const dlg = screen.getByRole('dialog', { name: 'Clase con Martina Pérez' })
-    expect(dlg).toHaveTextContent('Martes 29 de septiembre · 18:00–19:00')
+    expect(dlg).toHaveTextContent('Martes 29 de septiembre, 18:00–19:00')
     expect(dlg).toHaveTextContent('Se repite')
     expect(within(dlg).getByRole('link', { name: A.enterZoom })).toHaveAttribute('href', ZOOM)
     expect(dlg).toHaveTextContent(A.room)

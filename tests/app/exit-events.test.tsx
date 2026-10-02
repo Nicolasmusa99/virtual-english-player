@@ -38,7 +38,7 @@ async function openExitDialog(container: HTMLElement) {
 
   // Click "← Cargar otro" to trigger handleExitAttempt
   const exitBtn = Array.from(container.querySelectorAll('button'))
-    .find(b => /cargar otro/i.test(b.textContent ?? ''))
+    .find(b => b.textContent?.trim() === 'Volver')
   await act(async () => { fireEvent.click(exitBtn!); await tick(30) })
 
   // Verify the exit dialog is visible
@@ -69,7 +69,7 @@ describe('exit_confirmation_resolved', () => {
     vi.mocked(capture).mockClear()
 
     const downloadBtn = Array.from(container.querySelectorAll('button'))
-      .find(b => /descargar srt/i.test(b.textContent ?? ''))
+      .find(b => /descargar srt y salir/i.test(b.textContent ?? ''))
     await act(async () => {
       fireEvent.click(downloadBtn!)
       await tick(50)

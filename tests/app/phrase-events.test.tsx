@@ -253,7 +253,7 @@ describe('phrases_bulk_selection', () => {
     await act(async () => { fireEvent.click(btn(container, 'Ninguna')!); await tick(30) })
     vi.mocked(capture).mockClear()
 
-    await act(async () => { fireEvent.click(btn(container, 'Todas ✓')!); await tick(30) })
+    await act(async () => { fireEvent.click(btn(container, 'Elegir todas')!); await tick(30) })
 
     expect(vi.mocked(capture)).toHaveBeenCalledWith('phrases_bulk_selection', {
       action: 'select_all',

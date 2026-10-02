@@ -11,6 +11,9 @@ interface UserRow {
 }
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
+// Rediseño (fase 5): nombres de los roles con palabras (sin minúsculas crudas ni "·").
+const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', profesor: 'Profe', alumno: 'Alumno' }
+const FILTER_LABEL = { all: 'Todos', admin: 'Admins', profesor: 'Profes', alumno: 'Alumnos' } as const
 
 // Fase 3a — cara visible de /api/users (Fase 2). Solo consume GET/POST existentes;
 // la seguridad real vive en el backend. El `role` decide qué vista mostrar.
@@ -112,11 +115,11 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
               value={email} onChange={e => setEmail(e.target.value)} />
             {newRole === 'alumno' && (
               <select className={styles.usersInput} value={teacherId} onChange={e => setTeacherId(e.target.value)}>
-                <option value="">— sin profe —</option>
+                <option value="">Sin profe</option>
                 {teachers.map(t => <option key={t.id} value={t.id}>{t.email}</option>)}
               </select>
             )}
-            <button className={styles.tbBtn} type="submit" disabled={submitting}>{submitting ? 'Creando…' : 'Crear'}</button>
+            <button className={styles.restoreBtn} type="submit" disabled={submitting}>{submitting ? 'Creando…' : 'Crear'}</button>
           </div>
           {newRole === 'alumno' && teachers.length === 0 && (
             <div className={styles.progSub}>Todavía no hay profesores cargados; el alumno quedará sin profe.</div>
@@ -132,9 +135,9 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
           <div className={styles.usersFormRow}>
             <input className={styles.usersInput} type="email" placeholder="email del alumno"
               value={email} onChange={e => setEmail(e.target.value)} />
-            <button className={styles.tbBtn} type="submit" disabled={submitting}>{submitting ? 'Creando…' : 'Crear alumno'}</button>
+            <button className={styles.restoreBtn} type="submit" disabled={submitting}>{submitting ? 'Creando…' : 'Crear alumno'}</button>
           </div>
-          <div className={styles.progSub}>El alumno queda asignado a vos automáticamente.</div>
+          <div className={styles.usersMeta}>El alumno queda asignado a vos automáticamente.</div>
           {formError && <div className={styles.errorBox}>{formError}</div>}
           {okMsg && <div className={styles.usersOk}>{okMsg}</div>}
         </form>
@@ -149,7 +152,7 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
               <button key={r} type="button"
                 className={`${styles.usersFilterChip} ${roleFilter === r ? styles.usersFilterChipOn : ''}`}
                 onClick={() => setRoleFilter(r)}>
-                {r === 'all' ? 'Todos' : r}
+                {FILTER_LABEL[r]}
               </button>
             ))}
           </div>
@@ -171,16 +174,16 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
       ) : (
         <>
           <div className={styles.progSub}>{filtered.length} {filtered.length === 1 ? 'usuario' : 'usuarios'}</div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className={styles.list}>
             {filtered.map(u => (
-              <div key={u.id} className={styles.restoreBanner}>
-                <span className={styles.restoreBannerText}>
-                  {u.email}
+              <div key={u.id} className={styles.row}>
+                <span className={styles.rowText}>
+                  <span className={styles.rowName}>{u.email}</span>
                   {u.role === 'alumno' && role === 'admin' && (
-                    <span className={styles.usersMeta}> · profe: {u.teacherId ? (emailById[u.teacherId] ?? '—') : '—'}</span>
+                    <span className={styles.usersMeta}>Profe: {u.teacherId ? (emailById[u.teacherId] ?? 'sin profe') : 'sin profe'}</span>
                   )}
                 </span>
-                <span className={`${styles.chip} ${styles.chipSrt}`}>{u.role}</span>
+                <span className={`${styles.chip} ${styles.chipSrt}`}>{u.role ? ROLE_LABEL[u.role] : ''}</span>
                 {u.role === 'alumno' && onOpenStudent && (
                   <button className={styles.tbBtn} onClick={() => onOpenStudent(u.id, u.email ?? '')}>Abrir</button>
                 )}

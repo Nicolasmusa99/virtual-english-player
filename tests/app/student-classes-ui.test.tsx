@@ -54,8 +54,11 @@ describe('StudentClasses — inicio', () => {
     await flush()
     const card = screen.getByTestId('next-class')
     expect(card).toHaveTextContent(CLASSES_TEXTS.next)
-    expect(card).toHaveTextContent('Hoy, martes 29 · 18:00')
-    expect(card).toHaveTextContent('60 min · Google Meet')
+    // Rediseño (fase 4): "Hoy martes 29", la hora grande, y cuánto dura y por dónde
+    expect(card).toHaveTextContent('Hoy martes 29')
+    expect(within(card).getByText('Hoy').tagName).toBe('MARK') // "hoy" resaltado (el "ahora")
+    expect(card).toHaveTextContent('18:00')
+    expect(card).toHaveTextContent('Dura 60 minutos. Es por Google Meet.')
     const enter = within(card).getByRole('link', { name: /Entrar a la clase/ })
     expect(enter).toHaveAttribute('href', MEET)
     expect(enter).toHaveAttribute('target', '_blank')
@@ -69,10 +72,10 @@ describe('StudentClasses — inicio', () => {
     await flush()
     const rows = screen.getAllByRole('listitem')
     expect(rows.map((r) => r.textContent)).toEqual([
-      'Vie 2/1010:30 · 45 min',
-      `Mar 6/1018:00${CLASSES_TEXTS.cancelled}`,
-      `Jue 15/1017:00 · 90 min${CLASSES_TEXTS.moved}`,
-      'Mar 20/1018:00 · 60 min',
+      'Viernes 2 de octubre10:30–11:15',
+      `Martes 6 de octubre18:00–19:00${CLASSES_TEXTS.cancelled}`,
+      `Jueves 15 de octubre17:00–18:30${CLASSES_TEXTS.moved}`,
+      'Martes 20 de octubre18:00–19:00',
     ])
   })
 
@@ -80,12 +83,14 @@ describe('StudentClasses — inicio', () => {
     vi.setSystemTime(new Date('2026-09-29T21:30:00Z'))
     const r = render(<StudentClasses onOpenMonth={() => {}} />)
     await flush()
-    expect(screen.getByTestId('next-class')).toHaveTextContent('Hoy, martes 29 · 18:00')
+    expect(screen.getByTestId('next-class')).toHaveTextContent('Hoy martes 2918:00')
     r.unmount()
     vi.setSystemTime(new Date('2026-09-29T22:01:00Z'))
     render(<StudentClasses onOpenMonth={() => {}} />)
     await flush()
-    expect(screen.getByTestId('next-class')).toHaveTextContent('Viernes 2 de octubre · 10:30')
+    expect(screen.getByTestId('next-class')).toHaveTextContent('Viernes 2 de octubre10:30')
+    expect(screen.getByTestId('next-class')).toHaveTextContent('Es por Zoom: entrás con el botón.')
+    expect(within(screen.getByTestId('next-class')).getByRole('link', { name: CLASSES_TEXTS.enterZoom })).toBeInTheDocument()
   })
 
   it('sin link → "Tu profe todavía no cargó el link" (sin botón)', async () => {
@@ -117,11 +122,14 @@ describe('StudentClasses — inicio', () => {
   it('alumno en otro huso (Madrid) → avisa "tu hora local"', async () => {
     const cv = await import('@/lib/classView')
     const spy = vi.spyOn(cv, 'deviceTz').mockReturnValue('Europe/Madrid')
-    render(<StudentClasses onOpenMonth={() => {}} />)
-    await flush()
-    expect(screen.getByTestId('next-class')).toHaveTextContent('Hoy, martes 29 · 23:00')
-    expect(screen.getByTestId('next-class')).toHaveTextContent(CLASSES_TEXTS.localTime)
-    spy.mockRestore()
+    try {
+      render(<StudentClasses onOpenMonth={() => {}} />)
+      await flush()
+      expect(screen.getByTestId('next-class')).toHaveTextContent('Hoy martes 2923:00')
+      expect(screen.getByTestId('next-class')).toHaveTextContent(CLASSES_TEXTS.localTime)
+    } finally {
+      spy.mockRestore() // si falla, que no arrastre el huso de Madrid a los tests siguientes
+    }
   })
 })
 
@@ -169,7 +177,7 @@ describe('StudentMonth', () => {
     await flush()
     const detail = screen.getByTestId('day-detail')
     expect(detail).toHaveTextContent('martes 29 de septiembre')
-    expect(detail).toHaveTextContent('18:00–19:00 · 60 min')
+    expect(detail).toHaveTextContent('18:00–19:00')
     expect(within(detail).getByRole('link', { name: /Entrar/ })).toHaveAttribute('href', MEET)
   })
 
