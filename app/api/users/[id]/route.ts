@@ -3,9 +3,10 @@ import { requireRole } from '@/lib/authz'
 import { getStudentById, setUserName } from '@/lib/users'
 import { NAME_ERROR, normalizePersonName } from '@/lib/personName'
 
-// ─── PATCH /api/users/[id] — cambiar el nombre y apellido de un ALUMNO ───────
-// admin → cualquier alumno; profesor → SOLO los suyos (teacher_id = él). Un alumno ajeno,
-// otro rol o un id que no existe dan el mismo 404 (no se revela qué hay). Solo se lee `name`.
+// ─── PATCH /api/users/[id] — cambiar el nombre y apellido de un usuario ──────
+// admin → cualquier usuario (alumno, profe o admin); profesor → SOLO sus alumnos
+// (teacher_id = él). Para un profe, un alumno ajeno, otro rol o un id que no existe dan el
+// mismo 404 (no se revela qué hay). Solo se lee `name`.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRole('admin', 'profesor')
   if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
@@ -17,7 +18,8 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!name) return NextResponse.json({ error: NAME_ERROR }, { status: 400 })
 
   const target = await getStudentById(id)
-  if (!target || target.role !== 'alumno' || (me.role === 'profesor' && target.teacherId !== me.id)) {
+  const allowed = !!target && (me.role === 'admin' || (target.role === 'alumno' && target.teacherId === me.id))
+  if (!allowed) {
     return NextResponse.json({ error: 'No encontrado' }, { status: 404 })
   }
 

@@ -2,7 +2,7 @@
 // UsersPanel — nombre y apellido en el alta y en la lista.
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent, act } from '@testing-library/react'
+import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import UsersPanel from '@/app/UsersPanel'
 import { NAME_ERROR } from '@/lib/personName'
 
@@ -57,6 +57,34 @@ describe('UsersPanel — nombre y apellido', () => {
     expect(screen.getByRole('option', { name: 'Laura Sosa' })).toBeInTheDocument()
     fireEvent.click(screen.getAllByRole('button', { name: 'Abrir' })[0])
     expect(onOpen).toHaveBeenCalledWith('al-1', 'martina@x.com', 'Martina Pérez')
+  })
+
+  it('admin: "Cambiar nombre" en los profes (no en los alumnos, que tienen "Abrir")', async () => {
+    fetchMock.mockImplementation((_url: string, init?: RequestInit) => {
+      if (init?.method === 'PATCH') return Promise.resolve(json(200, { id: 'pr-1', name: 'Laura Sosa Díaz' }))
+      return Promise.resolve(json(200, { users }))
+    })
+    render(<UsersPanel role="admin" onOpenStudent={() => {}} />)
+    await flush()
+    expect(screen.getAllByRole('button', { name: 'Cambiar nombre' })).toHaveLength(1) // solo la profe
+    fireEvent.click(screen.getByRole('button', { name: 'Cambiar nombre' }))
+    const dlg = screen.getByRole('dialog', { name: 'Nombre del profe' })
+    fireEvent.change(within(dlg).getByLabelText('Nombre y apellido'), { target: { value: 'Laura Sosa Díaz' } })
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Guardar' })) })
+    await flush()
+    const call = fetchMock.mock.calls.find(([, i]) => i?.method === 'PATCH')!
+    expect(call[0]).toBe('/api/users/pr-1')
+    expect(JSON.parse(String(call[1].body))).toEqual({ name: 'Laura Sosa Díaz' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    // el nombre nuevo se ve en la fila y en el selector de profe del alta
+    expect(screen.getAllByText('Laura Sosa Díaz')).toHaveLength(2)
+    expect(screen.getByRole('option', { name: 'Laura Sosa Díaz' })).toBeInTheDocument()
+  })
+
+  it('el profe no ve "Cambiar nombre" en la lista', async () => {
+    render(<UsersPanel role="profesor" onOpenStudent={() => {}} />)
+    await flush()
+    expect(screen.queryByRole('button', { name: /nombre/ })).toBeNull()
   })
 
   it('la búsqueda encuentra por nombre', async () => {

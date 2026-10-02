@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import styles from './page.module.css'
 import type { Role } from '@/lib/db/schema'
 import { NAME_ERROR, NAME_MAX, normalizePersonName } from '@/lib/personName'
+import StudentNameDialog from './StudentNameDialog'
 
 interface UserRow {
   id: string
@@ -16,6 +17,7 @@ const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
 // Rediseño (fase 5): nombres de los roles con palabras (sin minúsculas crudas ni "·").
 const ROLE_LABEL: Record<Role, string> = { admin: 'Admin', profesor: 'Profe', alumno: 'Alumno' }
 const FILTER_LABEL = { all: 'Todos', admin: 'Admins', profesor: 'Profes', alumno: 'Alumnos' } as const
+const NAME_TITLE: Record<Role, string> = { admin: 'Nombre del admin', profesor: 'Nombre del profe', alumno: 'Nombre del alumno' }
 
 // Fase 3a — cara visible de /api/users (Fase 2). Solo consume GET/POST existentes;
 // la seguridad real vive en el backend. El `role` decide qué vista mostrar.
@@ -33,6 +35,9 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const [okMsg, setOkMsg] = useState('')
+
+  // "Cambiar nombre" de un profe o admin (vista admin; el alumno se cambia desde su pantalla)
+  const [editing, setEditing] = useState<UserRow | null>(null)
 
   // búsqueda / filtro (front-only)
   const [q, setQ] = useState('')
@@ -201,10 +206,18 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
                 {u.role === 'alumno' && onOpenStudent && (
                   <button className={styles.tbBtn} onClick={() => onOpenStudent(u.id, u.email ?? '', u.name)}>Abrir</button>
                 )}
+                {role === 'admin' && u.role !== 'alumno' && (
+                  <button className={styles.tbBtn} onClick={() => setEditing(u)}>{u.name ? 'Cambiar nombre' : 'Agregar nombre'}</button>
+                )}
               </div>
             ))}
           </div>
         </>
+      )}
+      {editing && (
+        <StudentNameDialog userId={editing.id} name={editing.name} title={editing.role ? NAME_TITLE[editing.role] : undefined}
+          onClose={() => setEditing(null)}
+          onSaved={(name) => { setUsers((list) => list.map((x) => (x.id === editing.id ? { ...x, name } : x))); setEditing(null) }} />
       )}
     </div>
   )

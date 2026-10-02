@@ -1,5 +1,6 @@
 // @vitest-environment node
-// PATCH /api/users/[id] — cambiar el nombre y apellido de un ALUMNO. Permisos REALES
+// PATCH /api/users/[id] — cambiar el nombre y apellido (el admin, de cualquiera; el profe,
+// solo de sus alumnos). Permisos REALES
 // (requireRole); se mockean la sesión y el acceso a datos.
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
@@ -57,11 +58,16 @@ describe('PATCH /api/users/[id]', () => {
     expect(setUserNameMock).not.toHaveBeenCalled()
   })
 
-  it('el admin puede con cualquier alumno, pero no con un profe', async () => {
+  it('el admin puede con cualquier usuario: alumnos, profes y admins; un id que no existe → 404', async () => {
     authMock.mockResolvedValue(ADMIN)
+    getStudentByIdMock.mockImplementation(async (id: string) => ({
+      'al-2': OTHER, 'pr-9': { id: 'pr-9', role: 'profesor', teacherId: null }, 'ad-2': { id: 'ad-2', role: 'admin', teacherId: null },
+    } as Record<string, unknown>)[id] ?? null)
     expect((await patch('al-2', { name: 'Tomás Ruiz' })).status).toBe(200)
-    expect((await patch('pr-9', { name: 'Laura Sosa' })).status).toBe(404)
-    expect(setUserNameMock).toHaveBeenCalledTimes(1)
+    expect((await patch('pr-9', { name: 'Laura Sosa' })).status).toBe(200)
+    expect((await patch('ad-2', { name: 'Admin Dos' })).status).toBe(200)
+    expect((await patch('nope', { name: 'Nadie' })).status).toBe(404)
+    expect(setUserNameMock.mock.calls).toEqual([['al-2', 'Tomás Ruiz'], ['pr-9', 'Laura Sosa'], ['ad-2', 'Admin Dos']])
   })
 
   it('nombre vacío o inválido → 400; solo se lee `name`', async () => {
