@@ -1,4 +1,6 @@
 // VE Drills (Bloque 14) — extended in Bloque 15
+// Rediseño (fase 6): estilos en exercises.module.css (tokens: sirve en la sala y en el
+// aula), textos en castellano y sin mayúsculas; la respuesta se marca con palabra, no solo color.
 'use client'
 import { useEffect, useState } from 'react'
 import type { Phrase } from '@/lib/srt'
@@ -6,6 +8,7 @@ import type { Level, Scope, GenState, ExerciseSet, MatchItem, ExerciseMode, PdfT
 import { resolveScope } from '@/lib/exercises'
 import { buildStudentContent, buildTeacherContent } from '@/lib/pdf'
 import { capture } from '@/lib/capture'
+import styles from './exercises.module.css'
 
 interface Props {
   phrases: Phrase[]
@@ -14,6 +17,35 @@ interface Props {
 }
 
 type DrillTab = 'quiz' | 'cloze' | 'match'
+
+export const EXERCISES_TEXTS = {
+  source: 'De dónde salen',
+  modes: { video: 'Del video', topic: 'De un tema', both: 'Video y tema' } as Record<ExerciseMode, string>,
+  topic: 'Tema',
+  topicPh: 'Por ejemplo: la Segunda Guerra Mundial',
+  level: 'Nivel',
+  levels: { beginner: 'Básico', intermediate: 'Intermedio', advanced: 'Avanzado' } as Record<Level, string>,
+  phrases: 'Frases',
+  all: 'Todas',
+  chosen: (n: number) => `Elegidas (${n})`,
+  generate: 'Generar ejercicios',
+  generating: 'Generando ejercicios…',
+  error: 'No se pudieron generar los ejercicios.',
+  retry: 'Reintentar',
+  regenerate: 'Generar otros',
+  pdf: 'Descargar en PDF',
+  include: 'Qué incluir',
+  version: 'Para quién',
+  versions: { student: 'Alumno', teacher: 'Profesor (con respuestas)', both: 'Los dos' } as Record<PdfVersion, string>,
+  download: 'Descargar',
+  close: 'Cerrar',
+  kindsLabel: 'Tipo de ejercicio',
+  kinds: { quiz: 'Preguntas', cloze: 'Completar', match: 'Unir' } as Record<DrillTab, string>,
+  right: 'Correcta', wrong: 'Incorrecta', wasThis: 'Era esta',
+  clozeHint: 'Escribí la palabra que falta y apretá Enter.',
+  blank: (n: number) => `Palabra que falta ${n}`,
+  answer: (a: string) => `Respuesta: ${a}`,
+} as const
 
 export default function ExercisesPanel({ phrases, videoFileName, singleMode }: Props) {
   // ── source / generation state ────────────────────────────────────────────
@@ -220,273 +252,195 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
   }
 
   const selCount = phrases.filter(p => p.sel).length
-
-  const btnBase: React.CSSProperties = {
-    border: '1px solid var(--ln)', borderRadius: 4, background: 'transparent',
-    cursor: 'pointer', fontFamily: 'var(--font-mono)',
-  }
+  const T = EXERCISES_TEXTS
 
   return (
-    <div style={{ padding: '12px 10px', display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className={styles.panel}>
 
-      {/* ── Bloque 15: Source mode selector (hidden when singleMode locks the mode) ── */}
+      {/* ── Bloque 15: de dónde salen (oculto cuando singleMode fija el modo) ── */}
       {!singleMode && (
-        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' as const }}>
-          {(['video', 'topic', 'both'] as ExerciseMode[]).map(m => (
-            <button
-              key={m}
-              data-testid={`mode-${m}`}
-              data-active={mode === m ? 'true' : 'false'}
-              onClick={() => handleModeChange(m)}
-              style={{
-                ...btnBase, padding: '3px 8px', fontSize: 10,
-                textTransform: 'uppercase' as const,
-                background: mode === m ? 'var(--ac)' : 'transparent',
-                color: mode === m ? 'var(--p1)' : 'var(--tx3)',
-              }}
-            >
-              {m === 'video' ? 'Video' : m === 'topic' ? 'Tópico' : 'Ambos'}
-            </button>
-          ))}
+        <div className={styles.field}>
+          <span className={styles.lbl}>{T.source}</span>
+          <div className={styles.seg} role="group" aria-label={T.source}>
+            {(['video', 'topic', 'both'] as ExerciseMode[]).map(m => (
+              <button
+                key={m}
+                type="button"
+                data-testid={`mode-${m}`}
+                data-active={mode === m ? 'true' : 'false'}
+                aria-pressed={mode === m}
+                onClick={() => handleModeChange(m)}
+                className={styles.segBtn}
+              >
+                {T.modes[m]}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* ── Bloque 15: Topic input (visible when mode !== video) ── */}
+      {/* ── Bloque 15: tema (cuando el modo no es solo video) ── */}
       {mode !== 'video' && (
-        <input
-          data-testid="topic-input"
-          type="text"
-          value={topic}
-          placeholder="Topic (e.g. Second World War)"
-          onChange={e => setTopic(e.target.value)}
-          style={{
-            padding: '5px 8px', border: '1px solid var(--ln)', borderRadius: 4,
-            background: 'var(--p3)', color: 'var(--tx)', fontSize: 11,
-            fontFamily: 'var(--font-mono)',
-          }}
-        />
+        <label className={styles.field}>
+          <span className={styles.lbl}>{T.topic}</span>
+          <input
+            data-testid="topic-input"
+            type="text"
+            value={topic}
+            placeholder={T.topicPh}
+            onChange={e => setTopic(e.target.value)}
+            className={styles.input}
+          />
+        </label>
       )}
 
-      {/* Level + Scope controls */}
-      <div style={{ display: 'flex', gap: 5, alignItems: 'center', flexWrap: 'wrap' as const }}>
-        {(['beginner', 'intermediate', 'advanced'] as Level[]).map(l => (
-          <button key={l} onClick={() => setLevel(l)} style={{
-            ...btnBase, padding: '3px 7px',
-            background: level === l ? 'var(--ac)' : 'transparent',
-            color: level === l ? 'var(--p1)' : 'var(--tx3)',
-            fontSize: 10, textTransform: 'uppercase' as const,
-          }}>
-            {l}
-          </button>
-        ))}
-        {/* Scope selector hidden in topic-only mode */}
-        {mode !== 'topic' && (
-          <>
-            <span style={{ color: 'var(--tx3)', fontSize: 10 }}>·</span>
-            <button data-testid="scope-all" onClick={() => setScope('all')} style={{
-              ...btnBase, padding: '3px 7px',
-              background: scope === 'all' ? 'var(--ac)' : 'transparent',
-              color: scope === 'all' ? 'var(--p1)' : 'var(--tx3)', fontSize: 10,
-            }}>
-              Todas
+      {/* Nivel */}
+      <div className={styles.field}>
+        <span className={styles.lbl}>{T.level}</span>
+        <div className={styles.seg} role="group" aria-label={T.level}>
+          {(['beginner', 'intermediate', 'advanced'] as Level[]).map(l => (
+            <button key={l} type="button" aria-pressed={level === l} onClick={() => setLevel(l)} className={styles.segBtn}>
+              {T.levels[l]}
             </button>
-            <button data-testid="scope-sel" onClick={() => setScope('sel')} style={{
-              ...btnBase, padding: '3px 7px',
-              background: scope === 'sel' ? 'var(--ac)' : 'transparent',
-              color: scope === 'sel' ? 'var(--p1)' : 'var(--tx3)', fontSize: 10,
-            }}>
-              Sel. ({selCount})
-            </button>
-          </>
-        )}
+          ))}
+        </div>
       </div>
+
+      {/* Qué frases (no aplica a "solo tema") */}
+      {mode !== 'topic' && (
+        <div className={styles.field}>
+          <span className={styles.lbl}>{T.phrases}</span>
+          <div className={styles.seg} role="group" aria-label={T.phrases}>
+            <button type="button" data-testid="scope-all" aria-pressed={scope === 'all'} onClick={() => setScope('all')} className={styles.segBtn}>
+              {T.all}
+            </button>
+            <button type="button" data-testid="scope-sel" aria-pressed={scope === 'sel'} onClick={() => setScope('sel')} className={styles.segBtn}>
+              {T.chosen(selCount)}
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Idle */}
       {genState === 'idle' && (
-        <button
-          data-testid="btn-generate"
-          disabled={generateDisabled}
-          onClick={generate}
-          style={{
-            ...btnBase, padding: '8px 0', borderColor: 'var(--ac)',
-            color: generateDisabled ? 'var(--tx3)' : 'var(--ac)',
-            fontSize: 11, letterSpacing: '1px', textTransform: 'uppercase' as const,
-            opacity: generateDisabled ? 0.4 : 1, cursor: generateDisabled ? 'default' : 'pointer',
-          }}
-        >
-          GENERAR EJERCICIOS
+        <button type="button" data-testid="btn-generate" disabled={generateDisabled} onClick={generate} className={styles.primary}>
+          {T.generate}
         </button>
       )}
 
       {/* Generating */}
-      {genState === 'generating' && (
-        <div style={{ color: 'var(--tx3)', fontSize: 11, textAlign: 'center' as const, padding: '16px 0' }}>
-          Generando…
-        </div>
-      )}
+      {genState === 'generating' && <div className={styles.msg} role="status">{T.generating}</div>}
 
       {/* Error */}
       {genState === 'error' && (
         <>
-          <div data-testid="exercises-error" style={{
-            color: 'var(--rd)', fontSize: 11, padding: 8,
-            border: '1px solid var(--rd)', borderRadius: 4,
-          }}>
-            {errorMsg || 'Error al generar ejercicios'}
+          <div data-testid="exercises-error" role="alert" className={styles.error}>
+            {errorMsg || T.error}
           </div>
-          <button data-testid="btn-retry" onClick={generate} style={{
-            ...btnBase, padding: '6px 0', borderColor: 'var(--ac)',
-            color: 'var(--ac)', fontSize: 10, textTransform: 'uppercase' as const,
-          }}>
-            REINTENTAR
-          </button>
+          <div className={styles.acts}>
+            <button type="button" data-testid="btn-retry" onClick={generate} className={styles.secondary}>{T.retry}</button>
+          </div>
         </>
       )}
 
       {/* Ready */}
       {genState === 'ready' && exercises && (
-        <div>
-          {/* Drill sub-tabs */}
-          <div style={{ display: 'flex', borderBottom: '1px solid var(--ln)', marginBottom: 10 }}>
-            {(['quiz', 'cloze', 'match'] as DrillTab[]).map(t => (
-              <button key={t} data-testid={`tab-${t}`} onClick={() => setDrillTab(t)} style={{
-                flex: 1, padding: '5px 0', border: 'none',
-                borderBottom: drillTab === t ? '2px solid var(--ac)' : '2px solid transparent',
-                background: 'transparent',
-                color: drillTab === t ? 'var(--ac)' : 'var(--tx3)',
-                fontSize: 10, cursor: 'pointer', fontFamily: 'var(--font-mono)',
-                textTransform: 'uppercase' as const,
-              }}>
-                {t === 'quiz' ? 'Quiz' : t === 'cloze' ? 'Fill-in' : 'Match'}
-              </button>
-            ))}
+        <>
+          <div className={styles.acts}>
+            <button type="button" data-testid="btn-generate" onClick={generate} className={styles.secondary}>{T.regenerate}</button>
+            <button type="button" data-testid="btn-pdf" onClick={() => setPdfOpen(true)} className={styles.secondary}>{T.pdf}</button>
           </div>
 
-          {/* Regenerate + PDF buttons */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 10 }}>
-            <button data-testid="btn-generate" onClick={generate} style={{
-              ...btnBase, flex: 1, padding: '4px 0',
-              color: 'var(--tx3)', fontSize: 10,
-            }}>
-              ↺ REGENERAR
-            </button>
-            <button data-testid="btn-pdf" onClick={() => setPdfOpen(true)} style={{
-              ...btnBase, padding: '4px 10px', borderColor: 'var(--ac)',
-              color: 'var(--ac)', fontSize: 10,
-            }}>
-              PDF
-            </button>
-          </div>
-
-          {/* ── Bloque 15: PDF panel ── */}
+          {/* ── Bloque 15: PDF ── */}
           {pdfOpen && (
-            <div data-testid="pdf-panel" style={{
-              border: '1px solid var(--ln)', borderRadius: 6, padding: 12,
-              marginBottom: 10, background: 'var(--p2)',
-            }}>
-              <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 8, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' as const }}>
-                Tipos a incluir
+            <div data-testid="pdf-panel" className={styles.pdf}>
+              <div className={styles.field}>
+                <span className={styles.lbl}>{T.include}</span>
+                <div className={styles.checks}>
+                  {(['quiz', 'cloze', 'match'] as PdfType[]).map(t => (
+                    <label key={t} className={styles.check}>
+                      <input
+                        type="checkbox"
+                        data-testid={`pdf-type-${t}`}
+                        checked={pdfTypes.includes(t)}
+                        onChange={() => togglePdfType(t)}
+                      />
+                      {T.kinds[t]}
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 10 }}>
-                {(['quiz', 'cloze', 'match'] as PdfType[]).map(t => (
-                  <label key={t} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--tx)', cursor: 'pointer' }}>
-                    <input
-                      type="checkbox"
-                      data-testid={`pdf-type-${t}`}
-                      checked={pdfTypes.includes(t)}
-                      onChange={() => togglePdfType(t)}
-                    />
-                    {t === 'quiz' ? 'Quiz' : t === 'cloze' ? 'Fill-in' : 'Match'}
-                  </label>
-                ))}
+              <div className={styles.field}>
+                <span className={styles.lbl}>{T.version}</span>
+                <div className={styles.checks}>
+                  {(['student', 'teacher', 'both'] as PdfVersion[]).map(v => (
+                    <label key={v} className={styles.check}>
+                      <input
+                        type="radio"
+                        data-testid={`pdf-version-${v}`}
+                        name="pdf-version"
+                        checked={pdfVersion === v}
+                        onChange={() => setPdfVersion(v)}
+                      />
+                      {T.versions[v]}
+                    </label>
+                  ))}
+                </div>
               </div>
-              <div style={{ fontSize: 10, color: 'var(--tx3)', marginBottom: 8, fontFamily: 'var(--font-mono)', textTransform: 'uppercase' as const }}>
-                Versión
-              </div>
-              <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
-                {(['student', 'teacher', 'both'] as PdfVersion[]).map(v => (
-                  <label key={v} style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--tx)', cursor: 'pointer' }}>
-                    <input
-                      type="radio"
-                      data-testid={`pdf-version-${v}`}
-                      name="pdf-version"
-                      checked={pdfVersion === v}
-                      onChange={() => setPdfVersion(v)}
-                    />
-                    {v === 'student' ? 'Alumno' : v === 'teacher' ? 'Profesor' : 'Ambas'}
-                  </label>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button
-                  data-testid="btn-pdf-confirm"
-                  disabled={pdfTypes.length === 0}
-                  onClick={downloadPdf}
-                  style={{
-                    ...btnBase, flex: 1, padding: '6px 0', borderColor: 'var(--ac)',
-                    color: pdfTypes.length === 0 ? 'var(--tx3)' : 'var(--ac)',
-                    fontSize: 10, textTransform: 'uppercase' as const,
-                    opacity: pdfTypes.length === 0 ? 0.4 : 1,
-                    cursor: pdfTypes.length === 0 ? 'default' : 'pointer',
-                  }}
-                >
-                  DESCARGAR
+              <div className={styles.acts}>
+                <button type="button" data-testid="btn-pdf-confirm" disabled={pdfTypes.length === 0} onClick={downloadPdf} className={styles.primary}>
+                  {T.download}
                 </button>
-                <button onClick={() => setPdfOpen(false)} style={{
-                  ...btnBase, padding: '6px 10px', color: 'var(--tx3)', fontSize: 10,
-                }}>
-                  ✕
-                </button>
+                <button type="button" onClick={() => setPdfOpen(false)} className={styles.textBtn}>{T.close}</button>
               </div>
             </div>
           )}
 
-          {/* ── Quiz ─────────────────────────────────────────────────────────── */}
+          {/* Pestañas: Preguntas / Completar / Unir */}
+          <div className={styles.tabs} role="group" aria-label={T.kindsLabel}>
+            {(['quiz', 'cloze', 'match'] as DrillTab[]).map(t => (
+              <button key={t} type="button" data-testid={`tab-${t}`} aria-pressed={drillTab === t} onClick={() => setDrillTab(t)}
+                className={`${styles.tab} ${drillTab === t ? styles.tabOn : ''}`}>
+                {T.kinds[t]}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Preguntas (quiz) ─────────────────────────────────────────────── */}
           {drillTab === 'quiz' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <div className={styles.list}>
               {exercises.quiz.map((q, qi) => {
                 const answered = quizAnswers[qi] !== null
                 return (
-                  <div key={qi} data-testid={`quiz-q-${qi}`} style={{
-                    borderBottom: '1px solid var(--ln2)', paddingBottom: 10,
-                  }}>
-                    <div style={{ color: 'var(--tx)', fontSize: 12, marginBottom: 6 }}>
-                      {qi + 1}. {q.question}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <div key={qi} data-testid={`quiz-q-${qi}`} className={styles.q}>
+                    <div className={styles.qText}><span className={styles.qNum}>{qi + 1}.</span> {q.question}</div>
+                    <div className={styles.opts}>
                       {q.options.map((opt, oi) => {
                         const isChosen  = quizAnswers[qi] === oi
                         const isCorrect = oi === q.correct
+                        const state = !answered ? '' : isCorrect ? styles.optOk : isChosen ? styles.optBad : ''
                         return (
                           <button
                             key={oi}
+                            type="button"
                             data-testid={`quiz-q-${qi}-opt-${oi}`}
                             data-correct={isChosen ? String(isCorrect) : undefined}
                             data-answer={answered && !isChosen && isCorrect ? 'true' : undefined}
                             disabled={answered}
                             onClick={() => answerQuiz(qi, oi)}
-                            style={{
-                              textAlign: 'left' as const, padding: '4px 8px',
-                              border: '1px solid var(--ln)', borderRadius: 4,
-                              background:
-                                !answered                     ? 'transparent'  :
-                                isChosen && isCorrect         ? 'var(--gr)'    :
-                                isChosen && !isCorrect        ? 'var(--rd)'    :
-                                isCorrect                     ? 'rgba(45,184,122,0.18)' :
-                                'transparent',
-                              color: answered && (isChosen || isCorrect) ? '#fff' : 'var(--tx)',
-                              fontSize: 11, cursor: answered ? 'default' : 'pointer',
-                            }}
+                            className={`${styles.opt} ${state}`}
                           >
-                            {String.fromCharCode(65 + oi)}. {opt}
+                            <span className={styles.optLetter}>{String.fromCharCode(65 + oi)}</span>
+                            <span className={styles.optText}>{opt}</span>
+                            {answered && (isChosen || isCorrect) && (
+                              <span className={styles.optMark}>{isCorrect ? (isChosen ? T.right : T.wasThis) : T.wrong}</span>
+                            )}
                           </button>
                         )
                       })}
                     </div>
                     {answered && (
-                      <div data-testid={`quiz-q-${qi}-explanation`} style={{
-                        color: 'var(--tx3)', fontSize: 10, marginTop: 5,
-                      }}>
+                      <div data-testid={`quiz-q-${qi}-explanation`} className={styles.explain}>
                         {q.explanation}
                       </div>
                     )}
@@ -496,9 +450,10 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
             </div>
           )}
 
-          {/* ── Fill-in / Cloze ──────────────────────────────────────────────── */}
+          {/* ── Completar (cloze) ────────────────────────────────────────────── */}
           {drillTab === 'cloze' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <div className={styles.list}>
+              <div className={styles.hint}>{T.clozeHint}</div>
               {exercises.cloze.map((c, ci) => {
                 const submitted = clozeSubmitted[ci]
                 const answer    = clozeInputs[ci].trim().toLowerCase()
@@ -506,11 +461,12 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
                 const correct   = submitted && answer === expected
                 const parts     = c.sentence.split('___')
                 return (
-                  <div key={ci} style={{ fontSize: 12, color: 'var(--tx)', lineHeight: '1.8' }}>
+                  <div key={ci} className={styles.cloze}>
                     <span>{parts[0]}</span>
                     <input
                       data-testid={`cloze-input-${ci}`}
                       type="text"
+                      aria-label={T.blank(ci + 1)}
                       value={clozeInputs[ci]}
                       disabled={submitted}
                       data-correct={submitted ? String(correct) : undefined}
@@ -519,20 +475,12 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
                           setClozeInputs(prev => prev.map((v, i) => i === ci ? e.target.value : v))
                       }}
                       onKeyDown={e => { if (e.key === 'Enter') submitCloze(ci) }}
-                      style={{
-                        width: 80, padding: '1px 4px',
-                        border: '1px solid var(--ln)', borderRadius: 3,
-                        background: 'var(--p3)',
-                        color: submitted ? (correct ? 'var(--gr)' : 'var(--rd)') : 'var(--tx)',
-                        fontSize: 12,
-                      }}
+                      className={`${styles.blank} ${submitted ? (correct ? styles.blankOk : styles.blankBad) : ''}`}
                     />
                     <span>{parts[1]}</span>
                     {submitted && !correct && (
-                      <span data-testid={`cloze-reveal-${ci}`} style={{
-                        color: 'var(--gr)', marginLeft: 4, fontSize: 10,
-                      }}>
-                        → {c.answer}
+                      <span data-testid={`cloze-reveal-${ci}`} className={styles.reveal}>
+                        {T.answer(c.answer)}
                       </span>
                     )}
                   </div>
@@ -541,10 +489,10 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
             </div>
           )}
 
-          {/* ── Match ────────────────────────────────────────────────────────── */}
+          {/* ── Unir (match) ─────────────────────────────────────────────────── */}
           {drillTab === 'match' && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div className={styles.match}>
+              <div className={styles.col}>
                 {exercises.match.map((m, mi) => {
                   const matched  = matchedPairs.has(mi)
                   const selected = selectedTerm === mi
@@ -552,44 +500,29 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
                   return (
                     <button
                       key={mi}
+                      type="button"
                       data-testid={`match-term-${mi}`}
                       data-matched={matched ? 'true' : undefined}
                       data-selected={selected ? 'true' : undefined}
+                      aria-pressed={selected}
                       onClick={() => !matched && clickTerm(mi)}
-                      style={{
-                        ...btnBase, padding: '4px 6px', textAlign: 'left' as const,
-                        background:
-                          matched  ? 'rgba(45,184,122,0.18)' :
-                          flashing ? 'rgba(204,68,68,0.18)'  :
-                          selected ? 'rgba(106,160,230,0.18)' :
-                          'transparent',
-                        color:
-                          matched  ? 'var(--gr)'  :
-                          flashing ? 'var(--rd)'  :
-                          selected ? 'var(--ac)'  :
-                          'var(--tx)',
-                        fontSize: 11, cursor: matched ? 'default' : 'pointer',
-                      }}
+                      className={`${styles.pair} ${matched ? styles.pairOk : flashing ? styles.pairBad : selected ? styles.pairSel : ''}`}
                     >
                       {m.term}
                     </button>
                   )
                 })}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <div className={styles.col}>
                 {shuffledDefs.map((matchIdx, di) => {
                   const matched = matchedPairs.has(matchIdx)
                   return (
                     <button
                       key={di}
+                      type="button"
                       data-testid={`match-def-${di}`}
                       onClick={() => !matched && clickDef(di)}
-                      style={{
-                        ...btnBase, padding: '4px 6px', textAlign: 'left' as const,
-                        background: matched ? 'rgba(45,184,122,0.18)' : 'transparent',
-                        color: matched ? 'var(--gr)' : 'var(--tx)',
-                        fontSize: 11, cursor: matched ? 'default' : 'pointer',
-                      }}
+                      className={`${styles.pair} ${matched ? styles.pairOk : ''}`}
                     >
                       {exercises.match[matchIdx].definition}
                     </button>
@@ -598,7 +531,7 @@ export default function ExercisesPanel({ phrases, videoFileName, singleMode }: P
               </div>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   )

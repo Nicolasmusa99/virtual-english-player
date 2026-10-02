@@ -1425,7 +1425,7 @@ export default function Player() {
               {panelTab === 'exercises' && (
                 <div style={{ flex: 1, overflowY: 'auto' as const }}>
                   {exercisesOpen ? (
-                    <div data-testid="exercises-open-hint" style={{ padding: 20, color: 'var(--tx3)', fontSize: 12, textAlign: 'center' as const }}>
+                    <div data-testid="exercises-open-hint" style={{ padding: 20, color: 'var(--tx2)', fontSize: 15, textAlign: 'center' as const }}>
                       El generador está abierto en otra ventana.
                     </div>
                   ) : (
