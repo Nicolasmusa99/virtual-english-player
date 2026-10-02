@@ -21,6 +21,7 @@ interface SharedVideoRow {
 // "Mi biblioteca" (y el backend lo rechaza igual para un profe). Se trae el
 // listado completo y se filtra client-side, para poder distinguir "no hay nada
 // publicado todavía" de "no hay resultados con estos filtros".
+// Rediseño (fase 5): tarjetas con miniatura grande como en el inicio del alumno.
 export default function SharedLibrary({ onOpen, assignable }: { onOpen: (id: string) => void; assignable?: boolean }) {
   const [videos, setVideos] = useState<SharedVideoRow[]>([])
   const [loading, setLoading] = useState(true)
@@ -49,10 +50,10 @@ export default function SharedLibrary({ onOpen, assignable }: { onOpen: (id: str
   ), [videos, tipo, nivel])
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+    <div className={styles.stack}>
       <div className={styles.sharedHint}>
         El material compartido es <b>solo lectura</b>: si editás las captions de un video,
-        se guarda tu propia copia — el original queda intacto para el resto de los profes.
+        se guarda tu propia copia y el original queda intacto para el resto de los profes.
       </div>
 
       <div className={styles.sharedFilters}>
@@ -93,16 +94,16 @@ export default function SharedLibrary({ onOpen, assignable }: { onOpen: (id: str
         <div className={styles.sharedGrid}>
           {filtered.map(v => (
             <div key={v.id} className={styles.sharedCard}>
-              <div className={styles.sharedThumb}>{v.sharedType === 'cancion' ? '🎵' : '🎬'}</div>
+              <div className={styles.sharedThumb}><svg className={styles.thumbIco} viewBox="0 0 24 24" aria-hidden="true"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg></div>
               <div className={styles.sharedName}>{v.originalName}</div>
               <div className={styles.sharedMeta}>
-                {v.ownerName ? `de ${v.ownerName} · ` : ''}{v.phraseCount} frases
+                {v.ownerName ? `De ${v.ownerName}, ` : ''}{v.phraseCount} frases
               </div>
               <div className={styles.libChips}>
                 {v.sharedType && <span className={`${styles.chip} ${styles.chipTipo}`}>{TIPO_LABEL[v.sharedType]}</span>}
                 {v.sharedLevel && <span className={`${styles.chip} ${styles.chipNivel}`}>{NIVEL_LABEL[v.sharedLevel]}</span>}
               </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              <div className={styles.libActions} style={{ marginTop: 4 }}>
                 <button className={styles.restoreBtn} onClick={() => onOpen(v.id)}>Abrir en el player</button>
                 {assignable && (
                   <button className={styles.tbBtn} onClick={() => setAssignTarget({ id: v.id, name: v.originalName })}>Asignar a…</button>

@@ -44,7 +44,8 @@ describe('AssignToStudents', () => {
     await screen.findByText('a@x.com')
     expect(screen.getByText('b@x.com')).toBeInTheDocument()
     expect(screen.queryByText('p@x.com')).toBeNull() // profesor filtrado
-    expect(screen.getByText('✓ Asignado — quitar')).toBeInTheDocument() // al-1 ya tiene v1
+    expect(screen.getByText('Asignado')).toBeInTheDocument() // al-1 ya tiene v1
+    expect(screen.getByRole('button', { name: 'Quitar' })).toBeInTheDocument()
     expect(screen.getByText('Asignar')).toBeInTheDocument() // al-2 no
   })
 
@@ -60,7 +61,7 @@ describe('AssignToStudents', () => {
     setup(routes)
     render(<AssignToStudents videoId="v1" videoName="Matilda" onClose={() => {}} />)
     await screen.findByText('a@x.com')
-    fireEvent.click(screen.getByText('✓ Asignado — quitar')) // al-1
+    fireEvent.click(screen.getByRole('button', { name: 'Quitar' })) // al-1
     await waitFor(() => expect(bodyOf('DELETE')).toEqual({ studentId: 'al-1', videoId: 'v1' }))
   })
 

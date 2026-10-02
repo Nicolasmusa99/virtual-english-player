@@ -2,6 +2,7 @@
 // Calendario (C3) — "Ver el mes" del ALUMNO: grilla de lunes a domingo con sus clases
 // (pasadas en gris, hoy resaltado, canceladas en rojo). Tocar un día muestra el detalle
 // con el botón para entrar. Pide a /api/student/classes solo el rango de ese mes.
+// Rediseño (fase 4): el número de hoy va en amarillo (el "ahora"), sin mayúsculas ni "·".
 import { useCallback, useEffect, useState } from 'react'
 import styles from './student.module.css'
 import { EnterButton, CLASSES_TEXTS, toStudentClasses, type StudentClass } from './StudentClasses'
@@ -110,7 +111,7 @@ export default function StudentMonth({ onBack }: { onBack: () => void }) {
         <p className={styles.clMsg}>{MONTH_TEXTS.pickDay}</p>
       ) : (
         <div className={styles.moDetail} data-testid="day-detail">
-          <div className={styles.clLbl}>{longDate(new Date(`${selected}T12:00:00Z`), 'UTC')}</div>
+          <div className={styles.moDetailDay}>{longDate(new Date(`${selected}T12:00:00Z`), 'UTC')}</div>
           {selClasses.length === 0 && state.kind === 'ok' && <p className={styles.clMsg}>{MONTH_TEXTS.noClasses}</p>}
           {selClasses.map((c) => {
             const t = new Date(c.startsAt)
@@ -119,9 +120,9 @@ export default function StudentMonth({ onBack }: { onBack: () => void }) {
             return (
               <div key={c.key} className={styles.moDetailRow}>
                 <div className={styles.moDetailWhen}>
-                  <span className={canc ? styles.clStrike : ''}>{timeRange(t, c.durationMin, tz)} · {CLASSES_TEXTS.minutes(c.durationMin)}</span>
-                  {canc && <span className={styles.clTagCanc}>{CLASSES_TEXTS.cancelled}</span>}
-                  {!canc && c.moved && <span className={styles.clTagMoved}>{CLASSES_TEXTS.moved}</span>}
+                  <span className={canc ? styles.clStrike : ''}>{timeRange(t, c.durationMin, tz)}</span>
+                  {canc && <span className={styles.clNoteCanc}>{CLASSES_TEXTS.cancelled}</span>}
+                  {!canc && c.moved && <span className={styles.clNote}>{CLASSES_TEXTS.moved}</span>}
                 </div>
                 {!canc && !past && <EnterButton url={c.meetUrl} compact />}
                 {!canc && past && <span className={styles.clNoLink}>{MONTH_TEXTS.past}</span>}

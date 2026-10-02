@@ -6,6 +6,8 @@
 // Solo arman el borrador (lib/classDraft.ts); qué se le pide a la API lo decide
 // useClassEditor. Todo en hora de Argentina (la del profe).
 // G2: desde "Mi agenda" la ventana muestra el alumno (y lo deja elegir al crear).
+// Rediseño (fase 5): cada fila con su nombre a la izquierda ("Cuándo", "Repetición",
+// "Zoom"…) en vez de íconos; sin "·".
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
 import styles from './classes.module.css'
 import { weekdayOf } from '@/lib/classSchedule'
@@ -23,6 +25,7 @@ export const DIALOG_TEXTS = {
   noStudent: 'Elegí el alumno',
   editSeries: 'Editar el horario',
   close: 'Cerrar',
+  when: 'Cuándo',
   date: 'Fecha', start: 'Empieza', end: 'Termina a las',
   repeat: 'Repetición',
   none: 'No se repite',
@@ -32,13 +35,14 @@ export const DIALOG_TEXTS = {
   never: 'Nunca',
   onDay: 'El día…',
   endsOn: 'Último día',
+  zoom: 'Zoom',
   room: 'Mi sala de Zoom',
   change: 'Cambiar',
   useRoom: 'Usar Mi sala de Zoom',
   link: 'Link de Zoom de esta clase',
   linkPh: 'https://…zoom.us/j/…',
   noRoom: 'Pegá el link de Zoom. Si cargás "Mi sala de Zoom" en el inicio, se usa sola.',
-  tz: 'Hora de Argentina · el alumno la ve en su hora',
+  tz: 'Hora de Argentina. El alumno la ve en su hora.',
   cancel: 'Cancelar', save: 'Guardar',
   scopeEdit: 'Editar clase que se repite',
   scopeCancel: 'Cancelar clase que se repite',
@@ -127,54 +131,60 @@ export function ClassDialog({ mode, initial, zoomUrl, lockRepeat, student, busy,
 
         {student && (
           <div className={styles.cdLine}>
-            <span className={styles.cdIco} aria-hidden="true">👤</span>
-            {student.locked ? (
-              <b className={styles.cdRoom} data-testid="dialog-student">{student.options.find((o) => o.id === who)?.label ?? ''}</b>
-            ) : (
-              <label className={styles.cdField}><span className={styles.cdSr}>{T.student}</span>
-                <select data-autofocus={pickFirst || undefined} className={styles.cdInput} value={who}
-                  onChange={(e) => { setLocalError(''); setWho(e.target.value) }}>
-                  <option value="" disabled>{T.pickStudent}</option>
-                  {student.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
-                </select>
-              </label>
-            )}
+            <span className={styles.cdKey} aria-hidden="true">{T.student}</span>
+            <div className={styles.cdVals}>
+              {student.locked ? (
+                <b className={styles.cdRoom} data-testid="dialog-student">{student.options.find((o) => o.id === who)?.label ?? ''}</b>
+              ) : (
+                <label className={styles.cdField}><span className={styles.cdSr}>{T.student}</span>
+                  <select data-autofocus={pickFirst || undefined} className={styles.cdInput} value={who}
+                    onChange={(e) => { setLocalError(''); setWho(e.target.value) }}>
+                    <option value="" disabled>{T.pickStudent}</option>
+                    {student.options.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                  </select>
+                </label>
+              )}
+            </div>
           </div>
         )}
 
         <div className={styles.cdLine}>
-          <span className={styles.cdIco} aria-hidden="true">🕒</span>
-          <label className={`${styles.cdField} ${styles.cdDateField}`}><span className={styles.cdSr}>{T.date}</span>
-            <input data-autofocus={!pickFirst || undefined} className={styles.cdInput} type="date" required value={d.date} onChange={(e) => set({ date: e.target.value })} />
-          </label>
-          <label className={styles.cdField}><span className={styles.cdSr}>{T.start}</span>
-            <input className={styles.cdInput} type="time" required value={d.start} onChange={(e) => changeStart(e.target.value)} />
-          </label>
-          <span className={styles.cdDash}>–</span>
-          <label className={styles.cdField}><span className={styles.cdSr}>{T.end}</span>
-            <input className={styles.cdInput} type="time" required value={d.end} onChange={(e) => set({ end: e.target.value })} />
-          </label>
-          {dur !== null && <span className={styles.cdDur}>{durationLabel(dur)}</span>}
+          <span className={styles.cdKey} aria-hidden="true">{T.when}</span>
+          <div className={styles.cdVals}>
+            <label className={`${styles.cdField} ${styles.cdDateField}`}><span className={styles.cdSr}>{T.date}</span>
+              <input data-autofocus={!pickFirst || undefined} className={styles.cdInput} type="date" required value={d.date} onChange={(e) => set({ date: e.target.value })} />
+            </label>
+            <label className={styles.cdField}><span className={styles.cdSr}>{T.start}</span>
+              <input className={styles.cdInput} type="time" required value={d.start} onChange={(e) => changeStart(e.target.value)} />
+            </label>
+            <span className={styles.cdDash}>–</span>
+            <label className={styles.cdField}><span className={styles.cdSr}>{T.end}</span>
+              <input className={styles.cdInput} type="time" required value={d.end} onChange={(e) => set({ end: e.target.value })} />
+            </label>
+            {dur !== null && <span className={styles.cdDur}>{durationLabel(dur)}</span>}
+          </div>
         </div>
 
         <div className={styles.cdLine}>
-          <span className={styles.cdIco} aria-hidden="true">↻</span>
-          <label className={styles.cdField}><span className={styles.cdSr}>{T.repeat}</span>
-            <select className={styles.cdInput} value={d.repeat}
-              onChange={(e) => {
-                const repeat = e.target.value as RepeatMode
-                set({ repeat, days: repeat === 'custom' && d.days.length === 0 && weekday !== null ? [weekday] : d.days })
-              }}>
-              {!lockRepeat && <option value="none">{T.none}</option>}
-              {weekday !== null && <option value="weekly">{repeatLabel([weekday])}</option>}
-              <option value="custom">{customLabel}</option>
-            </select>
-          </label>
+          <span className={styles.cdKey} aria-hidden="true">{T.repeat}</span>
+          <div className={styles.cdVals}>
+            <label className={styles.cdField}><span className={styles.cdSr}>{T.repeat}</span>
+              <select className={styles.cdInput} value={d.repeat}
+                onChange={(e) => {
+                  const repeat = e.target.value as RepeatMode
+                  set({ repeat, days: repeat === 'custom' && d.days.length === 0 && weekday !== null ? [weekday] : d.days })
+                }}>
+                {!lockRepeat && <option value="none">{T.none}</option>}
+                {weekday !== null && <option value="weekly">{repeatLabel([weekday])}</option>}
+                <option value="custom">{customLabel}</option>
+              </select>
+            </label>
+          </div>
         </div>
 
         {d.repeat === 'custom' && (
           <div className={styles.cdLine}>
-            <span className={styles.cdIco} />
+            <span className={styles.cdKey} aria-hidden="true">{T.days}</span>
             <div className={styles.cdChips} role="group" aria-label={T.days}>
               {WEEK_ORDER.map((day) => (
                 <button key={day} type="button" aria-pressed={d.days.includes(day)} title={WEEKDAYS[day]}
@@ -188,34 +198,34 @@ export function ClassDialog({ mode, initial, zoomUrl, lockRepeat, student, busy,
 
         {d.repeat !== 'none' && (
           <div className={styles.cdLine}>
-            <span className={styles.cdIco} />
-            <span className={styles.cdLbl} aria-hidden="true">{T.ends}:</span>
-            <select className={styles.cdInput} aria-label={T.ends} value={endsMode}
-              onChange={(e) => {
-                const m = e.target.value as 'never' | 'on'
-                setEndsMode(m)
-                if (m === 'on' && !d.endsOn) set({ endsOn: d.date })
-              }}>
-              <option value="never">{T.never}</option>
-              <option value="on">{T.onDay}</option>
-            </select>
-            {endsMode === 'on' && (
-              <label className={styles.cdField}><span className={styles.cdSr}>{T.endsOn}</span>
-                <input className={styles.cdInput} type="date" required value={d.endsOn ?? ''} min={d.date} onChange={(e) => set({ endsOn: e.target.value })} />
-              </label>
-            )}
+            <span className={styles.cdKey} aria-hidden="true">{T.ends}</span>
+            <div className={styles.cdVals}>
+              <select className={styles.cdInput} aria-label={T.ends} value={endsMode}
+                onChange={(e) => {
+                  const m = e.target.value as 'never' | 'on'
+                  setEndsMode(m)
+                  if (m === 'on' && !d.endsOn) set({ endsOn: d.date })
+                }}>
+                <option value="never">{T.never}</option>
+                <option value="on">{T.onDay}</option>
+              </select>
+              {endsMode === 'on' && (
+                <label className={styles.cdField}><span className={styles.cdSr}>{T.endsOn}</span>
+                  <input className={styles.cdInput} type="date" required value={d.endsOn ?? ''} min={d.date} onChange={(e) => set({ endsOn: e.target.value })} />
+                </label>
+              )}
+            </div>
           </div>
         )}
 
         <div className={styles.cdLine}>
-          <span className={styles.cdZ} aria-hidden="true">Z</span>
+          <span className={styles.cdKey} aria-hidden="true">{T.zoom}</span>
           {!ownLink && zoomUrl ? (
-            <>
+            <div className={styles.cdVals}>
               <b className={styles.cdRoom}>{T.room}</b>
               <span className={styles.cdUrl}>{shortUrl(zoomUrl)}</span>
-              <span className={styles.cdSp} />
-              <button type="button" className={styles.tcBtn} onClick={() => setOwnLink(true)}>{T.change}</button>
-            </>
+              <button type="button" className={styles.cdTxtBtn} onClick={() => setOwnLink(true)}>{T.change}</button>
+            </div>
           ) : (
             <div className={styles.cdLinkBox}>
               <label className={styles.cdField}><span className={styles.cdLbl}>{T.link}</span>

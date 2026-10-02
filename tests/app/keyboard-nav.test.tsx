@@ -71,7 +71,7 @@ async function positionAt(video: HTMLVideoElement, ref: { t: number }, t: number
 
 // Lee el contador "N / M" del panel de frase actual
 function phraseCounter(container: HTMLElement): string {
-  const el = container.querySelector('[class*="phCtr"]')
+  const el = container.querySelector('[data-testid="phrase-counter"]')
   return (el?.textContent ?? '').replace(/\s+/g, ' ').trim()
 }
 
@@ -89,10 +89,10 @@ describe('Esquema de teclas por flechas (US-011/012/013 + US-056)', () => {
     await loadWithPhrases(container, PHRASES_4)
     const { video, ref } = mockVideoTime(container, 1.5)
     await positionAt(video, ref, 1.5)
-    expect(phraseCounter(container)).toBe('1 / 4')
+    expect(phraseCounter(container)).toBe('Frase 1 de 4')
 
     await act(async () => { fireEvent.keyDown(document.body, { key: 'ArrowRight' }); await tick(30) })
-    expect(phraseCounter(container)).toBe('2 / 4')
+    expect(phraseCounter(container)).toBe('Frase 2 de 4')
     expect(ref.t).toBeGreaterThanOrEqual(4); expect(ref.t).toBeLessThan(5)
   })
 
@@ -102,10 +102,10 @@ describe('Esquema de teclas por flechas (US-011/012/013 + US-056)', () => {
     await loadWithPhrases(container, PHRASES_4)
     const { video, ref } = mockVideoTime(container, 4.5)
     await positionAt(video, ref, 4.5)
-    expect(phraseCounter(container)).toBe('2 / 4')
+    expect(phraseCounter(container)).toBe('Frase 2 de 4')
 
     await act(async () => { fireEvent.keyDown(document.body, { key: 'ArrowLeft' }); await tick(30) })
-    expect(phraseCounter(container)).toBe('1 / 4')
+    expect(phraseCounter(container)).toBe('Frase 1 de 4')
   })
 
   // TC-145: mantener → dispara la navegación repetidamente (~NAV_HOLD_MS) y frena al soltar.
@@ -208,13 +208,13 @@ describe('Esquema de teclas por flechas (US-011/012/013 + US-056)', () => {
     await loadWithPhrases(container, PHRASES_4)
     const { video, ref } = mockVideoTime(container, 4.5)
     await positionAt(video, ref, 4.5)
-    expect(phraseCounter(container)).toBe('2 / 4')
+    expect(phraseCounter(container)).toBe('Frase 2 de 4')
     ref.t = 5.0
 
     for (const key of ['a', 'A', 'd', 'D', 'r', 'R', 'w', 'W']) {
       await act(async () => { fireEvent.keyDown(document.body, { key }); await tick(10) })
     }
-    expect(phraseCounter(container)).toBe('2 / 4')
+    expect(phraseCounter(container)).toBe('Frase 2 de 4')
     expect(ref.t).toBe(5.0)
   })
 
@@ -224,12 +224,12 @@ describe('Esquema de teclas por flechas (US-011/012/013 + US-056)', () => {
     await loadWithPhrases(container, PHRASES_4)
     const { video, ref } = mockVideoTime(container, 4.5)
     await positionAt(video, ref, 4.5)
-    expect(phraseCounter(container)).toBe('2 / 4')
+    expect(phraseCounter(container)).toBe('Frase 2 de 4')
 
     const input = container.querySelector('input[type="range"], input') as HTMLInputElement
     expect(input).not.toBeNull()
     await act(async () => { fireEvent.keyDown(input, { key: 'ArrowRight' }); await tick(30) })
-    expect(phraseCounter(container)).toBe('2 / 4')
+    expect(phraseCounter(container)).toBe('Frase 2 de 4')
   })
 
   // TC-151: al desmontar el player no queda ningún intervalo de barrido activo

@@ -31,9 +31,9 @@ describe('semanas de lunes a domingo', () => {
     expect(weekTitle('2026-12-28')).toBe('28 dic 2026 – 3 ene 2027')
   })
   it('cabeceras de los días', () => {
-    expect(dayHead('2026-09-29')).toEqual({ short: 'MAR', letter: 'M', num: 29 })
-    expect(dayHead('2026-09-30').short).toBe('MIÉ')
-    expect(dayHead('2026-10-03').short).toBe('SÁB')
+    expect(dayHead('2026-09-29')).toEqual({ short: 'Mar', letter: 'M', num: 29 })
+    expect(dayHead('2026-09-30').short).toBe('Mié')
+    expect(dayHead('2026-10-03').short).toBe('Sáb')
     expect(dayTitle('2026-09-29')).toBe('Martes 29')
     expect(dayLong('2026-10-06')).toBe('martes 6 de octubre')
   })

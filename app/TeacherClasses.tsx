@@ -6,11 +6,13 @@
 // Todas" (ScopeDialog). Todo en hora de Argentina (en la que carga el profe). Solo habla
 // con /api/classes/** — quién puede tocar qué lo decide el servidor (lib/classAccess.ts).
 // G2: lo de crear/editar/cancelar vive en useClassEditor (lo comparte con "Mi agenda").
+// Rediseño (fase 5): sin recuadros ni etiquetas en mayúsculas; filas como en "Hoy", fechas
+// con palabras y "Hoy" resaltado en amarillo (el "ahora").
 import { useCallback, useEffect, useState } from 'react'
 import styles from './classes.module.css'
 import { CLASS_TZ, dateInTz } from '@/lib/classSchedule'
 import {
-  classKind, dayMonth, meetLabel, relativeDay, seriesTitle, shortDate, timeRange,
+  classKind, dayMonthLong, longDate, meetLabel, relativeDay, seriesTitle, timeRange,
   type TeacherClass,
 } from '@/lib/classView'
 import { EDITOR_TEXTS, useClassEditor, type Series } from './useClassEditor'
@@ -34,17 +36,16 @@ export const TEACHER_CLASS_TEXTS = {
   loadError: 'No se pudieron cargar las clases.',
   retry: 'Reintentar',
   saveError: EDITOR_TEXTS.saveError,
-  minutes: (n: number) => `${n} min`,
+  minutes: (n: number) => `${n} minutos`,
+  via: (label: string) => `en ${label}`,
   since: (d: string) => `desde el ${d}`,
   until: (d: string) => `hasta el ${d}`,
   between: (a: string, b: string) => `del ${a} al ${b}`,
 } as const
 
 // De qué es el link de una clase/horario. Sin link propio → "Mi sala de Zoom" (si hay).
-function LinkPill({ url, room }: { url: string | null; room: string | null }) {
-  const label = url ? meetLabel(url) : room ? TEACHER_CLASS_TEXTS.room : null
-  return label ? <span className={styles.tcPill}>{label}</span> : null
-}
+const linkLabel = (url: string | null, room: string | null) => (url ? meetLabel(url) : room ? TEACHER_CLASS_TEXTS.room : null)
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
 
 export default function TeacherClasses({ studentId }: { studentId: string }) {
   const T = TEACHER_CLASS_TEXTS
@@ -89,50 +90,55 @@ export default function TeacherClasses({ studentId }: { studentId: string }) {
       {data && (
         <>
           <div className={styles.tcBox}>
-            <div className={styles.tcBoxTitle}>{T.fixed}</div>
+            <h3 className={styles.tcBoxTitle}>{T.fixed}</h3>
             {data.series.length === 0 && <div className={styles.tcHint}>{T.noFixed}</div>}
-            {data.series.map((s) => (
-              <div key={s.id} className={styles.tcFixed} data-testid="series-row">
-                <b>{seriesTitle(s.weekdays, s.time)}</b>
-                <span className={styles.tcMeta}>
-                  {T.minutes(s.durationMin)} · {
-                    s.startsOn > today && s.endsOn ? T.between(dayMonth(s.startsOn), dayMonth(s.endsOn))
-                      : s.startsOn > today || !s.endsOn ? T.since(dayMonth(s.startsOn)) : T.until(dayMonth(s.endsOn))}
-                </span>
-                <LinkPill url={s.meetUrl} room={data.zoomUrl} />
-                <span className={styles.tcSp} />
-                <button type="button" className={styles.tcBtn} onClick={() => editor.editSeries(studentId, s)} disabled={busy}>{T.edit}</button>
-              </div>
-            ))}
+            {data.series.map((s) => {
+              const link = linkLabel(s.meetUrl, data.zoomUrl)
+              const span = s.startsOn > today && s.endsOn ? T.between(dayMonthLong(s.startsOn), dayMonthLong(s.endsOn))
+                : s.startsOn > today || !s.endsOn ? T.since(dayMonthLong(s.startsOn)) : T.until(dayMonthLong(s.endsOn))
+              return (
+                <div key={s.id} className={styles.tcFixed} data-testid="series-row">
+                  <div className={styles.tcFixedText}>
+                    <b>{seriesTitle(s.weekdays, s.time)}</b>
+                    <span className={styles.tcMeta}>{[T.minutes(s.durationMin), span, link && T.via(link)].filter(Boolean).join(', ')}</span>
+                  </div>
+                  <button type="button" className={styles.tcBtn} onClick={() => editor.editSeries(studentId, s)} disabled={busy}>{T.edit}</button>
+                </div>
+              )
+            })}
           </div>
 
           <div className={styles.tcBox}>
-            <div className={styles.tcBoxTitle}>{T.upcoming}</div>
+            <h3 className={styles.tcBoxTitle}>{T.upcoming}</h3>
             {data.classes.length === 0 && <div className={styles.tcHint}>{T.none}</div>}
             <ul className={styles.tcRows}>
               {data.classes.map((c) => {
                 const t = new Date(c.startsAt)
                 const kind = classKind(c)
                 const rel = relativeDay(t, now, CLASS_TZ)
+                const link = kind === 'suelta' ? linkLabel(c.meetUrl, data.zoomUrl) : null
                 return (
                   <li key={c.key} className={styles.tcRowWrap}>
                     <div className={`${styles.tcRow} ${kind === 'cancelada' ? styles.tcCanc : ''}`} data-testid="class-row">
-                      <span className={styles.tcWhen}>
-                        <span className={styles.tcD}>{rel ? `${rel}, ` : ''}{shortDate(t, CLASS_TZ)}</span>
-                        <span className={styles.tcH}> · {timeRange(t, c.durationMin, CLASS_TZ)}</span>
+                      <span className={styles.tcD}>
+                        {rel === 'Hoy' && kind !== 'cancelada' ? <><mark className={styles.tcNow}>{T.today}</mark> </> : rel ? `${rel} ` : ''}
+                        {rel ? longDate(t, CLASS_TZ) : cap(longDate(t, CLASS_TZ))}
                       </span>
-                      {rel === 'Hoy' && kind !== 'cancelada' && <span className={styles.tcToday}>{T.today}</span>}
-                      <span className={`${styles.tcKind} ${styles['k_' + kind]}`}>{T.kinds[kind]}</span>
-                      {kind === 'movida' && c.originalStartsAt && <span className={styles.tcWas}>{T.was(shortDate(new Date(c.originalStartsAt), CLASS_TZ).toLowerCase())}</span>}
-                      {kind === 'suelta' && <LinkPill url={c.meetUrl} room={data.zoomUrl} />}
-                      <span className={styles.tcSp} />
-                      {kind !== 'cancelada' && <>
-                        <button type="button" className={styles.tcBtn} disabled={busy} onClick={() => editor.edit(studentId, c)}>{T.edit}</button>
-                        <button type="button" className={styles.tcDanger} onClick={() => editor.cancel(studentId, c)} disabled={busy}>{T.cancel}</button>
-                      </>}
-                      {kind === 'cancelada' && (
-                        <button type="button" className={styles.tcAccent} onClick={() => editor.restore(c)} disabled={busy}>{T.restore}</button>
-                      )}
+                      <span className={styles.tcH}>{timeRange(t, c.durationMin, CLASS_TZ)}</span>
+                      <span className={`${styles.tcKind} ${styles['k_' + kind]}`}>
+                        {T.kinds[kind]}
+                        {kind === 'movida' && c.originalStartsAt ? `, ${T.was(longDate(new Date(c.originalStartsAt), CLASS_TZ))}` : ''}
+                        {link ? `, ${T.via(link)}` : ''}
+                      </span>
+                      <span className={styles.tcActs}>
+                        {kind !== 'cancelada' && <>
+                          <button type="button" className={styles.tcBtn} disabled={busy} onClick={() => editor.edit(studentId, c)}>{T.edit}</button>
+                          <button type="button" className={styles.tcDanger} onClick={() => editor.cancel(studentId, c)} disabled={busy}>{T.cancel}</button>
+                        </>}
+                        {kind === 'cancelada' && (
+                          <button type="button" className={styles.tcBtn} onClick={() => editor.restore(c)} disabled={busy}>{T.restore}</button>
+                        )}
+                      </span>
                     </div>
                   </li>
                 )

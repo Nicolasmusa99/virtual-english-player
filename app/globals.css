@@ -1,22 +1,37 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
-  /* Virtual English — navy-tinted dark surfaces (p1 darkest → p5 lightest) */
-  --p1:#0F1B2D; --p2:#14243B; --p3:#1B2F4A; --p4:#223A59; --p5:#2B4668;
-  --ln:rgba(255,255,255,0.06); --ln2:rgba(255,255,255,0.11);
-  /* Cool text ramp (tx brightest → tx3 faint), AA on navy surfaces */
-  --tx:#EAF1F8; --tx2:#A6BACE; --tx3:#7E97B4;
-  /* Brand accent: celeste for text/icons/ticks/borders (AA on navy) */
-  --ac:#6AA0E6; --ac2:rgba(106,160,230,0.10); --ac3:rgba(106,160,230,0.28);
-  /* Brand primary: solid fills (Play) with white text */
-  --acDeep:#3D6FB6; --acDeepHover:#2F5A94;
-  --gr:#2DB87A; --gr2:rgba(45,184,122,0.1); --gr3:rgba(45,184,122,0.3);
-  /* State/info blue: cyan tone, deliberately distinct from brand blues */
-  --bl:#2BB0E0; --bl2:rgba(43,176,224,0.1); --bl3:rgba(43,176,224,0.28);
-  --pu:#9B7FD4;
-  /* Error red: lightened for legibility on navy */
-  --rd:#E86B6B; --rd2:rgba(232,107,107,0.10); --rd3:rgba(232,107,107,0.30);
+  /* ── Virtual English: paleta "la sala y el aula" (rediseño 2026-10) ──
+     Tinta y Azul VE salen del logo. El amarillo es el del subtítulo y significa
+     SOLO "acá y ahora" (frase actual, hoy, la raya de la hora): nunca decora. */
+  --tinta:#14284B;   /* texto y títulos del aula; fondo de la sala */
+  --azul:#1F5FBF;    /* acciones principales, con texto blanco */
+  --azulHover:#184C99;
+  --amarillo:#F2C94C;/* "ahora": como resaltador, con texto tinta encima */
+  --pizarra:#5A6B85; /* texto secundario del aula */
+  --tiza:#E3E9F2;    /* líneas y fondos de campos del aula */
+  --rojo:#B93A33;    /* cancelado / error (aula) */
+
+  /* LA SALA (player, oscuro): superficies desde la tinta (p1 más oscura → p5) */
+  --p1:#14284B; --p2:#1A3157; --p3:#1F3863; --p4:#284572; --p5:#335283;
+  --ln:rgba(255,255,255,0.08); --ln2:rgba(255,255,255,0.14);
+  /* Texto (AA sobre p1/p2) */
+  --tx:#F3F6FA; --tx2:#B4C1D6; --tx3:#8E9EBA;
+  /* Azul VE aclarado para texto/íconos/marcas sobre la tinta (el --azul no llega a AA ahí) */
+  --ac:#8FB4EC; --ac2:rgba(143,180,236,0.12); --ac3:rgba(143,180,236,0.32);
+  /* Rellenos sólidos con texto blanco (Play) */
+  --acDeep:var(--azul); --acDeepHover:var(--azulHover);
+  --gr:#3CC48A; --gr2:rgba(60,196,138,0.12); --gr3:rgba(60,196,138,0.32);
+  /* Info: cian, distinto de los azules de la marca */
+  --bl:#4CC0EA; --bl2:rgba(76,192,234,0.12); --bl3:rgba(76,192,234,0.30);
+  --pu:#A893DE;
+  /* Rojo aclarado para leerse sobre la tinta */
+  --rd:#F08A84; --rd2:rgba(240,138,132,0.12); --rd3:rgba(240,138,132,0.32);
 }
-html, body { height: 100%; overflow: hidden; background: #000; color: var(--tx); font-family: var(--font-sans, 'DM Sans', sans-serif); font-size: 13px; -webkit-font-smoothing: antialiased; }
+/* El video va sobre negro (letterbox). Un solo tipo de letra: los nombres viejos de
+   variables (--font-mono / --font-public-sans) apuntan a la misma familia mientras las
+   fases 2–5 los van reemplazando. */
+html, body { height: 100%; overflow: hidden; background: #000; color: var(--tx); font-family: var(--font-sans, 'Atkinson Hyperlegible Next', system-ui, sans-serif); font-size: 13px; -webkit-font-smoothing: antialiased; }
+body { --font-mono: var(--font-sans); --font-public-sans: var(--font-sans); }
 ::-webkit-scrollbar { width: 2px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }

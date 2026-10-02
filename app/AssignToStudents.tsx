@@ -6,6 +6,7 @@ import styles from './page.module.css'
 // Cruza GET /api/users (alumnos) con GET /api/assignments (para saber cuáles ya lo
 // tienen). Solo endpoints scopeados; el backend rechaza fuera de alcance. Cada
 // toggle persiste al instante (no hay "guardar"), así que cerrar no pierde nada.
+// Rediseño (fase 5): la ventana blanca del aula (exitOverlay/exitDialog) y filas.
 interface StudentRow { id: string; email: string | null; role: string | null }
 
 export default function AssignToStudents({
@@ -73,38 +74,37 @@ export default function AssignToStudents({
     <div
       role="dialog"
       aria-modal="true"
+      aria-label={`Asignar “${videoName}”`}
       onClick={onClose}
-      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }}
+      className={styles.exitOverlay}
     >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        style={{ background: 'var(--p2)', border: '1px solid var(--ln)', borderRadius: 10, padding: 16, width: '100%', maxWidth: 460, maxHeight: '80vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 10 }}
-      >
-        <div className={styles.dzSub}>Asignar “{videoName}” a…</div>
+      <div onClick={(e) => e.stopPropagation()} className={styles.exitDialog}>
+        <div className={styles.exitTitle}>Asignar “{videoName}” a…</div>
         {error && <div className={styles.errorBox}>{error}</div>}
         {loading ? (
           <div className={styles.progSub}>Cargando alumnos…</div>
         ) : students.length === 0 ? (
           <div className={styles.progSub}>No tenés alumnos todavía.</div>
         ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className={styles.list}>
             {students.map((s) => {
               const isA = assignedTo.has(s.id)
               return (
-                <div key={s.id} className={styles.restoreBanner}>
-                  <span className={styles.restoreBannerText}>{s.email}</span>
+                <div key={s.id} className={styles.row}>
+                  <span className={styles.rowText}>{s.email}</span>
+                  {isA && <span className={styles.rowOk}>Asignado</span>}
                   <button
                     className={isA ? styles.discardBtn : styles.restoreBtn}
                     disabled={busy[s.id]}
                     onClick={() => toggle(s.id)}>
-                    {busy[s.id] ? '…' : isA ? '✓ Asignado — quitar' : 'Asignar'}
+                    {busy[s.id] ? '…' : isA ? 'Quitar' : 'Asignar'}
                   </button>
                 </div>
               )
             })}
           </div>
         )}
-        <button className={styles.tbBtn} onClick={onClose}>Cerrar</button>
+        <button className={styles.tbBtn} style={{ alignSelf: 'flex-end', marginTop: 8 }} onClick={onClose}>Cerrar</button>
       </div>
     </div>
   )

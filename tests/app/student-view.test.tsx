@@ -44,9 +44,9 @@ afterEach(() => { vi.unstubAllGlobals() })
 describe('StudentView', () => {
   it('lista lo asignado; ítem despublicado atenuado "no disponible" y "Abrir" deshabilitado', async () => {
     setup(defaultRoutes)
-    render(<StudentView studentId="al-1" studentEmail="a@x.com" onOpenVideo={() => {}} />)
+    render(<StudentView studentId="al-1" onOpenVideo={() => {}} />)
     await screen.findByText('Matilda.mp4')
-    expect(screen.getByText(/no disponible/)).toBeInTheDocument()
+    expect(screen.getByText(/no disponible/i)).toBeInTheDocument()
     const abrir = screen.getAllByRole('button', { name: 'Abrir' })
     expect((abrir[0] as HTMLButtonElement).disabled).toBe(false) // v1 activo
     expect((abrir[1] as HTMLButtonElement).disabled).toBe(true)  // v2 despublicado
@@ -54,24 +54,24 @@ describe('StudentView', () => {
 
   it('estado vacío cuando no hay material asignado', async () => {
     setup((url) => (url.startsWith('/api/assignments?') ? { assignments: [] } : {}))
-    render(<StudentView studentId="al-1" studentEmail="a@x.com" onOpenVideo={() => {}} />)
+    render(<StudentView studentId="al-1" onOpenVideo={() => {}} />)
     expect(await screen.findByText(/todavía no tiene material asignado/)).toBeInTheDocument()
   })
 
-  it('picker: video ya asignado muestra "✓ Asignado — quitar"; asignar uno nuevo → POST', async () => {
+  it('picker: video ya asignado muestra "Asignado" y "Quitar"; asignar uno nuevo → POST', async () => {
     setup(defaultRoutes)
-    render(<StudentView studentId="al-1" studentEmail="a@x.com" onOpenVideo={() => {}} />)
+    render(<StudentView studentId="al-1" onOpenVideo={() => {}} />)
     await screen.findByText('Matilda.mp4')
     fireEvent.click(screen.getByText('+ Asignar material'))
     await screen.findByText('New Movie.mp4')
-    expect(screen.getByText('✓ Asignado — quitar')).toBeInTheDocument() // v1 ya asignado
+    expect(screen.getByText('Asignado')).toBeInTheDocument() // v1 ya asignado
     fireEvent.click(screen.getByText('Asignar')) // v3 (no asignado)
     await waitFor(() => expect(bodyOf('POST')).toEqual({ studentId: 'al-1', videoId: 'v3' }))
   })
 
   it('quitar un asignado → DELETE con {studentId, videoId}', async () => {
     setup(defaultRoutes)
-    render(<StudentView studentId="al-1" studentEmail="a@x.com" onOpenVideo={() => {}} />)
+    render(<StudentView studentId="al-1" onOpenVideo={() => {}} />)
     await screen.findByText('Matilda.mp4')
     fireEvent.click(screen.getAllByText('Quitar')[0]) // v1
     await waitFor(() => expect(bodyOf('DELETE')).toEqual({ studentId: 'al-1', videoId: 'v1' }))

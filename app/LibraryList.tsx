@@ -19,7 +19,7 @@ export const NIVEL_LABEL: Record<SharedLevel, string> = { beginner: 'Beginner', 
 // Vista admin de "Mi biblioteca": publicar/despublicar/editar clasificación por
 // fila. Solo el admin ve los controles (un profe no puede publicar; el backend
 // además lo rechaza server-side). Consume /api/videos/[id]/share; onChanged
-// refetchea el listado del padre.
+// refetchea el listado del padre. Rediseño (fase 5): filas del aula (sin bandas de color).
 export default function LibraryList({ videos, role, onOpen, onDelete, onChanged }: {
   videos: LibraryVideoRow[]
   role: Role | null
@@ -75,15 +75,16 @@ export default function LibraryList({ videos, role, onOpen, onDelete, onChanged 
   }
 
   return (
-    <div style={{ width: '100%', maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className={styles.list} style={{ width: '100%', maxWidth: 760 }}>
       {error && <div className={styles.errorBox}>{error}</div>}
       {videos.map(v => {
         const published = !!v.publishedAt
         const expired = v.status === 'expired'
         return (
-          <div key={v.id} className={`${styles.restoreBanner} ${published ? styles.rowPub : ''}`}>
-            <span className={styles.restoreBannerText}>
-              {v.originalName} — {v.phraseCount} frases{expired ? ' · expirado' : ''}
+          <div key={v.id} className={styles.row}>
+            <span className={styles.rowText}>
+              <span className={styles.rowName}>{v.originalName}</span>
+              <span className={styles.usersMeta}>{v.phraseCount} frases{expired ? ', expirado' : ''}</span>
             </span>
             <div className={styles.libChips}>
               {isAdmin && (published
@@ -104,7 +105,7 @@ export default function LibraryList({ videos, role, onOpen, onDelete, onChanged 
                 <div className={styles.libFld}>
                   <label>Tipo</label>
                   <select className={styles.usersInput} value={tipo} onChange={e => setTipo(e.target.value as SharedType | '')}>
-                    <option value="">— elegir —</option>
+                    <option value="">Elegir…</option>
                     <option value="pelicula">Película</option>
                     <option value="cancion">Canción</option>
                   </select>
@@ -112,7 +113,7 @@ export default function LibraryList({ videos, role, onOpen, onDelete, onChanged 
                 <div className={styles.libFld}>
                   <label>Nivel</label>
                   <select className={styles.usersInput} value={nivel} onChange={e => setNivel(e.target.value as SharedLevel | '')}>
-                    <option value="">— elegir —</option>
+                    <option value="">Elegir…</option>
                     <option value="beginner">Beginner</option>
                     <option value="medium">Medium</option>
                     <option value="advance">Advance</option>
@@ -142,7 +143,7 @@ export default function LibraryList({ videos, role, onOpen, onDelete, onChanged 
               Despublicar (recomendado)
             </button>
             <button className={styles.exitBtn} onClick={() => { const id = confirmDel.id; setConfirmDel(null); onDelete(id) }}>
-              Eliminar igual — los profes lo pierden
+              Eliminar igual (los profes lo pierden)
             </button>
             <button className={styles.exitBtnCancel} onClick={() => setConfirmDel(null)}>Cancelar</button>
           </div>

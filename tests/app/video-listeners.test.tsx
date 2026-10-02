@@ -37,7 +37,7 @@ describe('video listeners — regression ea36c81', () => {
     })
 
     // onTU enganchado: la frase actual pasa a "Hello" (el contador sale de "— / —").
-    expect(container.querySelector('[class*="phCtr"]')!.textContent).toBe('1 / 1')
+    expect(container.querySelector('[data-testid="phrase-counter"]')!.textContent).toBe('Frase 1 de 1')
 
     // P1: la barra de tiempo (PlayerDock) lee el video en cada cuadro → muestra 0:02.
     expect(container.textContent).toContain('0:02')

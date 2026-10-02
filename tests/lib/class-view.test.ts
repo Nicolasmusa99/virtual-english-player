@@ -1,7 +1,7 @@
 // Calendario (C3) — funciones de presentación (lib/classView.ts).
 import { describe, it, expect } from 'vitest'
 import {
-  byDay, calendarLeaf, classKind, dayMonth, differsFromClassTz, formDate, formTime, hhmm, longDate, meetLabel,
+  byDay, calendarLeaf, classKind, classLengthNote, nextClassDay, dayMonth, dayMonthLong, differsFromClassTz, formDate, formTime, hhmm, longDate, meetLabel,
   monthGrid, monthRange, monthTitle, nextClassTitle, relativeDay, seriesTitle, shiftMonth, shortDate, splitUpcoming,
   timeRange, type TeacherClass,
 } from '@/lib/classView'
@@ -121,14 +121,39 @@ describe('lado profe', () => {
   it('formularios en hora de Buenos Aires; títulos', () => {
     expect(formDate(Z('2026-09-30T02:30:00Z'))).toBe('2026-09-29')
     expect(formTime(Z('2026-09-30T02:30:00Z'))).toBe('23:30')
-    expect(seriesTitle([2], '18:00')).toBe('Todos los martes · 18:00')
-    expect(seriesTitle([6], '10:00')).toBe('Todos los sábados · 10:00')
-    expect(seriesTitle([0], '10:00')).toBe('Todos los domingos · 10:00')
+    expect(seriesTitle([2], '18:00')).toBe('Todos los martes a las 18:00')
+    expect(seriesTitle([6], '10:00')).toBe('Todos los sábados a las 10:00')
+    expect(seriesTitle([0], '10:00')).toBe('Todos los domingos a las 10:00')
     // G1: varios días, de lunes a domingo
-    expect(seriesTitle([4, 2], '18:00')).toBe('Todos los martes y jueves · 18:00')
-    expect(seriesTitle([5, 1, 3], '18:00')).toBe('Todos los lunes, miércoles y viernes · 18:00')
-    expect(seriesTitle([0, 6], '10:00')).toBe('Todos los sábados y domingos · 10:00')
-    expect(seriesTitle([0, 1, 2, 3, 4, 5, 6], '07:00')).toBe('Todos los días · 07:00')
+    expect(seriesTitle([4, 2], '18:00')).toBe('Todos los martes y jueves a las 18:00')
+    expect(seriesTitle([5, 1, 3], '18:00')).toBe('Todos los lunes, miércoles y viernes a las 18:00')
+    expect(seriesTitle([0, 6], '10:00')).toBe('Todos los sábados y domingos a las 10:00')
+    expect(seriesTitle([0, 1, 2, 3, 4, 5, 6], '07:00')).toBe('Todos los días a las 07:00')
     expect(dayMonth('2026-09-01')).toBe('1/9')
+    expect(dayMonthLong('2026-09-01')).toBe('1 de septiembre') // rediseño: fechas con palabras
+    expect(dayMonthLong('2026-12-25')).toBe('25 de diciembre')
+  })
+})
+
+// Rediseño (fase 4): la tarjeta de la próxima clase del alumno.
+
+describe('nextClassDay', () => {
+  const BA = 'America/Argentina/Buenos_Aires'
+  const now = new Date('2026-09-29T15:00:00Z') // martes 29, 12:00 en BA
+  it('hoy / mañana: la palabra aparte y el día corto', () => {
+    expect(nextClassDay(new Date('2026-09-29T21:00:00Z'), now, BA)).toEqual({ rel: 'Hoy', day: 'martes 29' })
+    expect(nextClassDay(new Date('2026-09-30T21:00:00Z'), now, BA)).toEqual({ rel: 'Mañana', day: 'miércoles 30' })
+  })
+  it('más adelante: la fecha larga, con mayúscula', () => {
+    expect(nextClassDay(new Date('2026-10-02T13:30:00Z'), now, BA)).toEqual({ rel: null, day: 'Viernes 2 de octubre' })
+  })
+})
+
+describe('classLengthNote', () => {
+  it('cuánto dura y por dónde (Zoom dice que se entra con el botón)', () => {
+    expect(classLengthNote(60, 'https://us02web.zoom.us/j/1')).toBe('Dura 60 minutos. Es por Zoom: entrás con el botón.')
+    expect(classLengthNote(45, 'https://meet.google.com/abc')).toBe('Dura 45 minutos. Es por Google Meet.')
+    expect(classLengthNote(90, null)).toBe('Dura 90 minutos.')
+    expect(classLengthNote(1, null)).toBe('Dura 1 minuto.')
   })
 })

@@ -1,44 +1,44 @@
-/* "Sonido" (P2) — ajustes rápidos + ajuste manual de 3 bandas.
+/* "Sonido" (P2; rediseño fase 3) — ajustes rápidos + ajuste manual de 3 bandas.
    Todo sale de los tokens de app/globals.css. Mismo ritmo que las secciones del panel. */
 
-.section { padding: 12px 16px; border-bottom: 1px solid var(--ln); flex-shrink: 0; }
+.section { padding: 14px 18px; border-bottom: 1px solid var(--ln2); flex-shrink: 0; }
 
-.head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.title { font-family: var(--font-mono); font-size: 10.5px; font-weight: 600; letter-spacing: 1.4px; text-transform: uppercase; color: var(--tx2); }
-.state { font-family: var(--font-mono); font-size: 11px; color: var(--tx3); }
+.head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.title { font-size: 15px; font-weight: 700; color: var(--tx); }
+.state { font-size: 14px; color: var(--tx2); }
 .stateOn { color: var(--ac); }
 
 .presets { display: flex; gap: 5px; flex-wrap: wrap; }
-.preset { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--ln2); background: transparent; color: var(--tx2); font-size: 12px; font-family: inherit; white-space: nowrap; cursor: pointer; transition: all 0.12s; }
+.preset { height: 36px; padding: 0 12px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 14px var(--font-sans); white-space: nowrap; cursor: pointer; }
 .preset:hover { background: var(--p3); color: var(--tx); }
-.presetOn { background: var(--ac2); border-color: var(--ac3); color: var(--ac); }
-.presetOn:hover { background: var(--ac2); color: var(--ac); }
+.presetOn { background: var(--ac2); border-color: var(--ac); color: var(--tx); font-weight: 700; }
+.presetOn:hover { background: var(--ac3); color: var(--tx); }
 
 /* Filtro de voz: fila con interruptor, aparte de los ajustes rápidos (se combina con todos). */
-.denoise { margin-top: 10px; width: 100%; display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid var(--ln2); border-radius: 9px; background: transparent; font-family: inherit; text-align: left; cursor: pointer; transition: all 0.12s; }
+.denoise { margin-top: 10px; width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1.5px solid var(--ln2); border-radius: 4px; background: transparent; font-family: var(--font-sans); text-align: left; cursor: pointer; }
 .denoise:hover { background: var(--p3); }
-.denoiseOn { border-color: var(--ac3); background: linear-gradient(180deg, var(--ac2), transparent 80%); }
+.denoiseOn { border-color: var(--ac); background: var(--ac2); }
 .dnText { flex: 1; min-width: 0; display: flex; flex-direction: column; }
-.dnTitle { font-size: 12.5px; font-weight: 500; color: var(--tx); display: flex; align-items: center; gap: 6px; }
-.dnTitle em { font-family: var(--font-mono); font-size: 10px; font-style: normal; color: var(--ac); border: 1px solid var(--ac3); background: var(--ac2); border-radius: 10px; padding: 0 6px; }
-.dnDesc { font-size: 11px; color: var(--tx3); margin-top: 1px; }
+.dnTitle { font-size: 14px; font-weight: 700; color: var(--tx); display: flex; align-items: center; gap: 6px; }
+.dnTitle em { font-size: 12px; font-style: normal; font-weight: 400; color: var(--ac); }
+.dnDesc { font-size: 13px; color: var(--tx2); margin-top: 2px; }
 .switch { width: 34px; height: 20px; border-radius: 10px; background: var(--p4); border: 1px solid var(--ln2); position: relative; flex-shrink: 0; transition: background 0.15s; }
 .switch i { position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--tx3); transition: left 0.15s, background 0.15s; }
 .denoiseOn .switch { background: var(--acDeep); border-color: var(--acDeep); }
 .denoiseOn .switch i { left: 16px; background: #fff; }
 
-.manualTog { margin-top: 9px; display: flex; align-items: center; gap: 6px; padding: 2px 0; border: none; background: transparent; font-size: 12px; font-family: inherit; color: var(--tx3); cursor: pointer; }
-.manualTog:hover { color: var(--tx2); }
-.manualOpen { color: var(--tx2); }
-.caret { font-size: 9px; display: inline-block; transition: transform 0.15s; }
+.manualTog { margin-top: 10px; display: flex; align-items: center; gap: 6px; padding: 4px 0; border: none; background: transparent; font: 14px var(--font-sans); color: var(--ac); cursor: pointer; }
+.manualTog:hover { text-decoration: underline; }
+.manualOpen { color: var(--tx); }
+.caret { font-size: 10px; display: inline-block; transition: transform 0.15s; }
 .manualOpen .caret { transform: rotate(90deg); }
 
-.eq { margin-top: 6px; border: 1px solid var(--ln2); border-radius: 10px; background: var(--p2); padding: 8px 12px 6px; }
+.eq { margin-top: 8px; border: 1px solid var(--ln2); border-radius: 4px; background: var(--p1); padding: 10px 12px 8px; }
 .band { padding: 4px 0; }
 .bTop { display: flex; justify-content: space-between; align-items: baseline; }
-.bName { font-size: 12.5px; font-weight: 500; color: var(--tx); }
-.bName small { font-size: 11px; font-weight: 400; color: var(--tx3); margin-left: 5px; }
-.bVal { font-family: var(--font-mono); font-size: 12px; color: var(--tx2); }
+.bName { font-size: 14px; font-weight: 700; color: var(--tx); }
+.bName small { font-size: 13px; font-weight: 400; color: var(--tx2); margin-left: 6px; }
+.bVal { font-size: 14px; color: var(--tx); font-variant-numeric: tabular-nums; }
 .up { color: var(--bl); }
 .down { color: var(--ac); }
 
@@ -59,13 +59,15 @@
 .range::-moz-range-track { height: 5px; border-radius: 3px; background: var(--p4); }
 .range::-moz-range-thumb { width: 10px; height: 10px; border-radius: 50%; background: var(--tx); border: 3px solid var(--fill); }
 
-.scale { position: relative; height: 12px; margin: 0 8px; font-family: var(--font-mono); font-size: 10px; color: var(--tx3); }
+.scale { position: relative; height: 14px; margin: 0 8px; font-size: 12px; color: var(--tx3); font-variant-numeric: tabular-nums; }
 .scale span { position: absolute; transform: translateX(-50%); }
 
 .foot { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; padding-top: 7px; border-top: 1px solid var(--ln); }
-.lim { display: flex; align-items: center; gap: 5px; font-size: 11px; color: var(--tx3); }
+.lim { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tx2); }
 .lim i { width: 7px; height: 7px; border-radius: 50%; background: var(--gr); }
-.reset { border: none; background: transparent; padding: 0; font-family: var(--font-mono); font-size: 11px; color: var(--tx3); text-decoration: underline; cursor: pointer; }
-.reset:hover { color: var(--tx2); }
+.reset { border: none; background: transparent; padding: 2px 0; font: 14px var(--font-sans); color: var(--ac); cursor: pointer; }
+.reset:hover { text-decoration: underline; }
 
-.hint { font-size: 11px; color: var(--tx2); margin-top: 8px; line-height: 1.35; }
+.hint { font-size: 13px; color: var(--tx2); margin-top: 8px; line-height: 1.4; }
+
+.preset:focus-visible, .denoise:focus-visible, .manualTog:focus-visible, .reset:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }

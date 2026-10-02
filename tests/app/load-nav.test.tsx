@@ -1,11 +1,13 @@
 // TC-089: load screen navigation — autenticado permanece en load, no auto-redirect a library
 import React from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, act, fireEvent } from '@testing-library/react'
+import { render, act, fireEvent, within, screen } from '@testing-library/react'
 import Player from '@/app/page'
 import { useSessionMock } from '../setup'
 
 function tick(ms = 100) { return new Promise<void>(r => setTimeout(r, ms)) }
+// La barra lateral (la primera navegación "Secciones"; la segunda son las pestañas del celular).
+const getAllByRoleNav = () => screen.getAllByRole('navigation', { name: 'Secciones' })
 
 const SESSION_AUTH = { data: { user: { email: 'x@x.com', role: 'admin' } }, status: 'authenticated' as const }
 
@@ -62,16 +64,41 @@ describe('Player — TC-089: load screen navigation con auth', () => {
     expect(global.fetch).toHaveBeenCalledWith('/api/videos')
   })
 
-  // TC-089e: el PROFE no ve el dropzone de subir; su home reorganizado muestra
-  // "Mis alumnos" (flujo principal) y "Biblioteca compartida" (asignar-material).
-  it('TC-089e: profesor no ve dropzone de subir, ve home con Mis alumnos + Biblioteca', async () => {
+  // TC-089e: el PROFE no ve el dropzone de subir. Rediseño (fase 2): su inicio es
+  // "Hoy" y navega con la barra lateral: Hoy, Agenda, Alumnos, Biblioteca, Ejercicios.
+  it('TC-089e: profesor no ve dropzone de subir; inicio "Hoy" y barra lateral del profe', async () => {
     useSessionMock.mockReturnValue({ data: { user: { email: 'p@x.com', role: 'profesor' } }, status: 'authenticated' as const })
-    const { container, getByText } = render(<Player />)
+    const { container, getByRole } = render(<Player />)
     await act(async () => { await tick(150) })
     expect(container.querySelector('input[type="file"]')).toBeNull()
-    expect(getByText('Mis alumnos')).toBeTruthy()
-    expect(getByText('Ver mis alumnos')).toBeTruthy()
-    expect(getByText('Ir a la biblioteca')).toBeTruthy()
+    expect(getByRole('heading', { level: 1, name: /^Hoy, / })).toBeTruthy()
+    const rail = within(getAllByRoleNav()[0])
+    expect(rail.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Hoy', 'Agenda', 'Alumnos', 'Biblioteca', 'Ejercicios'])
+    expect(rail.getByRole('button', { name: 'Hoy' })).toHaveAttribute('aria-current', 'page')
+  })
+
+  // TC-089g: la barra lateral lleva a cada sección (y marca dónde estás)
+  it('TC-089g: profesor: "Alumnos" abre sus alumnos y "Biblioteca" la compartida', async () => {
+    useSessionMock.mockReturnValue({ data: { user: { email: 'p@x.com', role: 'profesor' } }, status: 'authenticated' as const })
+    const { getByRole } = render(<Player />)
+    await act(async () => { await tick(150) })
+    const rail = within(getAllByRoleNav()[0])
+    await act(async () => { fireEvent.click(rail.getByRole('button', { name: 'Alumnos' })); await tick(150) })
+    expect(getByRole('heading', { level: 1, name: 'Alumnos' })).toBeTruthy()
+    expect(global.fetch).toHaveBeenCalledWith('/api/users')
+    expect(rail.getByRole('button', { name: 'Alumnos' })).toHaveAttribute('aria-current', 'page')
+    await act(async () => { fireEvent.click(rail.getByRole('button', { name: 'Biblioteca' })); await tick(150) })
+    expect(getByRole('heading', { level: 1, name: 'Biblioteca' })).toBeTruthy()
+  })
+
+  // TC-089h: el admin tiene sus propias secciones (sin Hoy ni Agenda)
+  it('TC-089h: admin: Subir video, Mi biblioteca, Biblioteca compartida, Usuarios, Ejercicios', async () => {
+    useSessionMock.mockReturnValue(SESSION_AUTH)
+    render(<Player />)
+    await act(async () => { await tick(150) })
+    const rail = within(getAllByRoleNav()[0])
+    expect(rail.getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Subir video', 'Mi biblioteca', 'Biblioteca compartida', 'Usuarios', 'Ejercicios'])
+    expect(rail.queryByTestId('zoom-status')).toBeNull() // "Mi sala de Zoom" es solo del profe
   })
 
   // TC-089f: el ADMIN sí ve el dropzone de subir

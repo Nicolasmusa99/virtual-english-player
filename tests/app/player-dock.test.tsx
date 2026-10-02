@@ -186,3 +186,35 @@ describe('PlayerDock — controles', () => {
     expect(screen.getByRole('button', { name: DOCK_TEXTS.cc })).toHaveAttribute('aria-pressed', 'false')
   })
 })
+
+describe('PlayerDock — rediseño (fase 3)', () => {
+  it('marca en la barra la frase que suena (y solo esa)', async () => {
+    const { container } = mount({ curIdx: 1 })
+    await frame()
+    const cur = container.querySelectorAll('[data-cur]')
+    expect(cur).toHaveLength(1)
+    expect(cur[0].className).toMatch(/segCur/)
+  })
+
+  it('sin frase actual no marca ninguna', async () => {
+    const { container } = mount({ curIdx: -1 })
+    await frame()
+    expect(container.querySelectorAll('[data-cur]')).toHaveLength(0)
+  })
+
+  it('"Repetir frase" está en los controles y llama a onRepeat', async () => {
+    const onRepeat = vi.fn()
+    mount({ onRepeat })
+    const btn = screen.getByRole('button', { name: DOCK_TEXTS.repeat })
+    expect(btn).toHaveTextContent(DOCK_TEXTS.repeatShort)
+    fireEvent.click(btn)
+    expect(onRepeat).toHaveBeenCalledTimes(1)
+  })
+
+  it('Anterior / Siguiente / Subtítulos se leen con texto, no solo ícono', () => {
+    mount()
+    expect(screen.getByRole('button', { name: DOCK_TEXTS.prev })).toHaveTextContent(DOCK_TEXTS.prevShort)
+    expect(screen.getByRole('button', { name: DOCK_TEXTS.next })).toHaveTextContent(DOCK_TEXTS.nextShort)
+    expect(screen.getByRole('button', { name: DOCK_TEXTS.cc })).toHaveTextContent('Subtítulos')
+  })
+})

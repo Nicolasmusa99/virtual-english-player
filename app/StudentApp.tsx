@@ -4,6 +4,8 @@
 // Es un camino APARTE: page.tsx la muestra EN LUGAR de todo lo demás cuando el rol es
 // 'alumno', así que el alumno nunca llega a una pantalla del profe. Solo habla con
 // /api/student/** (el servidor scopea todo al alumno de la sesión).
+// Rediseño (fase 4): el aula de día — "Hola" grande, la próxima clase, y el material en
+// tarjetas con miniatura grande; sin etiquetas en mayúsculas ni flechas.
 import { useCallback, useEffect, useState } from 'react'
 import { signOut } from 'next-auth/react'
 import pageStyles from './page.module.css'
@@ -38,7 +40,6 @@ export const STUDENT_TEXTS = {
   listErrorSub: 'Revisá tu conexión y probá de nuevo.',
   retry: 'Reintentar',
   signOut: 'Salir',
-  see: 'Ver →',
   opening: 'Abriendo el video…',
   videoGone: 'Ese video ya no está disponible. Puede que tu profe lo haya quitado.',
   videoError: 'No pudimos abrir el video. Probá de nuevo en un momento.',
@@ -172,21 +173,16 @@ export default function StudentApp({ name, email }: { name: string | null; email
         {hasItems && (
           <ul className={styles.list}>
             {list.items.map((m) => {
-              const chips = [typeLabel(m.sharedType), levelLabel(m.sharedLevel), durationLabel(m.durationSec)].filter(Boolean) as string[]
+              const meta = [typeLabel(m.sharedType), levelLabel(m.sharedLevel), durationLabel(m.durationSec)].filter(Boolean).join(', ')
               return (
                 <li key={m.videoId}>
                   <button type="button" className={styles.card} onClick={() => open(m.videoId)} disabled={!!openingId}>
                     <span className={styles.thumb} aria-hidden="true">
-                      <svg width="20" height="20" viewBox="0 0 24 24"><polygon points="9 7 17 12 9 17 9 7" fill="currentColor" /></svg>
+                      <svg width="28" height="28" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg>
                     </span>
-                    <span className={styles.cInfo}>
-                      <span className={styles.cTitle}>{displayVideoName(m.originalName)}</span>
-                      {chips.length > 0 && (
-                        <span className={styles.cMeta}>{chips.map((c) => <span key={c} className={styles.chip}>{c}</span>)}</span>
-                      )}
-                      <span className={styles.cWhen}>{assignedAgo(m.assignedAt)}</span>
-                    </span>
-                    <span className={styles.go} aria-hidden="true">{STUDENT_TEXTS.see}</span>
+                    <span className={styles.cTitle}>{displayVideoName(m.originalName)}</span>
+                    {meta && <span className={styles.cMeta}>{meta}</span>}
+                    <span className={styles.cWhen}>{assignedAgo(m.assignedAt)}</span>
                   </button>
                 </li>
               )

@@ -5,21 +5,25 @@
 // (mismas ventanas y mismo "Solo esta / Esta y las siguientes / Todas" que en la
 // pantalla del alumno: useClassEditor). En el celular, un día por vez con la semana
 // arriba. Todo en hora de Argentina. Solo habla con /api/classes/**.
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
+// Rediseño (fase 2): vive dentro del aula (barra lateral); la carga de la semana es
+// useWeekAgenda (la comparte con "Hoy") y el "← Inicio" solo aparece si se lo pasan.
+// Rediseño (fase 5): la raya de "ahora" y el número de hoy van en amarillo (el "ahora");
+// el título de la semana es el de la página y "+ Nueva clase" va a la derecha.
+import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import styles from './classes.module.css'
 import { CLASS_TZ, addDays, dateInTz, minuteInTz } from '@/lib/classSchedule'
-import { classKind, hhmm, meetLabel, shortDate, timeRange, type TeacherClass } from '@/lib/classView'
+import { classKind, hhmm, longDate, meetLabel, timeRange } from '@/lib/classView'
 import {
-  dayHead, dayLong, dayTitle, hourBounds, placeClasses, slotTime, studentLabels, weekDays, weekRange, weekStartOf, weekTitle,
-  type AgendaStudent,
+  dayHead, dayLong, dayTitle, hourBounds, placeClasses, slotTime, studentLabels, weekDays, weekStartOf, weekTitle,
 } from '@/lib/agendaView'
 import { addMinutes } from '@/lib/classDraft'
 import { Modal } from './ClassDialog'
-import { useClassEditor, type Series } from './useClassEditor'
+import { useClassEditor } from './useClassEditor'
+import { useWeekAgenda, type AgendaClass } from './useWeekAgenda'
 
 export const AGENDA_TEXTS = {
   title: 'Mi agenda',
-  create: 'Crear',
+  create: 'Nueva clase',
   today: 'Hoy',
   prevWeek: 'Semana anterior', nextWeek: 'Semana siguiente',
   prevDay: 'Día anterior', nextDay: 'Día siguiente',
@@ -30,18 +34,15 @@ export const AGENDA_TEXTS = {
   retry: 'Reintentar',
   empty: 'No tenés clases esta semana.',
   noStudents: 'Todavía no tenés alumnos: agregalos en "Mis alumnos" para agendarles clases.',
-  hint: 'Tachada = cancelada · clic en un hueco = crear',
+  hint: 'Las tachadas están canceladas. Hacé clic en un hueco para crear una clase.',
   kinds: { fija: 'Se repite', suelta: 'Una vez', movida: 'Cambió de día', cancelada: 'Cancelada' },
   was: (d: string) => `era el ${d}`,
+  when: 'Cuándo', zoom: 'Zoom',
   enterZoom: 'Entrar a Zoom', enter: 'Entrar a la clase', room: 'Mi sala de Zoom', noLink: 'Sin link de Zoom',
   edit: 'Editar', cancel: 'Cancelar clase', restore: 'Restaurar', openStudent: 'Ver alumno', close: 'Cerrar',
   classWith: (name: string) => `Clase con ${name}`,
   cancelledAria: ' (cancelada)',
 } as const
-
-type AgendaClass = TeacherClass & { studentId: string }
-type AgendaSeries = Series & { studentId: string }
-type Data = { week: string; students: AgendaStudent[]; series: AgendaSeries[]; classes: AgendaClass[]; zoomUrl: string | null }
 
 const HOUR_PX = 48
 const NARROW = '(max-width: 700px)'
@@ -63,7 +64,7 @@ function useNarrow(): boolean {
 }
 
 export default function MyAgenda({ onBack, onOpenStudent }: {
-  onBack: () => void
+  onBack?: () => void
   onOpenStudent?: (id: string, email: string) => void
 }) {
   const T = AGENDA_TEXTS
@@ -73,32 +74,8 @@ export default function MyAgenda({ onBack, onOpenStudent }: {
   const [day, setDay] = useState(today) // el día elegido (celular); su semana es la que se ve
   const week = weekStartOf(day)
   const narrow = useNarrow()
-  const [data, setData] = useState<Data | null>(null)
-  const [loadError, setLoadError] = useState(false)
+  const { data, ready, loadError, reload: load } = useWeekAgenda(week)
   const [peek, setPeek] = useState<AgendaClass | null>(null)
-  const asked = useRef('')
-
-  const load = useCallback(async () => {
-    asked.current = week
-    setLoadError(false)
-    const { from, to } = weekRange(week)
-    try {
-      const res = await fetch(`/api/classes/agenda?from=${encodeURIComponent(from.toISOString())}&to=${encodeURIComponent(to.toISOString())}`)
-      if (!res.ok) throw new Error(String(res.status))
-      const body = await res.json()
-      if (asked.current !== week) return // ya se pidió otra semana
-      setData({
-        week,
-        students: Array.isArray(body?.students) ? body.students : [],
-        series: Array.isArray(body?.series) ? body.series : [],
-        classes: Array.isArray(body?.classes) ? body.classes : [],
-        zoomUrl: typeof body?.zoomUrl === 'string' ? body.zoomUrl : null,
-      })
-    } catch {
-      if (asked.current === week) setLoadError(true)
-    }
-  }, [week])
-  useEffect(() => { load() }, [load])
 
   const labels = useMemo(() => studentLabels(data?.students ?? []), [data?.students])
   const options = useMemo(
@@ -107,15 +84,14 @@ export default function MyAgenda({ onBack, onOpenStudent }: {
   )
   const editor = useClassEditor({ zoomUrl: data?.zoomUrl ?? null, series: data?.series ?? [], reload: load, students: options })
 
-  const ready = data !== null && data.week === week
-  const classes = ready ? data.classes : []
+  const classes = ready && data ? data.classes : []
   const days = narrow ? [day] : weekDays(week)
   const bounds = hourBounds(classes)
   const hours = Array.from({ length: bounds.to - bounds.from }, (_, i) => bounds.from + i)
   const placed = placeClasses(classes, days)
   const inWeek = new Set(classes.map((c) => c.studentId))
   const legend = [...labels.entries()].filter(([id]) => inWeek.has(id)).sort((a, b) => a[1].label.localeCompare(b[1].label, 'es'))
-  const noStudents = ready && data.students.length === 0
+  const noStudents = ready && data?.students.length === 0
   const px = (min: number) => (min * HOUR_PX) / 60
 
   const move = (dir: -1 | 1) => setDay(addDays(day, dir * (narrow ? 1 : 7)))
@@ -153,19 +129,24 @@ export default function MyAgenda({ onBack, onOpenStudent }: {
           <button type="button" className={styles.cdX} onClick={() => setPeek(null)} aria-label={T.close}>×</button>
         </div>
         <div className={styles.cdLine}>
-          <span className={styles.cdIco} aria-hidden="true">🕒</span>
-          <span className={`${styles.pkWhen} ${kind === 'cancelada' ? styles.pkCanc : ''}`}>
-            {cap(dayLong(dateInTz(t, CLASS_TZ)))} · {timeRange(t, peek.durationMin, CLASS_TZ)}
-          </span>
-          <span className={`${styles.tcKind} ${styles['k_' + kind]}`}>{T.kinds[kind]}</span>
-          {kind === 'movida' && peek.originalStartsAt && <span className={styles.tcWas}>{T.was(shortDate(new Date(peek.originalStartsAt), CLASS_TZ).toLowerCase())}</span>}
+          <span className={styles.cdKey}>{T.when}</span>
+          <div className={styles.pkVals}>
+            <span className={`${styles.pkWhen} ${kind === 'cancelada' ? styles.pkCanc : ''}`}>
+              {cap(dayLong(dateInTz(t, CLASS_TZ)))}, {timeRange(t, peek.durationMin, CLASS_TZ)}
+            </span>
+            <span className={`${styles.tcKind} ${styles['k_' + kind]}`}>
+              {T.kinds[kind]}{kind === 'movida' && peek.originalStartsAt ? `, ${T.was(longDate(new Date(peek.originalStartsAt), CLASS_TZ))}` : ''}
+            </span>
+          </div>
         </div>
         <div className={styles.cdLine}>
-          <span className={styles.cdZ} aria-hidden="true">Z</span>
-          {url && linkLabel
-            ? <><a className={styles.pkLink} href={url} target="_blank" rel="noopener noreferrer">{linkLabel}</a>
-                {!peek.meetUrl && <span className={styles.tcHint}>{T.room}</span>}</>
-            : <span className={styles.tcHint}>{T.noLink}</span>}
+          <span className={styles.cdKey}>{T.zoom}</span>
+          <div className={styles.pkVals}>
+            {url && linkLabel
+              ? <><a className={styles.pkLink} href={url} target="_blank" rel="noopener noreferrer">{linkLabel}</a>
+                  {!peek.meetUrl && <span className={styles.tcHint}>{T.room}</span>}</>
+              : <span className={styles.tcHint}>{T.noLink}</span>}
+          </div>
         </div>
         <div className={styles.cdBtns}>
           {onOpenStudent && <button type="button" className={styles.tcBtn} onClick={act(() => onOpenStudent(peek.studentId, emailOf(peek)))}>{T.openStudent}</button>}
@@ -185,26 +166,26 @@ export default function MyAgenda({ onBack, onOpenStudent }: {
     <section className={`${styles.ag} ${narrow ? styles.agNarrow : ''}`} aria-label={T.title} style={{ ['--agCols' as string]: days.length }}>
       <div className={styles.agSticky}>
         <div className={styles.agTop}>
-          {narrow && <button type="button" className={styles.agRound} onClick={onBack} aria-label={T.backAria}>←</button>}
-          {!narrow && (
-            <button type="button" className={styles.agCreate} onClick={createDefault} disabled={!ready || noStudents}>
-              <span className={styles.agPlus} aria-hidden="true">+</span>{T.create}
-            </button>
-          )}
-          {!narrow && <button type="button" className={styles.agToday} onClick={() => setDay(today)}>{T.today}</button>}
+          {narrow && onBack && <button type="button" className={styles.agRound} onClick={onBack} aria-label={T.backAria}>←</button>}
+          <h1 className={styles.agTitle} data-testid="agenda-title">{narrow ? dayTitle(day) : weekTitle(week)}</h1>
           {!narrow && <>
             <button type="button" className={styles.agRound} onClick={() => move(-1)} aria-label={T.prevWeek}>‹</button>
             <button type="button" className={styles.agRound} onClick={() => move(1)} aria-label={T.nextWeek}>›</button>
+            <button type="button" className={styles.agToday} onClick={() => setDay(today)}>{T.today}</button>
+            <span className={styles.agTz}>{T.tz}</span>
           </>}
-          <h2 className={styles.agTitle} data-testid="agenda-title">{narrow ? dayTitle(day) : weekTitle(week)}</h2>
-          {!narrow && <span className={styles.agTz}>{T.tz}</span>}
           <span className={styles.tcSp} />
           {narrow && <>
             <button type="button" className={styles.agToday} onClick={() => setDay(today)}>{T.today}</button>
             <button type="button" className={styles.agRound} onClick={() => move(-1)} aria-label={T.prevDay}>‹</button>
             <button type="button" className={styles.agRound} onClick={() => move(1)} aria-label={T.nextDay}>›</button>
           </>}
-          {!narrow && <button type="button" className={styles.tcBtn} onClick={onBack}>{T.back}</button>}
+          {!narrow && onBack && <button type="button" className={styles.tcBtn} onClick={onBack}>{T.back}</button>}
+          {!narrow && (
+            <button type="button" className={styles.agCreate} onClick={createDefault} disabled={!ready || noStudents}>
+              <span aria-hidden="true">+</span> {T.create}
+            </button>
+          )}
         </div>
 
         {narrow ? (

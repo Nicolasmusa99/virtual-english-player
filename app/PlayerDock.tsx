@@ -3,6 +3,8 @@
 // Va FUERA de #ve-stage-wrap: el alumno en Zoom no la ve.
 // La barra se pinta en cada cuadro leyendo el reloj (readClock) y escribiendo el DOM
 // directo, sin re-render de React: avanza fluida y no carga al resto del player.
+// Rediseño (fase 3): la frase que suena se marca en amarillo en la barra ("ahora"), y
+// "Repetir frase", "Anterior" y "Siguiente" llevan texto, no solo ícono.
 import { useEffect, useRef, useState, type PointerEvent } from 'react'
 import styles from './PlayerDock.module.css'
 import { fmtTime, type Phrase } from '@/lib/srt'
@@ -21,7 +23,9 @@ export const DOCK_TEXTS = {
   volume: 'Volumen',
   speed: 'Velocidad',
   cc: 'Subtítulos',
-  sel: (n: number) => `sel. ${n}`,
+  repeat: 'Repetir frase (↓)',
+  repeatShort: 'Repetir frase', prevShort: 'Anterior', nextShort: 'Siguiente',
+  sel: (n: number) => `elegida ${n}`,
 } as const
 
 export type DockClock = { t: number; d: number; playing: boolean }
@@ -36,6 +40,8 @@ type Props = {
   speedIdx: number
   vol: number
   ccOn: boolean
+  /** La frase que está sonando (se marca en amarillo en la barra). */
+  curIdx?: number
   readClock: () => DockClock          // se llama en cada cuadro
   onSeek: (t: number) => void
   onJump: (idx: number) => void
@@ -46,6 +52,7 @@ type Props = {
   onSpeed: (idx: number) => void
   onVol: (v: number) => void
   onToggleCc: () => void
+  onRepeat?: () => void
 }
 
 export default function PlayerDock(p: Props) {
@@ -152,7 +159,8 @@ export default function PlayerDock(p: Props) {
         <div className={styles.track}>
           <div className={styles.buf} style={{ width: p.bufPct + '%' }} />
           {segs.map(s => (
-            <div key={s.idx} className={`${styles.seg} ${s.sel ? styles.segSel : ''}`} style={{ left: s.left + '%', width: s.width + '%' }} />
+            <div key={s.idx} className={`${styles.seg} ${s.sel ? styles.segSel : ''} ${s.idx === p.curIdx ? styles.segCur : ''}`}
+              data-cur={s.idx === p.curIdx || undefined} style={{ left: s.left + '%', width: s.width + '%' }} />
           ))}
           <div ref={fillRef} className={styles.fill} />
           {segs.map(s => (
@@ -177,11 +185,18 @@ export default function PlayerDock(p: Props) {
         <div className={styles.time}><span ref={curRef}>0:00</span> <span className={styles.tot}>/ <span ref={totRef}>0:00</span></span></div>
 
         <div className={styles.mid}>
-          <button type="button" className={styles.cb} onClick={() => p.onSkip(-10)} aria-label={DOCK_TEXTS.back10} title={DOCK_TEXTS.back10}>
+          {p.onRepeat && (
+            <button type="button" className={`${styles.cb} ${styles.cbTxt}`} onClick={p.onRepeat} aria-label={DOCK_TEXTS.repeat} title={DOCK_TEXTS.repeat}>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
+              <span>{DOCK_TEXTS.repeatShort}</span>
+            </button>
+          )}
+          <button type="button" className={`${styles.cb} ${styles.skip}`} onClick={() => p.onSkip(-10)} aria-label={DOCK_TEXTS.back10} title={DOCK_TEXTS.back10}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M1 4v6h6" /><path d="M3.5 15A9 9 0 1 0 4 8.5" /></svg>
           </button>
-          <button type="button" className={styles.cb} onClick={p.onPrev} aria-label={DOCK_TEXTS.prev} title={DOCK_TEXTS.prev}>
+          <button type="button" className={`${styles.cb} ${styles.cbTxt}`} onClick={p.onPrev} aria-label={DOCK_TEXTS.prev} title={DOCK_TEXTS.prev}>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 20L9 12l10-8v16zM5 4h2v16H5z" /></svg>
+            <span>{DOCK_TEXTS.prevShort}</span>
           </button>
           <button type="button" className={`${styles.cb} ${styles.play}`} onClick={p.onTogglePlay}
             aria-label={p.isPlaying ? DOCK_TEXTS.pause : DOCK_TEXTS.play} title={p.isPlaying ? DOCK_TEXTS.pause : DOCK_TEXTS.play}>
@@ -189,10 +204,11 @@ export default function PlayerDock(p: Props) {
               ? <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
               : <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>}
           </button>
-          <button type="button" className={styles.cb} onClick={p.onNext} aria-label={DOCK_TEXTS.next} title={DOCK_TEXTS.next}>
+          <button type="button" className={`${styles.cb} ${styles.cbTxt}`} onClick={p.onNext} aria-label={DOCK_TEXTS.next} title={DOCK_TEXTS.next}>
+            <span>{DOCK_TEXTS.nextShort}</span>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4l10 8-10 8V4zM17 4h2v16h-2z" /></svg>
           </button>
-          <button type="button" className={styles.cb} onClick={() => p.onSkip(10)} aria-label={DOCK_TEXTS.fwd10} title={DOCK_TEXTS.fwd10}>
+          <button type="button" className={`${styles.cb} ${styles.skip}`} onClick={() => p.onSkip(10)} aria-label={DOCK_TEXTS.fwd10} title={DOCK_TEXTS.fwd10}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M23 4v6h-6" /><path d="M20.5 15A9 9 0 1 1 20 8.5" /></svg>
           </button>
         </div>
@@ -224,7 +240,7 @@ export default function PlayerDock(p: Props) {
             )}
           </div>
           <button type="button" className={`${styles.pill} ${p.ccOn ? styles.pillOn : ''}`}
-            aria-label={DOCK_TEXTS.cc} aria-pressed={p.ccOn} title={DOCK_TEXTS.cc} onClick={p.onToggleCc}>CC</button>
+            aria-label={DOCK_TEXTS.cc} aria-pressed={p.ccOn} title={DOCK_TEXTS.cc} onClick={p.onToggleCc}>{DOCK_TEXTS.cc}</button>
         </div>
       </div>
     </div>
