@@ -9,6 +9,7 @@
 // useWeekAgenda (la comparte con "Hoy") y el "← Inicio" solo aparece si se lo pasan.
 // Rediseño (fase 5): la raya de "ahora" y el número de hoy van en amarillo (el "ahora");
 // el título de la semana es el de la página y "+ Nueva clase" va a la derecha.
+// G3 liviano: en el detalle de una clase, "Copiar invitación" (para WhatsApp).
 import { useEffect, useMemo, useState, type MouseEvent } from 'react'
 import styles from './classes.module.css'
 import { CLASS_TZ, addDays, dateInTz, minuteInTz } from '@/lib/classSchedule'
@@ -20,6 +21,8 @@ import { addMinutes } from '@/lib/classDraft'
 import { Modal } from './ClassDialog'
 import { useClassEditor } from './useClassEditor'
 import { useWeekAgenda, type AgendaClass } from './useWeekAgenda'
+import CopyInvite from './CopyInvite'
+import { classInvite } from '@/lib/invite'
 
 export const AGENDA_TEXTS = {
   title: 'Mi agenda',
@@ -144,7 +147,11 @@ export default function MyAgenda({ onBack, onOpenStudent }: {
           <div className={styles.pkVals}>
             {url && linkLabel
               ? <><a className={styles.pkLink} href={url} target="_blank" rel="noopener noreferrer">{linkLabel}</a>
-                  {!peek.meetUrl && <span className={styles.tcHint}>{T.room}</span>}</>
+                  {!peek.meetUrl && <span className={styles.tcHint}>{T.room}</span>}
+                  {kind !== 'cancelada' && (
+                    <CopyInvite className={styles.cdTxtBtn} okClassName={styles.zrOk}
+                      text={classInvite({ name: data.students.find((s) => s.id === peek.studentId)?.name, startsAt: peek.startsAt, durationMin: peek.durationMin, url })} />
+                  )}</>
               : <span className={styles.tcHint}>{T.noLink}</span>}
           </div>
         </div>

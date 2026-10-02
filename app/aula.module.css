@@ -50,6 +50,7 @@
 .who { font-size: 18px; font-weight: 700; }
 .what { margin-top: 3px; font-size: 15px; color: var(--pizarra); }
 .whatNext { color: var(--tinta); }
+.invite { margin-top: 2px; }
 .acts { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; }
 .canc .t, .canc .who { color: var(--pizarra); text-decoration: line-through; }
 .canc .what { color: var(--rojo); }
