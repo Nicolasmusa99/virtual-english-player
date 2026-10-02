@@ -105,12 +105,12 @@ describe('StudentApp — inicio', () => {
     expect(screen.getByRole('heading', { name: 'Hola, lucia' })).toBeInTheDocument()
   })
 
-  it('sin material → "Todavía no tenés material"', async () => {
+  it('sin material ni clases → la bienvenida (los otros armados: student-classes-ui.test.tsx)', async () => {
     listResponse = () => json(200, { material: [] })
     render(<StudentApp name="Martina" email={null} />)
     await flush()
-    expect(screen.getByText(STUDENT_TEXTS.emptyTitle)).toBeInTheDocument()
-    expect(screen.getByText(STUDENT_TEXTS.introEmpty)).toBeInTheDocument()
+    expect(screen.getByText(STUDENT_TEXTS.welcomeTitle)).toBeInTheDocument()
+    expect(screen.getByText(STUDENT_TEXTS.welcome)).toBeInTheDocument()
   })
 
   it('error al cargar → mensaje + Reintentar (que vuelve a pedir)', async () => {
@@ -234,10 +234,15 @@ describe('StudentPlayer — play/pausa, stop, volumen, barra de tiempo y CC', ()
     return { ...r, video, st, onBack }
   }
 
-  it('los ÚNICOS botones son: volver, play, stop, bajar y subir volumen, CC (sin herramientas del profe)', () => {
+  it('los ÚNICOS botones son los de practicar (sin herramientas del profe) y las frases del guion', () => {
     mountPlayer()
-    const names = screen.getAllByRole('button').map((b) => b.getAttribute('aria-label') ?? b.textContent)
-    expect(names).toEqual([PLAYER_TEXTS.back, PLAYER_TEXTS.play, PLAYER_TEXTS.stop, PLAYER_TEXTS.volDown, PLAYER_TEXTS.volUp, PLAYER_TEXTS.cc])
+    const buttons = screen.getAllByRole('button')
+    const names = buttons.filter((b) => !b.dataset.testid).map((b) => b.getAttribute('aria-label') ?? b.textContent)
+    expect(names).toEqual([
+      PLAYER_TEXTS.back, PLAYER_TEXTS.prev, PLAYER_TEXTS.repeat, PLAYER_TEXTS.play, PLAYER_TEXTS.next, PLAYER_TEXTS.stop,
+      PLAYER_TEXTS.volDown, PLAYER_TEXTS.volUp, PLAYER_TEXTS.slow, PLAYER_TEXTS.cc,
+    ])
+    expect(buttons.filter((b) => b.dataset.testid === 'script-phrase')).toHaveLength(2)
     expect(document.querySelector('input')).toBeNull() // ni sliders ni campos editables
   })
 
@@ -416,5 +421,130 @@ describe('StudentPlayer — play/pausa, stop, volumen, barra de tiempo y CC', ()
     fireEvent.click(screen.getByRole('button', { name: PLAYER_TEXTS.back }))
     expect(onBack).toHaveBeenCalled()
     expect(within(document.body).queryByText('Hola')).toBeNull()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────
+// Vista del alumno v2 — el player para practicar: frase anterior / repetir / siguiente,
+// más lento, el guion y el teclado. Frases: "Hello there" 1–3 s, "Second line" 4–6 s.
+describe('StudentPlayer — para practicar', () => {
+  const DATA: StudentVideoData = {
+    id: VID_A, originalName: 'Frozen (demo).mp4', storageUrl: 'https://blob.example/frozen.mp4',
+    durationSec: 185, phrases: DETAIL.captions.phrases, delay: 0,
+  }
+  function mountPlayer(data: StudentVideoData = DATA) {
+    const r = render(<StudentPlayer data={data} onBack={() => {}} />)
+    const video = r.container.querySelector('video') as HTMLVideoElement
+    const st = fakeVideo(video)
+    return { ...r, video, st }
+  }
+  const click = (name: string) => act(async () => { fireEvent.click(screen.getByRole('button', { name })) })
+  const key = (k: string, target: Element | Window = window) => act(async () => { fireEvent.keyDown(target, { key: k }) })
+
+  it('"Siguiente" va al principio de la frase que sigue y la hace sonar; en la última no hace nada', async () => {
+    const { st, video } = mountPlayer()
+    await click(PLAYER_TEXTS.next)
+    expect(st.t).toBe(1)
+    expect(video.play).toHaveBeenCalledTimes(1)
+    await click(PLAYER_TEXTS.next)
+    expect(st.t).toBe(4)
+    await click(PLAYER_TEXTS.next)
+    expect(st.t).toBe(4)
+  })
+
+  it('"Anterior" vuelve a la frase de antes (en la primera, se queda en la primera)', async () => {
+    const { st, video } = mountPlayer()
+    st.t = 5
+    await act(async () => { video.dispatchEvent(new Event('seeked')) })
+    await click(PLAYER_TEXTS.prev)
+    expect(st.t).toBe(1)
+    await click(PLAYER_TEXTS.prev)
+    expect(st.t).toBe(1)
+  })
+
+  it('"Repetir" vuelve al principio de la frase y se frena al terminarla', async () => {
+    const { st, video } = mountPlayer()
+    st.t = 5.2
+    await act(async () => { video.dispatchEvent(new Event('seeked')) })
+    await click(PLAYER_TEXTS.repeat)
+    expect(st.t).toBe(4)
+    expect(st.paused).toBe(false)
+    st.t = 5.5
+    await act(async () => { video.dispatchEvent(new Event('timeupdate')) })
+    expect(st.paused).toBe(false)
+    st.t = 6.02
+    await act(async () => { video.dispatchEvent(new Event('timeupdate')) })
+    expect(st.paused).toBe(true)
+    // después de frenar, Play sigue normal (ya no frena)
+    await click(PLAYER_TEXTS.play)
+    st.t = 7
+    await act(async () => { video.dispatchEvent(new Event('timeupdate')) })
+    expect(st.paused).toBe(false)
+  })
+
+  it('respeta el delay del profe al saltar', async () => {
+    const { st } = mountPlayer({ ...DATA, delay: 1 })
+    await click(PLAYER_TEXTS.next)
+    expect(st.t).toBe(2)
+  })
+
+  it('el guion: la frase que suena va marcada (y en la barra); tocar una frase va ahí', async () => {
+    const { st, video } = mountPlayer()
+    const script = screen.getByRole('complementary', { name: PLAYER_TEXTS.script })
+    expect(script).toHaveTextContent('2 frases')
+    const [first, second] = within(script).getAllByTestId('script-phrase')
+    expect(first).toHaveTextContent('0:01Hello there')
+    st.t = 2
+    await act(async () => { video.dispatchEvent(new Event('seeked')) })
+    expect(first).toHaveAttribute('aria-current', 'true')
+    expect(second).not.toHaveAttribute('aria-current')
+    expect(script).toHaveTextContent(PLAYER_TEXTS.phraseOf(1, 2))
+    expect(screen.getByTestId('track-now')).toBeInTheDocument()
+    await act(async () => { fireEvent.click(second) })
+    expect(st.t).toBe(4)
+    expect(video.play).toHaveBeenCalled()
+    expect(second).toHaveAttribute('aria-current', 'true')
+    expect(script).toHaveTextContent(PLAYER_TEXTS.phraseOf(2, 2))
+    st.t = 3.5 // un silencio: ninguna marcada, ni en la barra
+    await act(async () => { video.dispatchEvent(new Event('seeked')) })
+    expect(within(script).getAllByTestId('script-phrase').some((b) => b.hasAttribute('aria-current'))).toBe(false)
+    expect(screen.queryByTestId('track-now')).toBeNull()
+  })
+
+  it('teclado: → siguiente, ← anterior, ↓ repetir, espacio play/pausa; sobre la barra, las flechas son de la barra', async () => {
+    const { st } = mountPlayer()
+    await key('ArrowRight')
+    expect(st.t).toBe(1)
+    await key('ArrowRight')
+    expect(st.t).toBe(4)
+    await key('ArrowLeft')
+    expect(st.t).toBe(1)
+    st.t = 2.5
+    await key('ArrowDown')
+    expect(st.t).toBe(1)
+    await key(' ', document.body)
+    expect(st.paused).toBe(true)
+    await key(' ', document.body)
+    expect(st.paused).toBe(false)
+    st.t = 10
+    await key('ArrowRight', screen.getByRole('slider', { name: PLAYER_TEXTS.time }))
+    expect(st.t).toBe(15) // +5 s de la barra, no "siguiente frase"
+  })
+
+  it('"Más lento" pone el video a 0,75× y lo vuelve a la normal', async () => {
+    const { video } = mountPlayer()
+    const slow = screen.getByRole('button', { name: PLAYER_TEXTS.slow })
+    expect(slow).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(slow)
+    expect(slow).toHaveAttribute('aria-pressed', 'true')
+    expect(video.playbackRate).toBe(0.75)
+    fireEvent.click(slow)
+    expect(video.playbackRate).toBe(1)
+  })
+
+  it('sin frases: Anterior / Repetir / Siguiente desactivados y "Este video no tiene guion."', () => {
+    mountPlayer({ ...DATA, phrases: [] })
+    for (const n of [PLAYER_TEXTS.prev, PLAYER_TEXTS.repeat, PLAYER_TEXTS.next]) expect(screen.getByRole('button', { name: n })).toBeDisabled()
+    expect(screen.getByText(PLAYER_TEXTS.noScript)).toBeInTheDocument()
   })
 })

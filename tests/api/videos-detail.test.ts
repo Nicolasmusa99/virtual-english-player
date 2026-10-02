@@ -124,3 +124,37 @@ describe('PATCH /api/videos/[id]', () => {
     expect(res.status).toBe(403)
   })
 })
+
+// Vista del alumno v2: el admin cambia el nombre de SUS videos (al subirlo o en Mi biblioteca).
+describe('PATCH /api/videos/[id] { originalName }', () => {
+  it('el admin dueño cambia el nombre (limpio); solo se guarda el nombre', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
+    ;(db as any).__rows = [OWNED_VIDEO]
+    ;(db as any).set.mockClear()
+    const res = await PATCH(req('PATCH', { originalName: '  Comercial   del auto ', storageUrl: 'https://evil/x', userId: 'otro' }), ctx())
+    expect(res.status).toBe(200)
+    expect(await res.json()).toEqual({ ok: true, originalName: 'Comercial del auto' })
+    const set = (db as any).set.mock.calls.at(-1)[0]
+    expect(Object.keys(set).sort()).toEqual(['originalName', 'updatedAt'])
+    expect(set.originalName).toBe('Comercial del auto')
+  })
+
+  it('nombre vacío, muy largo o que no es texto → 400 y no toca nada', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
+    ;(db as any).__rows = [OWNED_VIDEO]
+    ;(db as any).set.mockClear()
+    for (const originalName of ['', '   ', 'a'.repeat(121), 3, null]) {
+      expect((await PATCH(req('PATCH', { originalName }), ctx())).status).toBe(400)
+    }
+    expect((db as any).set).not.toHaveBeenCalled()
+  })
+
+  it('un video ajeno → 404; un profe → 403 (aunque sea suyo)', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
+    ;(db as any).__rows = []
+    expect((await PATCH(req('PATCH', { originalName: 'Otro nombre' }), ctx())).status).toBe(404)
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
+    ;(db as any).__rows = [OWNED_VIDEO]
+    expect((await PATCH(req('PATCH', { originalName: 'Otro nombre' }), ctx())).status).toBe(403)
+  })
+})

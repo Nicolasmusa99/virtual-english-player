@@ -4,9 +4,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
-const m = vi.hoisted(() => ({ auth: vi.fn(), getStudentById: vi.fn(), getSchedule: vi.fn(), getZoomUrl: vi.fn() }))
+const m = vi.hoisted(() => ({ auth: vi.fn(), getStudentById: vi.fn(), getSchedule: vi.fn(), getZoomUrl: vi.fn(), getUserName: vi.fn() }))
 vi.mock('@/lib/auth', () => ({ auth: m.auth }))
-vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById, getZoomUrl: m.getZoomUrl }))
+vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById, getZoomUrl: m.getZoomUrl, getUserName: m.getUserName }))
 vi.mock('@/lib/db', () => ({ db: {} }))
 vi.mock('@/lib/classes', async (orig) => ({ withRoomLink: (await orig<typeof import('@/lib/classes')>()).withRoomLink, getSchedule: m.getSchedule }))
 
@@ -26,6 +26,7 @@ beforeEach(() => {
   m.getStudentById.mockImplementation(async (id: string) => ({ id, role: 'alumno', teacherId: 'profe-1' }))
   m.getSchedule.mockResolvedValue([ITEM])
   m.getZoomUrl.mockResolvedValue(null)
+  m.getUserName.mockResolvedValue('Laura Sosa')
 })
 
 describe('GET /api/student/classes', () => {
@@ -48,12 +49,19 @@ describe('GET /api/student/classes', () => {
     expect(m.getSchedule.mock.calls[0].slice(0, 2)).toEqual([ST, 'profe-1'])
   })
 
-  it('lista blanca: sin ids de serie/evento ni "original"', async () => {
+  it('lista blanca: sin ids de serie/evento ni "original"; del profe, solo su nombre', async () => {
     as(ST, 'alumno')
     const body = await (await GET(req())).json()
     expect(body).toEqual({ classes: [{
       key: ITEM.key, startsAt: '2026-09-29T21:00:00.000Z', durationMin: 60, meetUrl: ITEM.meetUrl, status: 'scheduled', moved: false,
-    }] })
+    }], teacherName: 'Laura Sosa' })
+    expect(m.getUserName).toHaveBeenCalledWith('profe-1') // el profe ACTUAL del alumno
+  })
+
+  it('el profe sin nombre → teacherName null', async () => {
+    as(ST, 'alumno')
+    m.getUserName.mockResolvedValue(null)
+    expect((await (await GET(req())).json()).teacherName).toBeNull()
   })
 
   it('"moved": solo una clase fija que el profe pasó a otro momento (no la cancelada ni la suelta)', async () => {
@@ -79,8 +87,9 @@ describe('GET /api/student/classes', () => {
   it('sin profe asignado → lista vacía, sin leer clases', async () => {
     as(ST, 'alumno')
     m.getStudentById.mockResolvedValue({ id: ST, role: 'alumno', teacherId: null })
-    expect(await (await GET(req())).json()).toEqual({ classes: [] })
+    expect(await (await GET(req())).json()).toEqual({ classes: [], teacherName: null })
     expect(m.getSchedule).not.toHaveBeenCalled()
+    expect(m.getUserName).not.toHaveBeenCalled()
   })
 
   it('rango: por defecto desde hace 2 h y 35 días; el mes pedido; >100 días o inválido → 400', async () => {

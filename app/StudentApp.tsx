@@ -6,15 +6,20 @@
 // /api/student/** (el servidor scopea todo al alumno de la sesión).
 // Rediseño (fase 4): el aula de día — "Hola" grande, la próxima clase, y el material en
 // tarjetas con miniatura grande; sin etiquetas en mayúsculas ni flechas.
-import { useCallback, useEffect, useState } from 'react'
+// Vista del alumno v2: barra con "Inicio" y "Calendario" (en el celular, abajo). El inicio
+// va en dos columnas (material a la izquierda, la próxima clase a la derecha; en el celular,
+// la clase primero). Lo asignado en los últimos 7 días va primero y con "Nuevo". Sin
+// material, la clase pasa a ser lo principal; sin clases ni material, una bienvenida.
+// El calendario es la grilla semanal de StudentWeek (reemplaza al mes).
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { signOut } from 'next-auth/react'
 import pageStyles from './page.module.css'
 import styles from './student.module.css'
 import StudentPlayer, { type StudentVideoData } from './StudentPlayer'
-import StudentClasses from './StudentClasses'
-import StudentMonth from './StudentMonth'
+import StudentClasses, { hasUpcoming, useStudentClasses } from './StudentClasses'
+import StudentWeek from './StudentWeek'
 import {
-  assignedAgo, displayVideoName, durationLabel, firstName, levelLabel, typeLabel,
+  assignedAgo, displayVideoName, durationLabel, firstName, isNewAssignment, levelLabel, newestFirst, typeLabel,
 } from '@/lib/studentView'
 import type { SharedLevel, SharedType } from '@/lib/db/schema'
 import type { StudentPhrase } from '@/lib/assignments'
@@ -30,12 +35,19 @@ export type MaterialItem = {
 
 export const STUDENT_TEXTS = {
   hello: (name: string) => (name ? `Hola, ${name}` : 'Hola'),
-  intro: 'Tus clases y el material que te asignó tu profe. Tocá un video para verlo.',
-  introEmpty: 'Tus clases y el material que te asignó tu profe.',
+  intro: 'Tocá un video para practicar.',
+  introEmpty: 'Acá vas a ver tus clases y el material que te asigne tu profe.',
+  welcome: 'Te damos la bienvenida a Virtual English.',
+  welcomeTitle: 'Todavía no tenés clases ni material',
+  welcomeSub: 'Cuando tu profe te agende una clase o te asigne un video, lo vas a ver acá.',
+  nav: 'Secciones',
+  home: 'Inicio',
+  calendar: 'Calendario',
   material: 'Tu material',
+  isNew: 'Nuevo',
   loading: 'Cargando tu material…',
   emptyTitle: 'Todavía no tenés material',
-  emptySub: 'Cuando tu profe te asigne un video, lo vas a ver acá.',
+  emptySub: 'Cuando tu profe te asigne un video, aparece acá para que lo practiques.',
   listErrorTitle: 'No pudimos cargar tu material',
   listErrorSub: 'Revisá tu conexión y probá de nuevo.',
   retry: 'Reintentar',
@@ -64,11 +76,16 @@ function toVideoData(body: unknown): StudentVideoData | null {
 }
 
 export default function StudentApp({ name, email }: { name: string | null; email: string | null }) {
+  const T = STUDENT_TEXTS
   const [list, setList] = useState<ListState>({ kind: 'loading' })
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [playing, setPlaying] = useState<StudentVideoData | null>(null)
   const [notice, setNotice] = useState('')
-  const [monthOpen, setMonthOpen] = useState(false)
+  const [tab, setTab] = useState<'inicio' | 'calendario'>('inicio')
+  const [now, setNow] = useState(() => new Date())
+  useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t) }, [])
+  const { state: classes, reload: reloadClasses } = useStudentClasses()
+  const homeRef = useRef<HTMLDivElement>(null)
 
   // silent: refresco "por detrás" (tras un 404): la lista actual queda en pantalla
   // hasta que llega la nueva, sin el parpadeo de "Cargando…". Si ese refresco falla,
@@ -94,7 +111,7 @@ export default function StudentApp({ name, email }: { name: string | null; email
     try {
       const res = await fetch(`/api/student/material/${encodeURIComponent(videoId)}`)
       if (res.status === 404) {
-        setNotice(STUDENT_TEXTS.videoGone)
+        setNotice(T.videoGone)
         loadList({ silent: true }) // ya no está: se refresca la lista para que desaparezca
         return
       }
@@ -102,92 +119,137 @@ export default function StudentApp({ name, email }: { name: string | null; email
       if (!data) throw new Error('respuesta inválida')
       setPlaying(data)
     } catch {
-      setNotice(STUDENT_TEXTS.videoError)
+      setNotice(T.videoError)
     } finally {
       setOpeningId(null)
     }
   }
 
+  function goTab(t: 'inicio' | 'calendario') {
+    setTab(t)
+    if (homeRef.current) homeRef.current.scrollTop = 0
+  }
+
   if (playing) return <StudentPlayer data={playing} onBack={() => setPlaying(null)} />
 
-  const hello = STUDENT_TEXTS.hello(firstName(name, email))
-  const hasItems = list.kind === 'ok' && list.items.length > 0
+  const hello = T.hello(firstName(name, email))
+  const items = list.kind === 'ok' ? newestFirst(list.items) : []
+  const noMaterial = list.kind === 'ok' && items.length === 0
+  const noClasses = classes.kind === 'ok' && !hasUpcoming(classes.classes, now)
+  // Armado del inicio: con material, dos columnas; sin material, la clase es lo principal;
+  // sin clases ni material, una bienvenida.
+  const layout = noMaterial && noClasses ? 'welcome' : noMaterial ? 'classFirst' : 'cols'
+  const lead = layout === 'welcome' ? T.welcome : items.length > 0 ? T.intro : T.introEmpty
 
   const header = (
     <header className={styles.hBar}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img className={styles.hLogo} src="/logo-ve.jpeg" alt="Virtual English" />
-      <button type="button" className={styles.hOut} onClick={() => signOut()}>{STUDENT_TEXTS.signOut}</button>
+      <nav className={styles.hTabs} aria-label={T.nav}>
+        {(['inicio', 'calendario'] as const).map((k) => (
+          <button key={k} type="button" className={`${styles.hTab} ${tab === k ? styles.hTabOn : ''}`}
+            aria-current={tab === k ? 'page' : undefined} onClick={() => goTab(k)}>
+            {k === 'inicio' ? T.home : T.calendar}
+          </button>
+        ))}
+      </nav>
+      <span className={styles.hSp} />
+      {(name || email) && <span className={styles.hMe}>{name || email}</span>}
+      <button type="button" className={styles.hOut} onClick={() => signOut()}>{T.signOut}</button>
     </header>
   )
 
-  if (monthOpen) {
+  if (tab === 'calendario') {
     return (
-      <div className={`${pageStyles.lightScope} ${styles.home}`}>
+      <div ref={homeRef} className={`${pageStyles.lightScope} ${styles.home}`}>
         {header}
-        <main className={styles.hBody}><StudentMonth onBack={() => setMonthOpen(false)} /></main>
+        <main className={styles.wkBody}>
+          <StudentWeek upcoming={classes.kind === 'ok' ? classes.classes : []} />
+        </main>
       </div>
     )
   }
 
+  const classesBlock = (
+    <StudentClasses state={classes} now={now} wide={layout === 'classFirst'} onRetry={reloadClasses} onOpenCalendar={() => goTab('calendario')} />
+  )
+
+  const materialBlock = (
+    <section className={styles.mat} aria-label={T.material}>
+      <h2 className={styles.sTitle}>{T.material}</h2>
+
+      {list.kind === 'loading' && <p role="status" className={styles.opening}>{T.loading}</p>}
+
+      {list.kind === 'error' && (
+        <div className={styles.empty}>
+          <div className={styles.emTitle}>{T.listErrorTitle}</div>
+          <div className={styles.emSub}>{T.listErrorSub}</div>
+          <button type="button" className={styles.stateBtn} onClick={() => loadList()}>{T.retry}</button>
+        </div>
+      )}
+
+      {noMaterial && (
+        <div className={styles.empty}>
+          <div className={styles.emTitle}>{T.emptyTitle}</div>
+          <div className={styles.emSub}>{T.emptySub}</div>
+        </div>
+      )}
+
+      {items.length > 0 && (
+        <ul className={styles.list}>
+          {items.map((m) => {
+            const meta = [typeLabel(m.sharedType), levelLabel(m.sharedLevel), durationLabel(m.durationSec)].filter(Boolean).join(', ')
+            const fresh = isNewAssignment(m.assignedAt, now)
+            return (
+              <li key={m.videoId}>
+                <button type="button" className={styles.card} onClick={() => open(m.videoId)} disabled={!!openingId}>
+                  <span className={styles.thumb} aria-hidden="true">
+                    {fresh && <span className={styles.newTag}>{T.isNew}</span>}
+                    <svg width="28" height="28" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg>
+                  </span>
+                  <span className={styles.cTitle}>{displayVideoName(m.originalName)}</span>
+                  {fresh && <span className={styles.srOnly}>, {T.isNew}</span>}
+                  {meta && <span className={styles.cMeta}>{meta}</span>}
+                  <span className={styles.cWhen}>{assignedAgo(m.assignedAt, now)}</span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+
   return (
-    <div className={`${pageStyles.lightScope} ${styles.home}`}>
+    <div ref={homeRef} className={`${pageStyles.lightScope} ${styles.home}`}>
       {header}
 
       <main className={styles.hBody}>
         <h1 className={styles.hello}>{hello}</h1>
-        <p className={styles.helloSub}>{hasItems ? STUDENT_TEXTS.intro : STUDENT_TEXTS.introEmpty}</p>
-
-        <StudentClasses onOpenMonth={() => setMonthOpen(true)} />
-
-        <h2 className={styles.sTitle}>{STUDENT_TEXTS.material}</h2>
+        <p className={styles.helloSub}>{lead}</p>
 
         {notice && (
           <div role="alert" className={styles.notice}>
             <span>{notice}</span>
-            <button type="button" className={styles.noticeClose} onClick={() => setNotice('')}>{STUDENT_TEXTS.close}</button>
+            <button type="button" className={styles.noticeClose} onClick={() => setNotice('')}>{T.close}</button>
           </div>
         )}
-        {openingId && <p role="status" className={styles.opening}>{STUDENT_TEXTS.opening}</p>}
+        {openingId && <p role="status" className={styles.opening}>{T.opening}</p>}
 
-        {list.kind === 'loading' && <p role="status" className={styles.opening}>{STUDENT_TEXTS.loading}</p>}
-
-        {list.kind === 'error' && (
-          <div className={styles.state}>
-            <div className={styles.stateTitle}>{STUDENT_TEXTS.listErrorTitle}</div>
-            <div className={styles.stateSub}>{STUDENT_TEXTS.listErrorSub}</div>
-            <button type="button" className={styles.stateBtn} onClick={() => loadList()}>{STUDENT_TEXTS.retry}</button>
+        {layout === 'welcome' && (
+          <div className={styles.empty}>
+            <div className={styles.emTitle}>{T.welcomeTitle}</div>
+            <div className={styles.emSub}>{T.welcomeSub}</div>
           </div>
         )}
 
-        {list.kind === 'ok' && list.items.length === 0 && (
-          <div className={styles.state}>
-            <div className={styles.stateIcon} aria-hidden="true">
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>
-            </div>
-            <div className={styles.stateTitle}>{STUDENT_TEXTS.emptyTitle}</div>
-            <div className={styles.stateSub}>{STUDENT_TEXTS.emptySub}</div>
-          </div>
-        )}
+        {layout === 'classFirst' && <>{classesBlock}{materialBlock}</>}
 
-        {hasItems && (
-          <ul className={styles.list}>
-            {list.items.map((m) => {
-              const meta = [typeLabel(m.sharedType), levelLabel(m.sharedLevel), durationLabel(m.durationSec)].filter(Boolean).join(', ')
-              return (
-                <li key={m.videoId}>
-                  <button type="button" className={styles.card} onClick={() => open(m.videoId)} disabled={!!openingId}>
-                    <span className={styles.thumb} aria-hidden="true">
-                      <svg width="28" height="28" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg>
-                    </span>
-                    <span className={styles.cTitle}>{displayVideoName(m.originalName)}</span>
-                    {meta && <span className={styles.cMeta}>{meta}</span>}
-                    <span className={styles.cWhen}>{assignedAgo(m.assignedAt)}</span>
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+        {layout === 'cols' && (
+          <div className={`${styles.cols} ${noClasses ? styles.colsMatFirst : ''}`}>
+            {materialBlock}
+            <div className={styles.aside}>{classesBlock}</div>
+          </div>
         )}
       </main>
     </div>

@@ -5,6 +5,7 @@ import { requireRole } from '@/lib/authz'
 import { db } from '@/lib/db'
 import { videos, videoSessions } from '@/lib/db/schema'
 import { getAccessibleVideo, getOwnedVideo } from '@/lib/library'
+import { normalizeVideoName, VIDEO_NAME_ERROR } from '@/lib/videoName'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRole('admin', 'profesor')
@@ -50,6 +51,10 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   return NextResponse.json({ ok: true })
 }
 
+// PATCH — solo el admin, solo SUS videos. Dos usos:
+//   { storageUrl } confirma la subida (paso de "subir").
+//   { originalName } cambia el nombre del video (al subirlo o en "Mi biblioteca"). Lo ven
+//   así los profes (compartida) y los alumnos (su material). Solo se lee ese campo.
 export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRole('admin')
   if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
@@ -59,7 +64,16 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const video = await getOwnedVideo(session.user.id, id)
   if (!video) return NextResponse.json({ error: 'Video no encontrado' }, { status: 404 })
 
-  const { storageUrl } = await req.json()
+  const body = await req.json().catch(() => null)
+  if (body && typeof body === 'object' && 'originalName' in body) {
+    const originalName = normalizeVideoName((body as { originalName: unknown }).originalName)
+    if (!originalName) return NextResponse.json({ error: VIDEO_NAME_ERROR }, { status: 400 })
+    await db.update(videos).set({ originalName, updatedAt: new Date() })
+      .where(and(eq(videos.id, id), eq(videos.userId, session.user.id)))
+    return NextResponse.json({ ok: true, originalName })
+  }
+
+  const storageUrl = (body as { storageUrl?: unknown } | null)?.storageUrl
   if (!storageUrl || typeof storageUrl !== 'string') {
     return NextResponse.json({ error: 'storageUrl requerido' }, { status: 400 })
   }

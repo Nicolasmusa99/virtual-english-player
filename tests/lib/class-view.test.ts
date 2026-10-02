@@ -1,7 +1,7 @@
 // Calendario (C3) — funciones de presentación (lib/classView.ts).
 import { describe, it, expect } from 'vitest'
 import {
-  byDay, calendarLeaf, classKind, classLengthNote, nextClassDay, dayMonth, dayMonthLong, differsFromClassTz, formDate, formTime, hhmm, longDate, meetLabel,
+  byDay, calendarLeaf, classKind, classLengthNote, classWithLine, nextClassDay, startsIn, dayMonth, dayMonthLong, differsFromClassTz, formDate, formTime, hhmm, longDate, meetLabel,
   monthGrid, monthRange, monthTitle, nextClassTitle, relativeDay, seriesTitle, shiftMonth, shortDate, splitUpcoming,
   timeRange, type TeacherClass,
 } from '@/lib/classView'
@@ -10,6 +10,26 @@ const BA = 'America/Argentina/Buenos_Aires'
 const MAD = 'Europe/Madrid'
 const Z = (iso: string) => new Date(iso)
 const NOW = Z('2026-09-29T15:00:00Z') // martes 29/9, 12:00 en BA
+
+describe('vista del alumno v2: cuánto falta y con quién', () => {
+  it('startsIn: horas y minutos hasta la clase; en curso "Ya empezó"; a un día o más, nada', () => {
+    expect(startsIn(Z('2026-09-29T17:15:00Z'), 60, NOW)).toBe('Empieza en 2 h 15 min')
+    expect(startsIn(Z('2026-09-29T18:00:00Z'), 60, NOW)).toBe('Empieza en 3 h')
+    expect(startsIn(Z('2026-09-29T15:40:00Z'), 60, NOW)).toBe('Empieza en 40 min')
+    expect(startsIn(Z('2026-09-29T15:00:30Z'), 60, NOW)).toBe('Empieza en 1 min')
+    expect(startsIn(Z('2026-09-29T14:30:00Z'), 60, NOW)).toBe('Ya empezó')
+    expect(startsIn(Z('2026-09-29T14:00:00Z'), 60, NOW)).toBeNull() // terminó justo ahora
+    expect(startsIn(Z('2026-09-30T14:59:00Z'), 60, NOW)).toBe('Empieza en 23 h 59 min')
+    expect(startsIn(Z('2026-09-30T15:00:00Z'), 60, NOW)).toBeNull()
+  })
+  it('classWithLine: "con Laura Sosa, por Zoom", o lo que haya', () => {
+    expect(classWithLine('Laura Sosa', 'https://zoom.us/j/1')).toBe('con Laura Sosa, por Zoom')
+    expect(classWithLine(' Laura ', 'https://meet.google.com/abc')).toBe('con Laura, por Google Meet')
+    expect(classWithLine(null, 'https://zoom.us/j/1')).toBe('Por Zoom')
+    expect(classWithLine('Laura Sosa', null)).toBe('con Laura Sosa')
+    expect(classWithLine('', 'https://ejemplo.com/sala')).toBe('')
+  })
+})
 
 describe('fechas y horas', () => {
   it('hora, rango, fecha corta y larga en la zona pedida', () => {

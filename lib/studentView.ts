@@ -2,6 +2,7 @@
 // Sin React ni DOM: se testean solas (tests/lib/student-view-helpers.test.ts).
 import type { SharedLevel, SharedType } from '@/lib/db/schema'
 import type { StudentPhrase } from '@/lib/assignments'
+import { VIDEO_EXT_RE } from '@/lib/videoName'
 
 // "Hola, {nombre}": primer nombre; si no hay nombre, la parte local del email.
 export function firstName(name: string | null | undefined, email?: string | null): string {
@@ -11,11 +12,13 @@ export function firstName(name: string | null | undefined, email?: string | null
   return local
 }
 
-// El nombre del archivo, sin la extensión: "Frozen (demo).mp4" → "Frozen (demo)".
+// El nombre del video, sin la extensión si la trae: "Frozen (demo).mp4" → "Frozen (demo)".
+// Solo saca extensiones de video ("Song vol.2" queda igual): desde que el admin escribe el
+// nombre al subirlo, ya no suele traer extensión.
 export function displayVideoName(originalName: string): string {
   const s = originalName.trim()
-  const i = s.lastIndexOf('.')
-  return i > 0 && s.length - i <= 5 ? s.slice(0, i) : s
+  const out = s.replace(VIDEO_EXT_RE, '')
+  return out ? out : s
 }
 
 const TYPE_LABEL: Record<SharedType, string> = { pelicula: 'Película', cancion: 'Canción' }
@@ -45,6 +48,21 @@ export function assignedAgo(assignedAt: Date | string, now: Date = new Date()): 
   return `Asignado el ${a.getDate()}/${a.getMonth() + 1}/${a.getFullYear()}`
 }
 
+// "Nuevo": asignado en los últimos 7 días de calendario (hoy cuenta como día 0).
+export const NEW_DAYS = 7
+export function isNewAssignment(assignedAt: Date | string, now: Date = new Date()): boolean {
+  const a = new Date(assignedAt)
+  if (isNaN(a.getTime())) return false
+  const day = (d: Date) => Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())
+  return Math.round((day(now) - day(a)) / 86_400_000) < NEW_DAYS
+}
+
+// El material, lo último asignado primero (sin fecha válida, al final).
+export function newestFirst<T extends { assignedAt: string }>(items: T[]): T[] {
+  const t = (x: T) => { const n = new Date(x.assignedAt).getTime(); return isNaN(n) ? -Infinity : n }
+  return [...items].sort((a, b) => t(b) - t(a))
+}
+
 // Qué frase se ve en el momento `t` del video, con el delay que configuró el profe
 // (mismo criterio que el player del profe: t - delay dentro de [start, end]).
 export function phraseAt(phrases: StudentPhrase[], t: number, delay: number): string {
@@ -52,6 +70,41 @@ export function phraseAt(phrases: StudentPhrase[], t: number, delay: number): st
   const p = phrases.find((ph) => x >= ph.start && x <= ph.end)
   return p ? p.text : ''
 }
+
+// ─── Player para practicar (vista del alumno v2) ───────────────────────────
+// Las frases llegan en orden (SRT). Los tiempos del video llevan el delay del profe:
+// la frase i suena entre start + delay y end + delay.
+
+// La frase que suena en `t` (su índice), o -1 en un silencio.
+export function phraseIndexAt(phrases: StudentPhrase[], t: number, delay: number): number {
+  const x = t - delay
+  return phrases.findIndex((ph) => x >= ph.start && x <= ph.end)
+}
+
+// La última frase que ya empezó en `t` (-1 antes de la primera). Con un margen chico, así
+// al saltar al principio de una frase ya cuenta como "esa".
+export function lastStartedIndex(phrases: StudentPhrase[], t: number, delay: number): number {
+  const x = t - delay + 0.05
+  let i = -1
+  for (let j = 0; j < phrases.length && phrases[j].start <= x; j++) i = j
+  return i
+}
+
+// A qué frase llevan "Anterior", "Repetir" y "Siguiente" (null = a ninguna).
+export function phraseTarget(phrases: StudentPhrase[], t: number, delay: number, action: 'prev' | 'repeat' | 'next'): number | null {
+  if (phrases.length === 0) return null
+  const base = lastStartedIndex(phrases, t, delay)
+  if (action === 'prev') return Math.max(0, base - 1)
+  if (action === 'repeat') return Math.max(0, base)
+  return base + 1 < phrases.length ? base + 1 : null
+}
+
+// El segundo del video donde empieza / termina la frase (con el delay; nunca negativo).
+export const phraseStartAt = (p: StudentPhrase, delay: number) => Math.max(0, p.start + delay)
+export const phraseEndAt = (p: StudentPhrase, delay: number) => Math.max(0, p.end + delay)
+
+// Más lento para escuchar mejor.
+export const SLOW_RATE = 0.75
 
 // Volumen en pasos del 10%, entre 0 y 1, sin errores de coma flotante (0.1 + 0.2).
 export const VOLUME_STEP = 0.1

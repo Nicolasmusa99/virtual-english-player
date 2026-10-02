@@ -73,6 +73,28 @@ export function classLengthNote(durationMin: number, url: string | null): string
   return where === 'Zoom' ? `${dur} Es por Zoom: entrás con el botón.` : `${dur} Es por ${where}.`
 }
 
+// Vista del alumno v2 — cuánto falta para la clase: 'Empieza en 2 h 15 min' / 'Empieza en
+// 40 min' / 'Ya empezó' (en curso). A un día o más (la fecha ya lo dice) o terminada → null.
+export function startsIn(t: Date, durationMin: number, now: Date): string | null {
+  const ms = t.getTime() - now.getTime()
+  if (ms <= 0) return now.getTime() < t.getTime() + durationMin * 60_000 ? 'Ya empezó' : null
+  const min = Math.ceil(ms / 60_000)
+  if (min >= 24 * 60) return null
+  if (min < 60) return `Empieza en ${min} min`
+  const h = Math.floor(min / 60), m = min % 60
+  return m ? `Empieza en ${h} h ${m} min` : `Empieza en ${h} h`
+}
+
+// Vista del alumno v2 — con quién y por dónde: 'con Laura Sosa, por Zoom' / 'Por Zoom' /
+// 'con Laura Sosa' / '' (sin nombre del profe ni plataforma conocida).
+export function classWithLine(teacherName: string | null | undefined, url: string | null): string {
+  const who = teacherName?.trim() ? `con ${teacherName.trim()}` : ''
+  const where = meetLabel(url)
+  if (who && where) return `${who}, por ${where}`
+  if (where) return `Por ${where}`
+  return who
+}
+
 // La "hojita" del calendario de la tarjeta: { month: 'sep', day: 29 }.
 export function calendarLeaf(t: Date, tz: string): { month: string; day: number } {
   const [, m, d] = ymd(dateInTz(t, tz))

@@ -1,14 +1,17 @@
 'use client'
-// Calendario (C3) — "Tus clases" en el inicio del ALUMNO: la próxima clase (con el botón
-// para entrar) + las siguientes + "Ver el mes". Solo habla con /api/student/classes (el
-// servidor scopea al alumno de la sesión y su profe actual). Las horas se muestran en la
-// zona del DISPOSITIVO; si no es la de Argentina, se avisa "tu hora local".
-// Rediseño (fase 4): la próxima clase con la hora grande y "Hoy" resaltado en amarillo
-// (el "ahora"); las siguientes en filas, sin etiquetas en mayúsculas.
+// Calendario (C3) — "Tu próxima clase" en el inicio del ALUMNO. Solo habla con
+// /api/student/classes (el servidor scopea al alumno de la sesión y su profe actual). Las
+// horas se muestran en la zona del DISPOSITIVO; si no es la de Argentina, se avisa "tu hora
+// local".
+// Rediseño (fase 4): la hora grande y "Hoy" resaltado en amarillo (el "ahora").
+// Vista del alumno v2: la tarjeta dice con quién y por dónde ("con Laura Sosa, por Zoom") y
+// cuánto falta; abajo, las 3 siguientes y "Ver el calendario". Las clases las carga
+// useStudentClasses en StudentApp (decide el armado del inicio); `wide` = sin material, la
+// clase es lo principal (la tarjeta y las siguientes, una al lado de la otra).
 import { useCallback, useEffect, useState } from 'react'
 import styles from './student.module.css'
 import {
-  classLengthNote, deviceTz, differsFromClassTz, hhmm, longDate, meetLabel, nextClassDay, splitUpcoming, timeRange,
+  classWithLine, deviceTz, differsFromClassTz, hhmm, longDate, meetLabel, nextClassDay, splitUpcoming, startsIn,
 } from '@/lib/classView'
 
 export type StudentClass = {
@@ -26,11 +29,11 @@ export const CLASSES_TEXTS = {
   enter: 'Entrar a la clase',
   enterZoom: 'Entrar a Zoom',
   noLink: 'Tu profe todavía no cargó el link',
-  minutes: (n: number) => `${n} min`,
   cancelled: 'Cancelada',
   moved: 'Cambió de día',
-  seeMonth: 'Ver el mes',
-  empty: 'Todavía no tenés clases agendadas.',
+  seeCalendar: 'Ver el calendario',
+  emptyTitle: 'No tenés clases agendadas',
+  emptySub: 'Cuando tu profe agende una, la vas a ver acá y en el calendario.',
   loading: 'Cargando tus clases…',
   error: 'No pudimos cargar tus clases.',
   retry: 'Reintentar',
@@ -48,96 +51,128 @@ export function toStudentClasses(body: unknown): StudentClass[] {
     .map((c) => ({ ...c, moved: c.moved === true }))
 }
 
+// El nombre de SU profe ("con Laura Sosa"), si llegó.
+export function toTeacherName(body: unknown): string | null {
+  const n = (body as { teacherName?: unknown })?.teacherName
+  return typeof n === 'string' && n.trim() ? n.trim() : null
+}
+
+export type ClassesState =
+  | { kind: 'loading' }
+  | { kind: 'error' }
+  | { kind: 'ok'; classes: StudentClass[]; teacherName: string | null }
+
+// Las próximas clases del alumno (sin rango: desde hace 2 h, 35 días).
+export function useStudentClasses() {
+  const [state, setState] = useState<ClassesState>({ kind: 'loading' })
+  const reload = useCallback(async () => {
+    setState({ kind: 'loading' })
+    try {
+      const res = await fetch('/api/student/classes')
+      if (!res.ok) throw new Error(String(res.status))
+      const body = await res.json()
+      setState({ kind: 'ok', classes: toStudentClasses(body), teacherName: toTeacherName(body) })
+    } catch {
+      setState({ kind: 'error' })
+    }
+  }, [])
+  useEffect(() => { reload() }, [reload])
+  return { state, reload }
+}
+
+// ¿Tiene alguna clase por delante? (sin ninguna, el inicio lo dice en vez de la tarjeta)
+export function hasUpcoming(classes: StudentClass[], now: Date): boolean {
+  const { next, rest } = splitUpcoming(classes, now)
+  return !!next || rest.length > 0
+}
+
 // Botón "Entrar": abre el link en otra pestaña ("Entrar a Zoom" si es de Zoom). Sin link → aviso.
-export function EnterButton({ url, compact }: { url: string | null; compact?: boolean }) {
-  if (!url) return <span className={styles.clNoLink}>{CLASSES_TEXTS.noLink}</span>
+export function EnterButton({ url, compact, block }: { url: string | null; compact?: boolean; block?: boolean }) {
+  if (!url) return <span className={`${styles.clNoLink} ${block ? styles.clBlock : ''}`}>{CLASSES_TEXTS.noLink}</span>
   return (
-    <a className={`${styles.clEnter} ${compact ? styles.clEnterSm : ''}`} href={url} target="_blank" rel="noopener noreferrer">
+    <a className={`${styles.clEnter} ${compact ? styles.clEnterSm : ''} ${block ? styles.clBlock : ''}`} href={url} target="_blank" rel="noopener noreferrer">
       {meetLabel(url) === 'Zoom' ? CLASSES_TEXTS.enterZoom : CLASSES_TEXTS.enter}
     </a>
   )
 }
 const cap = (x: string) => x.charAt(0).toUpperCase() + x.slice(1)
 
-type State = { kind: 'loading' } | { kind: 'error' } | { kind: 'ok'; classes: StudentClass[] }
-
-export default function StudentClasses({ onOpenMonth }: { onOpenMonth: () => void }) {
-  const [state, setState] = useState<State>({ kind: 'loading' })
-
-  const load = useCallback(async () => {
-    setState({ kind: 'loading' })
-    try {
-      const res = await fetch('/api/student/classes')
-      if (!res.ok) throw new Error(String(res.status))
-      setState({ kind: 'ok', classes: toStudentClasses(await res.json()) })
-    } catch {
-      setState({ kind: 'error' })
-    }
-  }, [])
-  useEffect(() => { load() }, [load])
-
+export default function StudentClasses({ state, now, wide, onRetry, onOpenCalendar }: {
+  state: ClassesState
+  now: Date
+  wide?: boolean
+  onRetry: () => void
+  onOpenCalendar: () => void
+}) {
+  const T = CLASSES_TEXTS
   const tz = deviceTz()
-  const now = new Date()
+
+  if (state.kind !== 'ok') {
+    return (
+      <section className={styles.cl} aria-label={T.title}>
+        <h2 className={styles.sTitle}>{T.title}</h2>
+        {state.kind === 'loading'
+          ? <p role="status" className={styles.opening}>{T.loading}</p>
+          : <p className={styles.clMsg}>{T.error}{' '}<button type="button" className={styles.clLinkBtn} onClick={onRetry}>{T.retry}</button></p>}
+      </section>
+    )
+  }
+
+  const { next, rest } = splitUpcoming(state.classes, now, 3)
+  if (!next && rest.length === 0) {
+    return (
+      <section className={styles.cl} aria-label={T.title}>
+        <h2 className={styles.sTitle}>{T.title}</h2>
+        <div className={styles.empty}>
+          <div className={styles.emTitle}>{T.emptyTitle}</div>
+          <div className={styles.emSub}>{T.emptySub}</div>
+        </div>
+      </section>
+    )
+  }
+
+  const t = next ? new Date(next.startsAt) : null
+  const when = t ? nextClassDay(t, now, tz) : null
+  const withLine = next ? classWithLine(state.teacherName, next.meetUrl) : ''
+  const count = next && t ? startsIn(t, next.durationMin, now) : null
 
   return (
-    <section className={styles.clSection} aria-label={CLASSES_TEXTS.title}>
-      <h2 className={styles.sTitle}>{CLASSES_TEXTS.title}</h2>
-
-      {state.kind === 'loading' && <p role="status" className={styles.opening}>{CLASSES_TEXTS.loading}</p>}
-
-      {state.kind === 'error' && (
-        <p className={styles.clMsg}>
-          {CLASSES_TEXTS.error}{' '}
-          <button type="button" className={styles.clLinkBtn} onClick={load}>{CLASSES_TEXTS.retry}</button>
-        </p>
-      )}
-
-      {state.kind === 'ok' && (() => {
-        const { next, rest } = splitUpcoming(state.classes, now)
-        if (!next && rest.length === 0) return <p className={styles.clMsg}>{CLASSES_TEXTS.empty}</p>
-        const t = next ? new Date(next.startsAt) : null
-        const when = t ? nextClassDay(t, now, tz) : null
-        return (
-          <>
-            {next && t && when && (
-              <div className={styles.clNext} data-testid="next-class">
-                <div className={styles.clWhenBox}>
-                  <div className={styles.clDay}>
-                    {when.rel === 'Hoy' ? <mark className={styles.now}>{when.rel}</mark> : when.rel && <b>{when.rel}</b>} {when.day}
-                  </div>
-                  <div className={styles.clTime}>{hhmm(t, tz)}</div>
-                </div>
-                <div className={styles.clInfo}>
-                  <div className={styles.clLbl}>{CLASSES_TEXTS.next}</div>
-                  <div className={styles.clMeta}>{classLengthNote(next.durationMin, next.meetUrl)}</div>
-                  {next.moved && <div className={styles.clMoved}>{CLASSES_TEXTS.moved}</div>}
-                  {differsFromClassTz(t, tz) && <div className={styles.clTz}>{CLASSES_TEXTS.localTime}</div>}
-                </div>
-                <EnterButton url={next.meetUrl} />
-              </div>
-            )}
-
-            {rest.length > 0 && (
-              <ul className={styles.clList}>
-                {rest.map((c) => {
-                  const ct = new Date(c.startsAt)
-                  const canc = c.status === 'cancelled'
-                  return (
-                    <li key={c.key} className={`${styles.clRow} ${canc ? styles.clRowCanc : ''}`}>
-                      <span className={styles.clRowDate}>{cap(longDate(ct, tz))}</span>
-                      <span className={styles.clRowTime}>{timeRange(ct, c.durationMin, tz)}</span>
-                      {canc && <span className={styles.clNoteCanc}>{CLASSES_TEXTS.cancelled}</span>}
-                      {!canc && c.moved && <span className={styles.clNote}>{CLASSES_TEXTS.moved}</span>}
-                    </li>
-                  )
-                })}
-              </ul>
-            )}
-
-            <button type="button" className={styles.clMonthBtn} onClick={onOpenMonth}>{CLASSES_TEXTS.seeMonth}</button>
-          </>
-        )
-      })()}
+    <section className={`${styles.cl} ${wide ? styles.clWide : ''}`} aria-label={T.title}>
+      <h2 className={styles.sTitle}>{next ? T.next : T.title}</h2>
+      <div className={styles.clGrid}>
+        {next && t && when && (
+          <div className={styles.clNext} data-testid="next-class">
+            <div className={styles.clDay}>
+              {when.rel === 'Hoy' ? <mark className={styles.now}>{when.rel}</mark> : when.rel && <b>{when.rel}</b>} {when.day}
+            </div>
+            <div className={styles.clTime}>{hhmm(t, tz)}</div>
+            {withLine && <div className={styles.clWith}>{withLine}</div>}
+            {count && <div className={styles.clCount}>{count}</div>}
+            {next.moved && <div className={styles.clMoved}>{T.moved}</div>}
+            {differsFromClassTz(t, tz) && <div className={styles.clTz}>{T.localTime}</div>}
+            <EnterButton url={next.meetUrl} block />
+          </div>
+        )}
+        <div className={styles.clMore}>
+          {rest.length > 0 && (
+            <ul className={styles.clList}>
+              {rest.map((c) => {
+                const ct = new Date(c.startsAt)
+                const canc = c.status === 'cancelled'
+                return (
+                  <li key={c.key} className={`${styles.clRow} ${canc ? styles.clRowCanc : ''}`}>
+                    <span className={styles.clRowDate}>{cap(longDate(ct, tz))}</span>
+                    <span className={styles.clRowTime}>{hhmm(ct, tz)}</span>
+                    {canc && <span className={styles.clNoteCanc}>{T.cancelled}</span>}
+                    {!canc && c.moved && <span className={styles.clNote}>{T.moved}</span>}
+                  </li>
+                )
+              })}
+            </ul>
+          )}
+          <button type="button" className={styles.clCalBtn} onClick={onOpenCalendar}>{T.seeCalendar}</button>
+        </div>
+      </div>
     </section>
   )
 }
