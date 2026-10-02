@@ -40,7 +40,7 @@ const WEEK_SHORT = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'] as const
 const shortDay = (day: string) => `${WEEK_SHORT[new Date(`${day}T12:00:00Z`).getUTCDay()]} ${Number(day.slice(8))}`
 
 export default function TeacherToday({ onOpenStudent, onOpenAgenda }: {
-  onOpenStudent: (id: string, email: string) => void
+  onOpenStudent: (id: string, email: string, name: string | null) => void
   onOpenAgenda: () => void
 }) {
   const T = TODAY_TEXTS
@@ -100,7 +100,7 @@ export default function TeacherToday({ onOpenStudent, onOpenAgenda }: {
             <button type="button" className={`${styles.btn} ${styles.btnSec}`} disabled={editor.busy} onClick={() => editor.restore(c)}>{T.restore}</button>
           )}
           {isNext && <>
-            <button type="button" className={`${styles.btn} ${styles.btnSec}`} onClick={() => onOpenStudent(c.studentId, emailOf(c))}>{T.openStudent}</button>
+            <button type="button" className={`${styles.btn} ${styles.btnSec}`} onClick={() => onOpenStudent(c.studentId, emailOf(c), realName(c))}>{T.openStudent}</button>
             {link && (
               <a className={`${styles.btn} ${styles.btnPri}`} href={link} target="_blank" rel="noopener noreferrer">
                 {meetLabel(link) === 'Zoom' ? T.enterZoom : T.enter}

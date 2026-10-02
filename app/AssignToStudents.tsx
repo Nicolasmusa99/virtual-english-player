@@ -7,7 +7,7 @@ import styles from './page.module.css'
 // tienen). Solo endpoints scopeados; el backend rechaza fuera de alcance. Cada
 // toggle persiste al instante (no hay "guardar"), así que cerrar no pierde nada.
 // Rediseño (fase 5): la ventana blanca del aula (exitOverlay/exitDialog) y filas.
-interface StudentRow { id: string; email: string | null; role: string | null }
+interface StudentRow { id: string; name?: string | null; email: string | null; role: string | null }
 
 export default function AssignToStudents({
   videoId,
@@ -91,7 +91,7 @@ export default function AssignToStudents({
               const isA = assignedTo.has(s.id)
               return (
                 <div key={s.id} className={styles.row}>
-                  <span className={styles.rowText}>{s.email}</span>
+                  <span className={styles.rowText}>{s.name || s.email}</span>
                   {isA && <span className={styles.rowOk}>Asignado</span>}
                   <button
                     className={isA ? styles.discardBtn : styles.restoreBtn}

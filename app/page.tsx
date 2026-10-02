@@ -9,6 +9,7 @@ import UsersPanel from './UsersPanel'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
+import StudentNameDialog from './StudentNameDialog'
 import AulaShell, { AULA_ICONS, AulaPage, type AulaNavItem } from './AulaShell'
 import TeacherToday from './TeacherToday'
 import ZoomRoomStatus from './ZoomRoomStatus'
@@ -62,7 +63,8 @@ export default function Player() {
 
   // ─── State ───────────────────────────────────────────────────────────────
   const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student' | 'agenda'>('load')
-  const [selectedStudent, setSelectedStudent] = useState<{ id: string; email: string } | null>(null)
+  const [selectedStudent, setSelectedStudent] = useState<{ id: string; email: string; name: string | null } | null>(null)
+  const [editingName, setEditingName] = useState(false)
   // A dónde vuelve la pantalla del alumno: a "Alumnos", a "Agenda" (G2) o a "Hoy" (rediseño).
   const [studentFrom, setStudentFrom] = useState<'users' | 'agenda' | 'load'>('users')
   const [step, setStep]                   = useState<Step>('idle')
@@ -1146,8 +1148,8 @@ export default function Player() {
     if (id === 'exercises') capture('exercises_section_opened', { has_session: true })
     setScreen(id as Screen)
   }
-  function openStudent(id: string, email: string, from: 'users' | 'agenda' | 'load') {
-    setSelectedStudent({ id, email }); setStudentFrom(from); setScreen('student')
+  function openStudent(id: string, email: string, from: 'users' | 'agenda' | 'load', name: string | null = null) {
+    setSelectedStudent({ id, email, name }); setStudentFrom(from); setScreen('student')
   }
   const STUDENT_BACK = { users: 'Alumnos', agenda: 'Agenda', load: 'Hoy' } as const
   // Sin rol (no debería pasar el login): solo la biblioteca compartida.
@@ -1192,7 +1194,7 @@ export default function Player() {
             footer={userRole === 'profesor' ? <ZoomRoomStatus /> : undefined}>
 
             {screen === 'load' && userRole === 'profesor' && (
-              <TeacherToday onOpenStudent={(id, email) => openStudent(id, email, 'load')} onOpenAgenda={() => setScreen('agenda')} />
+              <TeacherToday onOpenStudent={(id, email, name) => openStudent(id, email, 'load', name)} onOpenAgenda={() => setScreen('agenda')} />
             )}
 
             {screen === 'load' && userRole === 'admin' && (
@@ -1321,22 +1323,32 @@ export default function Player() {
                 lead={userRole === 'admin' ? 'Creá usuarios y asigná cada alumno a su profe.' : 'Sumá alumnos y abrí uno para ver sus clases y asignarle material.'}>
                 <div style={{ maxWidth: 760 }}>
                   {userRole && (
-                    <UsersPanel role={userRole} onOpenStudent={(id, email) => openStudent(id, email, 'users')} />
+                    <UsersPanel role={userRole} onOpenStudent={(id, email, name) => openStudent(id, email, 'users', name)} />
                   )}
                 </div>
               </AulaPage>
             )}
 
             {screen === 'student' && selectedStudent && (
-              <AulaPage title={selectedStudent.email} back={{ label: STUDENT_BACK[studentFrom], onClick: () => setScreen(studentFrom) }}>
+              <AulaPage title={selectedStudent.name || selectedStudent.email} back={{ label: STUDENT_BACK[studentFrom], onClick: () => setScreen(studentFrom) }}
+                lead={<>
+                  {selectedStudent.name && <span style={{ marginRight: 12 }}>{selectedStudent.email}</span>}
+                  <button type="button" className={aula.txtBtn} style={{ fontSize: 15 }} onClick={() => setEditingName(true)}>
+                    {selectedStudent.name ? 'Cambiar nombre' : 'Agregar nombre'}
+                  </button>
+                </>}>
                 <div style={{ maxWidth: 760 }}>
-                  <StudentView studentId={selectedStudent.id} onOpenVideo={openFromLibrary} />
+                  <StudentView studentId={selectedStudent.id} studentName={selectedStudent.name} onOpenVideo={openFromLibrary} />
                 </div>
+                {editingName && (
+                  <StudentNameDialog studentId={selectedStudent.id} name={selectedStudent.name} onClose={() => setEditingName(false)}
+                    onSaved={(name) => { setSelectedStudent((s) => (s ? { ...s, name } : s)); setEditingName(false) }} />
+                )}
               </AulaPage>
             )}
 
             {screen === 'agenda' && (
-              <MyAgenda onOpenStudent={(id, email) => openStudent(id, email, 'agenda')} />
+              <MyAgenda onOpenStudent={(id, email, name) => openStudent(id, email, 'agenda', name)} />
             )}
           </AulaShell>
         </div>

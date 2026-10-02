@@ -87,7 +87,7 @@ describe('TeacherToday — el día', () => {
     expect(next).toHaveTextContent('En 3 h 20 min')
     expect(within(next).getByRole('link', { name: T.enterZoom })).toHaveAttribute('href', ZOOM)
     await click(within(next).getByRole('button', { name: T.openStudent }))
-    expect(onOpenStudent).toHaveBeenCalledWith('st-m', 'martina@x.com')
+    expect(onOpenStudent).toHaveBeenCalledWith('st-m', 'martina@x.com', 'Martina Pérez')
   })
 
   it('las demás se editan con la ventana de siempre', async () => {

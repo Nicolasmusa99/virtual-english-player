@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole, canCreateRole } from '@/lib/authz'
 import { isRole } from '@/lib/db/schema'
 import { getUserByEmail, getUserById, insertUser, listAllUsers, listStudentsOf } from '@/lib/users'
+import { NAME_ERROR, normalizePersonName } from '@/lib/personName'
 
 const normalizeEmail = (e: string) => e.trim().toLowerCase()
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)
@@ -31,8 +32,12 @@ export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Body inválido' }, { status: 400 })
 
-  // Mass-assignment cerrado: SOLO se leen estos tres campos.
-  const { email: emailRaw, role, teacherId: teacherIdIn } = body as Record<string, unknown>
+  // Mass-assignment cerrado: SOLO se leen estos cuatro campos.
+  const { name: nameRaw, email: emailRaw, role, teacherId: teacherIdIn } = body as Record<string, unknown>
+
+  // nombre y apellido (obligatorio: el alumno se ve así en la agenda y en la invitación)
+  const name = normalizePersonName(nameRaw)
+  if (!name) return NextResponse.json({ error: NAME_ERROR }, { status: 400 })
 
   // email
   if (typeof emailRaw !== 'string' || !isValidEmail(emailRaw.trim())) {
@@ -70,7 +75,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const created = await insertUser({ email, role, teacherId })
+    const created = await insertUser({ name, email, role, teacherId })
     return NextResponse.json(created, { status: 201 })
   } catch (err: unknown) {
     // Carrera: dos altas del mismo email a la vez → el UNIQUE de la DB lo frena.

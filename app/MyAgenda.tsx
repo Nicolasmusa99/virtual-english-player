@@ -68,7 +68,7 @@ function useNarrow(): boolean {
 
 export default function MyAgenda({ onBack, onOpenStudent }: {
   onBack?: () => void
-  onOpenStudent?: (id: string, email: string) => void
+  onOpenStudent?: (id: string, email: string, name: string | null) => void
 }) {
   const T = AGENDA_TEXTS
   const [now, setNow] = useState(() => new Date())
@@ -156,7 +156,7 @@ export default function MyAgenda({ onBack, onOpenStudent }: {
           </div>
         </div>
         <div className={styles.cdBtns}>
-          {onOpenStudent && <button type="button" className={styles.tcBtn} onClick={act(() => onOpenStudent(peek.studentId, emailOf(peek)))}>{T.openStudent}</button>}
+          {onOpenStudent && <button type="button" className={styles.tcBtn} onClick={act(() => onOpenStudent(peek.studentId, emailOf(peek), data.students.find((s) => s.id === peek.studentId)?.name ?? null))}>{T.openStudent}</button>}
           <span className={styles.cdSp} />
           {kind === 'cancelada'
             ? <button type="button" className={styles.tcPrimary} onClick={act(() => editor.restore(peek))}>{T.restore}</button>

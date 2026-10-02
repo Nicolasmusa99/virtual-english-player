@@ -244,7 +244,7 @@ describe('MyAgenda — detalle de una clase', () => {
     await mount()
     await click(block(/Tomás.*17:00/))
     await click(screen.getByRole('button', { name: A.openStudent }))
-    expect(onOpenStudent).toHaveBeenCalledWith('st-t', 'tomas@x.com')
+    expect(onOpenStudent).toHaveBeenCalledWith('st-t', 'tomas@x.com', 'Tomás Ruiz')
   })
 
   it('Escape cierra el detalle', async () => {

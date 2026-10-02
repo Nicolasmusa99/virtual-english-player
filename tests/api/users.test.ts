@@ -30,7 +30,8 @@ const postReq = (body: unknown) =>
   new NextRequest('http://localhost/api/users', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    // Fase nombre: el alta exige nombre y apellido; los tests que no lo prueban usan uno fijo.
+    body: JSON.stringify(body && typeof body === 'object' && !('name' in body) ? { name: 'Ana Gómez', ...body } : body),
   })
 
 beforeEach(() => {
@@ -61,7 +62,7 @@ describe('POST /api/users — creación', () => {
     authMock.mockResolvedValue({ user: { id: 'ad-1', role: 'admin' } })
     const res = await POST(postReq({ email: 'prof@x.com', role: 'profesor' }))
     expect(res.status).toBe(201)
-    expect(insertUserMock).toHaveBeenCalledWith({ email: 'prof@x.com', role: 'profesor', teacherId: null })
+    expect(insertUserMock).toHaveBeenCalledWith({ name: 'Ana Gómez', email: 'prof@x.com', role: 'profesor', teacherId: null })
   })
 
   it('admin crea alumno con teacherId de un profesor válido → 201', async () => {
@@ -69,7 +70,7 @@ describe('POST /api/users — creación', () => {
     getUserByIdMock.mockResolvedValue({ id: 'prof-9', role: 'profesor' })
     const res = await POST(postReq({ email: 'al@x.com', role: 'alumno', teacherId: 'prof-9' }))
     expect(res.status).toBe(201)
-    expect(insertUserMock).toHaveBeenCalledWith({ email: 'al@x.com', role: 'alumno', teacherId: 'prof-9' })
+    expect(insertUserMock).toHaveBeenCalledWith({ name: 'Ana Gómez', email: 'al@x.com', role: 'alumno', teacherId: 'prof-9' })
   })
 
   it('admin crea alumno con teacherId que NO es profesor → 400', async () => {
@@ -91,14 +92,14 @@ describe('POST /api/users — creación', () => {
     authMock.mockResolvedValue({ user: { id: 'ad-1', role: 'admin' } })
     const res = await POST(postReq({ email: 'al@x.com', role: 'alumno' }))
     expect(res.status).toBe(201)
-    expect(insertUserMock).toHaveBeenCalledWith({ email: 'al@x.com', role: 'alumno', teacherId: null })
+    expect(insertUserMock).toHaveBeenCalledWith({ name: 'Ana Gómez', email: 'al@x.com', role: 'alumno', teacherId: null })
   })
 
   it('profesor crea alumno → teacherId FORZADO a su propio id (ignora el body)', async () => {
     authMock.mockResolvedValue({ user: { id: 'prof-1', role: 'profesor' } })
     const res = await POST(postReq({ email: 'al@x.com', role: 'alumno', teacherId: 'otro-profe' }))
     expect(res.status).toBe(201)
-    expect(insertUserMock).toHaveBeenCalledWith({ email: 'al@x.com', role: 'alumno', teacherId: 'prof-1' })
+    expect(insertUserMock).toHaveBeenCalledWith({ name: 'Ana Gómez', email: 'al@x.com', role: 'alumno', teacherId: 'prof-1' })
     expect(getUserByIdMock).not.toHaveBeenCalled() // no valida: se fuerza self
   })
 
@@ -144,16 +145,28 @@ describe('POST /api/users — creación', () => {
   it('email normalizado (trim + lowercase) antes de insertar', async () => {
     authMock.mockResolvedValue({ user: { id: 'ad-1', role: 'admin' } })
     await POST(postReq({ email: '  Foo@BAR.com ', role: 'profesor' }))
-    expect(insertUserMock).toHaveBeenCalledWith({ email: 'foo@bar.com', role: 'profesor', teacherId: null })
+    expect(insertUserMock).toHaveBeenCalledWith({ name: 'Ana Gómez', email: 'foo@bar.com', role: 'profesor', teacherId: null })
   })
 
   it('mass-assignment cerrado: campos extra se ignoran', async () => {
     authMock.mockResolvedValue({ user: { id: 'ad-1', role: 'admin' } })
-    await POST(postReq({ email: 'a@x.com', role: 'alumno', id: 'evil', name: 'x', createdAt: 'y' }))
-    expect(insertUserMock).toHaveBeenCalledWith({ email: 'a@x.com', role: 'alumno', teacherId: null })
+    await POST(postReq({ email: 'a@x.com', role: 'alumno', id: 'evil', createdAt: 'y', image: 'z', zoomUrl: 'w' }))
+    expect(insertUserMock).toHaveBeenCalledWith({ name: 'Ana Gómez', email: 'a@x.com', role: 'alumno', teacherId: null })
     const arg = insertUserMock.mock.calls[0][0]
     expect(arg).not.toHaveProperty('id')
-    expect(arg).not.toHaveProperty('name')
+    expect(arg).not.toHaveProperty('image')
+  })
+
+  it('nombre y apellido: obligatorio (400 sin él o inválido) y se guarda limpio', async () => {
+    authMock.mockResolvedValue({ user: { id: 'pr-1', role: 'profesor' } })
+    for (const name of ['', '   ', 'a', 'x@y.com', 42]) {
+      const res = await POST(postReq({ email: 'a@x.com', role: 'alumno', name }))
+      expect(res.status).toBe(400)
+    }
+    expect(insertUserMock).not.toHaveBeenCalled()
+    const res = await POST(postReq({ email: 'a@x.com', role: 'alumno', name: '  Martina   Pérez ' }))
+    expect(res.status).toBe(201)
+    expect(insertUserMock).toHaveBeenCalledWith({ name: 'Martina Pérez', email: 'a@x.com', role: 'alumno', teacherId: 'pr-1' })
   })
 })
 
