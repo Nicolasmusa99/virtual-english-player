@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSRT, timeToSec, fmtTime, splitPhrase, mergePhrase } from '@/lib/srt'
+import { parseSRT, timeToSec, fmtTime, splitPhrase, mergePhrase, cleanSrt, srtTime } from '@/lib/srt'
 
 describe('parseSRT', () => {
   it('parses standard LF input', () => {
@@ -214,5 +214,63 @@ describe('mergePhrase', () => {
     const m = mergePhrase(a, b)
     expect(m.start).toBe(2.5)
     expect(m.end).toBe(9.3)
+  })
+})
+
+// ─── Paso 4: validar y normalizar lo que devuelve Gemini ───
+
+describe('srtTime', () => {
+  it('segundos → HH:MM:SS,mmm', () => {
+    expect(srtTime(0)).toBe('00:00:00,000')
+    expect(srtTime(1.5)).toBe('00:00:01,500')
+    expect(srtTime(75.25)).toBe('00:01:15,250')
+    expect(srtTime(3723.007)).toBe('01:02:03,007')
+    expect(srtTime(-3)).toBe('00:00:00,000')
+  })
+})
+
+describe('cleanSrt', () => {
+  it('un SRT bien formado queda igual', () => {
+    const ok = '1\n00:00:01,000 --> 00:00:03,000\nHello world\n'
+    expect(cleanSrt(ok)).toEqual({ srt: ok, phrases: 1, dropped: 0 })
+  })
+
+  it('saca fences y CRLF (reusa parseSRT) y renumera', () => {
+    const fenced = '```srt\r\n7\r\n00:00:01,000 --> 00:00:03,000\r\nFenced text\r\n```'
+    expect(cleanSrt(fenced).srt).toBe('1\n00:00:01,000 --> 00:00:03,000\nFenced text\n')
+  })
+
+  it('descarta los bloques con fin imposible (antes, igual o ilegible) y los sin texto', () => {
+    const raw = [
+      '1\n00:00:01,000 --> 00:00:03,000\nGood one',
+      '2\n00:00:05,000 --> 00:00:04,000\nEnds before it starts',
+      '3\n00:00:06,000 --> 00:00:06,000\nZero length',
+      '4\n00:00:07,000 --> nada\nUnreadable end',
+      '5\n00:00:08,000 --> 00:00:09,500\n',
+      '6\n00:00:10,000 --> 00:00:12,000\nAnother good one',
+    ].join('\n\n')
+    const out = cleanSrt(raw)
+    expect(out.phrases).toBe(2)
+    expect(out.dropped).toBe(3) // el bloque sin texto ya lo saltea parseSRT
+    expect(out.srt).toBe('1\n00:00:01,000 --> 00:00:03,000\nGood one\n\n2\n00:00:10,000 --> 00:00:12,000\nAnother good one\n')
+  })
+
+  it('ordena por inicio', () => {
+    const raw = '1\n00:00:05,000 --> 00:00:06,000\nSecond\n\n2\n00:00:01,000 --> 00:00:02,000\nFirst'
+    expect(parseSRT(cleanSrt(raw).srt).map((p) => p.text)).toEqual(['First', 'Second'])
+  })
+
+  it('cortado por el tope de tokens: descarta el último bloque (puede estar incompleto)', () => {
+    const raw = '1\n00:00:01,000 --> 00:00:03,000\nComplete line\n\n2\n00:00:04,000 --> 00:00:06,000\nThis was cut in the mid'
+    const out = cleanSrt(raw, { dropLast: true })
+    expect(out.phrases).toBe(1)
+    expect(out.dropped).toBe(1)
+    expect(out.srt).not.toContain('cut in the mid')
+  })
+
+  it('vacío o basura → 0 frases y SRT vacío', () => {
+    for (const raw of ['', '   ', 'Sorry, I cannot transcribe this video.', '```\n```']) {
+      expect(cleanSrt(raw)).toEqual({ srt: '', phrases: 0, dropped: 0 })
+    }
   })
 })
