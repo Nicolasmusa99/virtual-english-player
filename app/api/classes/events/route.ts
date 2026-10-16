@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/authz'
 import { getStudentById } from '@/lib/users'
 import { CLASS_ERRORS, classScopeFor, isUuid, rowScopeFor } from '@/lib/classAccess'
 import { createSingleClass, getSeries, upsertException } from '@/lib/classes'
-import { isDateStr, isDurationOk, isOccurrence, normalizeZoomRoomUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
+import { isDateStr, isDurationOk, isOccurrence, isPastStart, normalizeZoomRoomUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
 
 // Calendario (C1) — clases SUELTAS y EXCEPCIONES del horario fijo.
 // POST /api/classes/events
@@ -13,6 +13,8 @@ import { isDateStr, isDurationOk, isOccurrence, normalizeZoomRoomUrl, parseTime,
 // Fecha y hora en hora de Buenos Aires. `originalStartsAt` es el startsAt que devolvió
 // GET /api/classes para esa clase; tiene que ser una clase REAL de la serie.
 // Cancelar/mover es idempotente por (serie, original): repetirlo reemplaza la excepción.
+// No se agenda en el pasado: una clase suelta o "mover" a una fecha/hora que ya pasó → 400
+// (mover a su mismo horario, p. ej. para cambiarle el link, se deja). Cancelar, sí.
 
 const err = (status: 400 | 401 | 403 | 404, msg: string) => NextResponse.json({ error: msg }, { status })
 
@@ -49,6 +51,7 @@ export async function POST(req: NextRequest) {
       if (durationMin !== undefined && !isDurationOk(durationMin)) return err(400, 'Duración inválida (15 a 240 minutos)')
       startsAt = zonedToUtc(date, minute)
       if (durationMin !== undefined) dur = durationMin as number
+      if (startsAt.getTime() !== original.getTime() && isPastStart(startsAt)) return err(400, CLASS_ERRORS.pastDate)
     }
     const event = await upsertException({
       teacherId: scope.teacherId, studentId: series.studentId, seriesId: series.id, originalStartsAt: original,
@@ -63,11 +66,13 @@ export async function POST(req: NextRequest) {
   const minute = parseTime(time)
   if (!isDateStr(date) || minute === null) return err(400, 'Fecha u hora inválida')
   if (!isDurationOk(durationMin)) return err(400, 'Duración inválida (15 a 240 minutos)')
+  const startsAt = zonedToUtc(date, minute)
+  if (isPastStart(startsAt)) return err(400, CLASS_ERRORS.pastDate)
   const scope = classScopeFor(me, await getStudentById(studentId))
   if (!scope.ok) return err(scope.status, scope.error)
 
   const event = await createSingleClass({
-    teacherId: scope.teacherId, studentId, startsAt: zonedToUtc(date, minute), durationMin,
+    teacherId: scope.teacherId, studentId, startsAt, durationMin,
     meetUrl: link.url, createdBy: me.id,
   })
   return NextResponse.json({ event: { id: event.id } }, { status: 201 })

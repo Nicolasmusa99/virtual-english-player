@@ -6,6 +6,7 @@ import {
   planSplit, seriesToJson, weekdayOf, zonedToUtc,
   type EventRow, type SeriesRow,
 } from '@/lib/classSchedule'
+import { isPastStart, PAST_TOLERANCE_MS } from '@/lib/classSchedule'
 
 const Z = (iso: string) => new Date(iso)
 
@@ -293,5 +294,17 @@ describe('planSplit — "esta y las siguientes" (como Google)', () => {
     expect(all.map((c) => `${c.seriesId}@${c.startsAt.toISOString()}`)).toEqual([
       's-tue@2026-10-06T21:00:00.000Z', 's-new@2026-10-13T22:00:00.000Z', 's-new@2026-10-20T22:00:00.000Z',
     ])
+  })
+})
+
+describe('isPastStart — no agendar en el pasado', () => {
+  const NOW = new Date('2026-10-01T15:00:00Z')
+  it('antes de ahora (más de 1 minuto) es pasado; ahora mismo y después, no', () => {
+    expect(PAST_TOLERANCE_MS).toBe(60_000)
+    expect(isPastStart(new Date('2026-10-01T14:58:59Z'), NOW)).toBe(true)
+    expect(isPastStart(new Date('2026-09-30T15:00:00Z'), NOW)).toBe(true)
+    expect(isPastStart(new Date('2026-10-01T14:59:30Z'), NOW)).toBe(false) // dentro del margen
+    expect(isPastStart(NOW, NOW)).toBe(false)
+    expect(isPastStart(new Date('2026-10-01T15:30:00Z'), NOW)).toBe(false)
   })
 })

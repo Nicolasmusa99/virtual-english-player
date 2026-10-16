@@ -2,7 +2,7 @@
 // Calendario (C1; G1: varios días, alcance como Google, solo Zoom) — rutas del PROFE: /api/classes, /api/classes/series[/id], /api/classes/events[/id].
 // Corren REALES requireRole, lib/classAccess (quién puede qué) y lib/classSchedule
 // (validación y fechas). Se mockean solo la sesión, getStudentById y la capa de datos.
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { NextRequest } from 'next/server'
 
 const m = vi.hoisted(() => ({
@@ -24,6 +24,7 @@ import { POST as createSeriesRoute } from '@/app/api/classes/series/route'
 import { PATCH as patchSeries, DELETE as deleteSeriesRoute } from '@/app/api/classes/series/[id]/route'
 import { POST as createEventRoute } from '@/app/api/classes/events/route'
 import { PATCH as patchEvent, DELETE as deleteEventRoute } from '@/app/api/classes/events/[id]/route'
+import { CLASS_ERRORS } from '@/lib/classAccess'
 
 const PA = 'aaaaaaaa-0000-4000-8000-00000000000a'
 const PB = 'bbbbbbbb-0000-4000-8000-00000000000b'
@@ -349,6 +350,10 @@ describe('DELETE /api/classes/series/[id] — cancelar con alcance', () => {
 })
 
 describe('POST /api/classes/events — suelta, cancelar, mover', () => {
+  // "Ahora": miércoles 30/9/2026 9:00 en Buenos Aires (las fechas de estos tests van después).
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-30T12:00:00Z')) })
+  afterEach(() => { vi.useRealTimers() })
+
   it('clase suelta: fecha/hora de Buenos Aires → instante UTC', async () => {
     as(PA, 'profesor')
     const res = await createEventRoute(req('/api/classes/events', 'POST', { studentId: ST_A, date: '2026-10-01', time: '17:00', durationMin: 45 }))
@@ -407,6 +412,36 @@ describe('POST /api/classes/events — suelta, cancelar, mover', () => {
     expect((await createEventRoute(req('/api/classes/events', 'POST', { seriesId: SER, originalStartsAt: '2026-10-06T21:00:00.000Z', action: 'borrar' }))).status).toBe(400)
     expect(m.upsertException).not.toHaveBeenCalled()
   })
+  it('clase suelta en una fecha u hora que ya pasó → 400 (con 1 minuto de margen)', async () => {
+    as(PA, 'profesor')
+    for (const [date, time] of [['2026-09-29', '17:00'], ['2026-09-30', '08:30']]) {
+      const res = await createEventRoute(req('/api/classes/events', 'POST', { studentId: ST_A, date, time, durationMin: 45 }))
+      expect(res.status).toBe(400)
+      expect((await res.json()).error).toBe(CLASS_ERRORS.pastDate)
+    }
+    expect(m.createSingleClass).not.toHaveBeenCalled()
+    vi.setSystemTime(new Date('2026-09-30T12:00:40Z')) // eligió "ahora mismo" (9:00) y tardó unos segundos
+    expect((await createEventRoute(req('/api/classes/events', 'POST', { studentId: ST_A, date: '2026-09-30', time: '09:00', durationMin: 45 }))).status).toBe(201)
+  })
+  it('mover una clase del horario a una fecha u hora que ya pasó → 400; cancelar una que ya pasó, sí', async () => {
+    as(PA, 'profesor')
+    const res = await createEventRoute(req('/api/classes/events', 'POST', {
+      seriesId: SER, originalStartsAt: '2026-10-06T21:00:00.000Z', action: 'move', date: '2026-09-29', time: '17:00',
+    }))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe(CLASS_ERRORS.pastDate)
+    expect(m.upsertException).not.toHaveBeenCalled()
+    vi.setSystemTime(new Date('2026-10-07T12:00:00Z')) // el martes 6 ya pasó
+    expect((await createEventRoute(req('/api/classes/events', 'POST', { seriesId: SER, originalStartsAt: '2026-10-06T21:00:00.000Z', action: 'cancel' }))).status).toBe(201)
+  })
+  it('"mover" una clase que ya pasó a su MISMO horario (p. ej. cambiarle el link) → se deja', async () => {
+    as(PA, 'profesor')
+    vi.setSystemTime(new Date('2026-10-07T12:00:00Z'))
+    const res = await createEventRoute(req('/api/classes/events', 'POST', {
+      seriesId: SER, originalStartsAt: '2026-10-06T21:00:00.000Z', action: 'move', date: '2026-10-06', time: '18:00', meetUrl: 'https://zoom.us/j/9',
+    }))
+    expect(res.status).toBe(201)
+  })
   it('mover sin fecha/hora, duración o link inválidos → 400', async () => {
     as(PA, 'profesor')
     const base = { seriesId: SER, originalStartsAt: '2026-10-06T21:00:00.000Z', action: 'move' }
@@ -419,6 +454,19 @@ describe('POST /api/classes/events — suelta, cancelar, mover', () => {
 })
 
 describe('PATCH / DELETE /api/classes/events/[id]', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-30T12:00:00Z')) })
+  afterEach(() => { vi.useRealTimers() })
+
+  it('reprogramar a una fecha u hora que ya pasó → 400; sin tocar cuándo es (o solo cancelar), se deja', async () => {
+    as(PA, 'profesor')
+    const res = await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', { date: '2026-09-29', time: '17:00' }), ctx(EVT))
+    expect(res.status).toBe(400)
+    expect((await res.json()).error).toBe(CLASS_ERRORS.pastDate)
+    expect(m.updateEvent).not.toHaveBeenCalled()
+    vi.setSystemTime(new Date('2026-10-02T12:00:00Z')) // la clase (1/10 17:00) ya pasó
+    expect((await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', { date: '2026-10-01', time: '17:00', meetUrl: 'https://zoom.us/j/9' }), ctx(EVT))).status).toBe(200)
+    expect((await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', { status: 'cancelled' }), ctx(EVT))).status).toBe(200)
+  })
   it('reprogramar y cancelar una suelta', async () => {
     as(PA, 'profesor')
     expect((await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', { date: '2026-10-02', time: '09:30', status: 'cancelled' }), ctx(EVT))).status).toBe(200)

@@ -7,6 +7,8 @@ import {
 
 // Martes 6/10/2026, 18:00–19:00, no se repite, Mi sala de Zoom.
 const D: ClassDraft = { date: '2026-10-06', start: '18:00', end: '19:00', repeat: 'none', days: [], endsOn: null, link: '' }
+// "Ahora" para validar: jueves 1/10/2026 12:00 en Buenos Aires (D queda en el futuro).
+const NOW = new Date('2026-10-01T15:00:00Z')
 
 describe('repetición', () => {
   it('textos de las opciones (de lunes a domingo)', () => {
@@ -49,16 +51,32 @@ describe('duración', () => {
 
 describe('validación antes de mandar', () => {
   it('ok', () => {
-    expect(draftError(D)).toBeNull()
-    expect(draftError({ ...D, repeat: 'custom', days: [2, 4], endsOn: '2026-12-15' })).toBeNull()
+    expect(draftError(D, NOW)).toBeNull()
+    expect(draftError({ ...D, repeat: 'custom', days: [2, 4], endsOn: '2026-12-15' }, NOW)).toBeNull()
   })
   it('lo que falta o está mal', () => {
-    expect(draftError({ ...D, date: '' })).toMatch(/fecha/)
-    expect(draftError({ ...D, start: '' })).toMatch(/hora/)
-    expect(draftError({ ...D, end: '18:05' })).toMatch(/durar/)
-    expect(draftError({ ...D, repeat: 'custom', days: [] })).toMatch(/al menos un día/)
-    expect(draftError({ ...D, repeat: 'weekly', endsOn: '2026-10-01' })).toMatch(/terminar antes/)
-    expect(draftError({ ...D, endsOn: '2026-10-01' })).toBeNull() // sin repetir, el fin no importa
+    expect(draftError({ ...D, date: '' }, NOW)).toMatch(/fecha/)
+    expect(draftError({ ...D, start: '' }, NOW)).toMatch(/hora/)
+    expect(draftError({ ...D, end: '18:05' }, NOW)).toMatch(/durar/)
+    expect(draftError({ ...D, repeat: 'custom', days: [] }, NOW)).toMatch(/al menos un día/)
+    expect(draftError({ ...D, repeat: 'weekly', endsOn: '2026-10-01' }, NOW)).toMatch(/terminar antes/)
+    expect(draftError({ ...D, endsOn: '2026-10-01' }, NOW)).toBeNull() // sin repetir, el fin no importa
+  })
+  it('una clase que no se repite no puede ser en el pasado (hora de Buenos Aires)', () => {
+    const PAST = 'La clase no puede ser en el pasado'
+    expect(draftError({ ...D, date: '2026-09-30' }, NOW)).toBe(PAST) // ayer
+    expect(draftError({ ...D, date: '2026-10-01', start: '11:30', end: '12:30' }, NOW)).toBe(PAST) // hoy, más temprano
+    expect(draftError({ ...D, date: '2026-10-01', start: '12:30', end: '13:30' }, NOW)).toBeNull() // hoy, más tarde
+    expect(draftError({ ...D, date: '2026-10-01', start: '12:00', end: '13:00' }, new Date('2026-10-01T15:00:50Z'))).toBeNull() // "ahora mismo": 1 min de margen
+  })
+  it('un horario que se repite puede empezar antes de hoy', () => {
+    expect(draftError({ ...D, date: '2026-09-01', repeat: 'weekly' }, NOW)).toBeNull()
+    expect(draftError({ ...D, date: '2026-09-01', repeat: 'custom', days: [2, 4] }, NOW)).toBeNull()
+  })
+  it('al editar una clase que ya pasó sin tocar cuándo es, se puede guardar (p. ej. el link)', () => {
+    const old = { ...D, date: '2026-09-29' }
+    expect(draftError({ ...old, link: 'https://zoom.us/j/9' }, NOW, old)).toBeNull()
+    expect(draftError({ ...old, start: '19:00', end: '20:00' }, NOW, old)).toMatch(/pasado/) // la movió, sigue en el pasado
   })
 })
 

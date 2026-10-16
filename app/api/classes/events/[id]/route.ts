@@ -3,7 +3,7 @@ import { requireRole } from '@/lib/authz'
 import { getStudentById } from '@/lib/users'
 import { CLASS_ERRORS, isUuid, rowScopeFor } from '@/lib/classAccess'
 import { deleteEvent, getEvent, updateEvent } from '@/lib/classes'
-import { isDateStr, isDurationOk, normalizeZoomRoomUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
+import { isDateStr, isDurationOk, isPastStart, normalizeZoomRoomUrl, parseTime, zonedToUtc } from '@/lib/classSchedule'
 import type { ClassStatus, Role } from '@/lib/db/schema'
 
 // Calendario (C1) — una clase suelta o una excepción.
@@ -11,6 +11,8 @@ import type { ClassStatus, Role } from '@/lib/db/schema'
 // DELETE /api/classes/events/[id]  borra la clase suelta, o la excepción (= ese martes
 //                                  vuelve a ser como dice el horario fijo).
 // Inexistente, de otro profe o del profe anterior del alumno → el MISMO 404.
+// Pasarla a una fecha/hora que ya pasó → 400 (si no cambia cuándo es, se deja: p. ej.
+// corregir el link o cancelar una clase que ya pasó).
 
 const err = (status: 400 | 401 | 403 | 404, msg: string) => NextResponse.json({ error: msg }, { status })
 type Ctx = { params: Promise<{ id: string }> }
@@ -39,6 +41,7 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
     const minute = parseTime(b.time)
     if (!isDateStr(b.date) || minute === null) return err(400, 'Fecha u hora inválida')
     patch.startsAt = zonedToUtc(b.date, minute)
+    if (patch.startsAt.getTime() !== new Date(event.startsAt).getTime() && isPastStart(patch.startsAt)) return err(400, CLASS_ERRORS.pastDate)
   }
   if ('durationMin' in b) {
     if (!isDurationOk(b.durationMin)) return err(400, 'Duración inválida (15 a 240 minutos)')
