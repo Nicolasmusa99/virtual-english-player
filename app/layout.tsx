@@ -1,17 +1,12 @@
 import type { Metadata } from 'next'
-import { Atkinson_Hyperlegible_Next } from 'next/font/google'
 import { Providers } from './providers'
 import './globals.css'
 
-// Rediseño 2026-10 ("la sala y el aula"): UNA sola familia para todo. Atkinson
-// Hyperlegible Next está hecha para que no se confundan letras parecidas (I/l/1, a/o,
-// rn/m): el alumno lee subtítulos en otro idioma a través de la compresión de Zoom.
-// Variable (pesos 200–800). Las horas usan `font-variant-numeric: tabular-nums`.
-// next/font no tiene sus medidas para ajustar la letra de respaldo: se declara a mano.
-const atkinson = Atkinson_Hyperlegible_Next({
-  subsets: ['latin'], variable: '--font-sans', display: 'swap',
-  adjustFontFallback: false, fallback: ['system-ui', 'Segoe UI', 'Arial', 'sans-serif'],
-})
+// Tipografía: UNA sola familia para todo, Verdana (decisión del dueño, 2026-10-16; antes
+// era Atkinson Hyperlegible Next). Es una fuente de sistema: no se descarga ni usa
+// next/font. Se define en app/globals.css como --font-sans (con Geneva y Tahoma de
+// respaldo) y la usan todos los módulos, también los subtítulos. Las horas siguen con
+// `font-variant-numeric: tabular-nums`.
 
 export const metadata: Metadata = {
   title: 'Virtual English — Player',
@@ -21,7 +16,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
-      <body className={atkinson.variable}>
+      <body>
         <Providers>{children}</Providers>
       </body>
     </html>
