@@ -3,6 +3,8 @@ import { db } from '@/lib/db'
 import { classEvents, classSeries } from '@/lib/db/schema'
 import type { ClassStatus } from '@/lib/db/schema'
 import { buildSchedule, type ClassItem, type EventRow, type SeriesRow } from '@/lib/classSchedule'
+import { findClash, type Slot } from '@/lib/overlap'
+import { listStudentsOf } from '@/lib/users'
 
 // Capa de datos del calendario (C1). Igual que lib/assignments.ts: helpers finos de DB,
 // SIN autorización — quién puede tocar qué lo deciden las rutas con lib/classAccess.ts.
@@ -79,6 +81,21 @@ export async function getTeacherSchedule(
   classes.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime() || a.key.localeCompare(b.key))
   const used = new Set(classes.map((c) => c.seriesId))
   return { classes, series: series.filter((s) => used.has(s.id)) }
+}
+
+// Una clase por franja del profe: la clase de cualquiera de sus alumnos ACTUALES (las
+// mismas que ve en "Mi agenda") que choca con alguna de `wanted`, o null. Las canceladas
+// no ocupan; `isSelf` saca la clase que se está editando. La decisión es de findClash
+// (lib/overlap.ts, pura); acá solo se traen las candidatas.
+export async function findTeacherClash(
+  teacherId: string, wanted: Slot[], isSelf?: (c: AgendaItem) => boolean
+): Promise<AgendaItem | null> {
+  if (wanted.length === 0) return null
+  const from = new Date(Math.min(...wanted.map((w) => w.startsAt.getTime())))
+  const to = new Date(Math.max(...wanted.map((w) => w.startsAt.getTime() + w.durationMin * 60_000)))
+  const students = await listStudentsOf(teacherId)
+  const { classes } = await getTeacherSchedule(teacherId, students.map((s) => s.id), from, to)
+  return findClash(wanted, classes, isSelf)?.busy ?? null
 }
 
 // Las clases sin link propio usan "Mi sala de Zoom" del profe (G0). Se resuelve al leer,

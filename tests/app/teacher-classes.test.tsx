@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import TeacherClasses, { TEACHER_CLASS_TEXTS as T } from '@/app/TeacherClasses'
 import { DIALOG_TEXTS as D } from '@/app/ClassDialog'
+import { CLASS_ERRORS } from '@/lib/classAccess'
 
 const ST = 'st-1'
 const SER = 'ser-1'
@@ -198,6 +199,16 @@ describe('"+ Nueva clase" (ventana tipo Google)', () => {
     change(within(box).getByLabelText(D.link), 'https://meet.google.com/x')
     await click(within(box).getByRole('button', { name: D.save }))
     expect(within(box).getByRole('alert')).toHaveTextContent('Tiene que ser un link de Zoom')
+  })
+
+  it('choque con otra clase del profe (409): se muestra el aviso y la ventana queda abierta', async () => {
+    nextWrite = () => json(409, { error: CLASS_ERRORS.overlap })
+    await mount()
+    await click(screen.getByRole('button', { name: T.add }))
+    const box = dialog(D.create)
+    await click(within(box).getByRole('button', { name: D.save }))
+    expect(within(box).getByRole('alert')).toHaveTextContent('Ya tenés otra clase en ese horario')
+    expect(dialog(D.create)).toBeInTheDocument()
   })
 
   it('Cancelar o Escape cierran sin guardar (y el error se va)', async () => {

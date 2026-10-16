@@ -9,7 +9,7 @@ const m = vi.hoisted(() => ({
   auth: vi.fn(), getStudentById: vi.fn(), getZoomUrl: vi.fn(),
   getSchedule: vi.fn(), listActiveSeries: vi.fn(), createSeries: vi.fn(), getSeries: vi.fn(),
   updateSeriesAll: vi.fn(), splitSeries: vi.fn(), deleteSeries: vi.fn(), createSingleClass: vi.fn(), upsertException: vi.fn(),
-  getEvent: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn(),
+  getEvent: vi.fn(), updateEvent: vi.fn(), deleteEvent: vi.fn(), findTeacherClash: vi.fn(),
 }))
 vi.mock('@/lib/auth', () => ({ auth: m.auth }))
 vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById, getZoomUrl: m.getZoomUrl }))
@@ -17,6 +17,7 @@ vi.mock('@/lib/classes', () => ({
   getSchedule: m.getSchedule, listActiveSeries: m.listActiveSeries, createSeries: m.createSeries, getSeries: m.getSeries,
   updateSeriesAll: m.updateSeriesAll, splitSeries: m.splitSeries, deleteSeries: m.deleteSeries, createSingleClass: m.createSingleClass,
   upsertException: m.upsertException, getEvent: m.getEvent, updateEvent: m.updateEvent, deleteEvent: m.deleteEvent,
+  findTeacherClash: m.findTeacherClash,
 }))
 
 import { GET as listClasses } from '@/app/api/classes/route'
@@ -66,6 +67,7 @@ beforeEach(() => {
   m.getEvent.mockImplementation(async (id: string) => (id === EVT ? EVENT_A : null))
   m.updateEvent.mockImplementation(async (id, p) => ({ ...EVENT_A, ...p }))
   m.deleteEvent.mockResolvedValue(true)
+  m.findTeacherClash.mockResolvedValue(null) // sin choques salvo que el test diga otra cosa
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -484,5 +486,107 @@ describe('PATCH / DELETE /api/classes/events/[id]', () => {
     }
     expect((await deleteEventRoute(req(`/api/classes/events/${EVT}`, 'DELETE'), ctx(EVT))).status).toBe(200)
     expect(m.deleteEvent).toHaveBeenCalledWith(EVT)
+  })
+})
+
+// ── Una clase por franja del profe (sin solapamiento) ──
+// La decisión de si chocan es de lib/overlap.ts (tests/lib/overlap.test.ts); acá: que cada
+// ruta pregunte con lo que corresponde, que devuelva 409 y que no guarde nada.
+describe('una clase por franja del profe → 409', () => {
+  beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(new Date('2026-09-30T12:00:00Z')) })
+  afterEach(() => { vi.useRealTimers() })
+  const OTRA = { key: 'otra', seriesId: null, eventId: 'x', studentId: 'otro-alumno', startsAt: new Date('2026-10-01T20:30:00Z'), durationMin: 60, status: 'scheduled' }
+  const clash = () => m.findTeacherClash.mockResolvedValue(OTRA)
+  const overlap409 = async (res: Response) => {
+    expect(res.status).toBe(409)
+    expect(await res.json()).toEqual({ error: CLASS_ERRORS.overlap })
+  }
+
+  it('clase suelta: pregunta por SU franja y, si choca, no la crea', async () => {
+    as(PA, 'profesor')
+    clash()
+    await overlap409(await createEventRoute(req('/api/classes/events', 'POST', { studentId: ST_A, date: '2026-10-01', time: '17:00', durationMin: 45 })))
+    expect(m.findTeacherClash).toHaveBeenCalledWith(PA, [{ startsAt: new Date('2026-10-01T20:00:00Z'), durationMin: 45 }])
+    expect(m.createSingleClass).not.toHaveBeenCalled()
+  })
+
+  it('mover una clase del horario: la clase que se mueve no choca consigo misma', async () => {
+    as(PA, 'profesor')
+    clash()
+    await overlap409(await createEventRoute(req('/api/classes/events', 'POST', {
+      seriesId: SER, originalStartsAt: '2026-10-06T21:00:00.000Z', action: 'move', date: '2026-10-08', time: '17:00',
+    })))
+    const [teacher, wanted, isSelf] = m.findTeacherClash.mock.calls[0]
+    expect(teacher).toBe(PA)
+    expect(wanted).toEqual([{ startsAt: new Date('2026-10-08T20:00:00Z'), durationMin: 60 }])
+    expect(isSelf({ seriesId: SER, startsAt: new Date('2026-10-06T21:00:00Z'), originalStartsAt: null })).toBe(true) // la del horario
+    expect(isSelf({ seriesId: SER, startsAt: new Date('2026-10-07T21:00:00Z'), originalStartsAt: new Date('2026-10-06T21:00:00Z') })).toBe(true) // ya movida
+    expect(isSelf({ seriesId: SER, startsAt: new Date('2026-10-13T21:00:00Z'), originalStartsAt: null })).toBe(false) // otra clase del horario
+    expect(m.upsertException).not.toHaveBeenCalled()
+    // cancelar no pregunta
+    m.findTeacherClash.mockClear()
+    await createEventRoute(req('/api/classes/events', 'POST', { seriesId: SER, originalStartsAt: '2026-10-06T21:00:00.000Z', action: 'cancel' }))
+    expect(m.findTeacherClash).not.toHaveBeenCalled()
+  })
+
+  it('PATCH de una clase: si cambia cuándo es o cuánto dura (o se restaura), pregunta sin contarse a sí misma', async () => {
+    as(PA, 'profesor')
+    clash()
+    await overlap409(await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', { date: '2026-10-02', time: '09:30' }), ctx(EVT)))
+    const [, wanted, isSelf] = m.findTeacherClash.mock.calls[0]
+    expect(wanted).toEqual([{ startsAt: new Date('2026-10-02T12:30:00Z'), durationMin: 60 }])
+    expect(isSelf({ eventId: EVT })).toBe(true)
+    expect(isSelf({ eventId: 'otra' })).toBe(false)
+    await overlap409(await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', { durationMin: 90 }), ctx(EVT)))
+    m.getEvent.mockResolvedValue({ ...EVENT_A, status: 'cancelled' })
+    await overlap409(await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', { status: 'scheduled' }), ctx(EVT)))
+    expect(m.updateEvent).not.toHaveBeenCalled()
+  })
+
+  it('PATCH de una clase sin cambiar cuándo es (link, cancelar, misma fecha) no pregunta', async () => {
+    as(PA, 'profesor')
+    clash()
+    for (const b of [{ meetUrl: 'https://zoom.us/j/9' }, { status: 'cancelled' }, { date: '2026-10-01', time: '17:00', durationMin: 60, meetUrl: '' }]) {
+      expect((await patchEvent(req(`/api/classes/events/${EVT}`, 'PATCH', b), ctx(EVT))).status).toBe(200)
+    }
+    expect(m.findTeacherClash).not.toHaveBeenCalled()
+  })
+
+  it('horario nuevo: chequea sus clases de los próximos 90 días; la suelta que reemplaza no cuenta', async () => {
+    as(PA, 'profesor')
+    clash()
+    await overlap409(await createSeriesRoute(req('/api/classes/series', 'POST', {
+      studentId: ST_A, weekdays: [2], time: '18:00', durationMin: 60, startsOn: '2026-10-06', replacesEventId: EVT,
+    })))
+    const [teacher, wanted, isSelf] = m.findTeacherClash.mock.calls[0]
+    expect(teacher).toBe(PA)
+    expect(wanted[0]).toEqual({ startsAt: new Date('2026-10-06T21:00:00Z'), durationMin: 60 })
+    expect(wanted.length).toBe(13)
+    expect(isSelf({ eventId: EVT })).toBe(true)
+    expect(isSelf({ eventId: 'otra' })).toBe(false)
+    expect(m.createSeries).not.toHaveBeenCalled()
+  })
+
+  it('editar el horario ("todas" o "esta y las siguientes"): si cambia cuándo caen, pregunta sin contar este horario', async () => {
+    as(PA, 'profesor')
+    clash()
+    await overlap409(await patchSeries(req(`/api/classes/series/${SER}`, 'PATCH', { time: '19:00' }), ctx(SER)))
+    expect(m.findTeacherClash.mock.calls[0][2]({ seriesId: SER })).toBe(true)
+    expect(m.findTeacherClash.mock.calls[0][2]({ seriesId: 'otro' })).toBe(false)
+    await overlap409(await patchSeries(req(`/api/classes/series/${SER}`, 'PATCH', {
+      scope: 'following', occurrence: '2026-10-13T21:00:00.000Z', time: '19:00',
+    }), ctx(SER)))
+    expect(m.updateSeriesAll).not.toHaveBeenCalled()
+    expect(m.splitSeries).not.toHaveBeenCalled()
+  })
+
+  it('editar el horario sin cambiar cuándo caen (solo el link) no pregunta', async () => {
+    as(PA, 'profesor')
+    clash()
+    expect((await patchSeries(req(`/api/classes/series/${SER}`, 'PATCH', { meetUrl: 'https://zoom.us/j/7' }), ctx(SER))).status).toBe(200)
+    expect((await patchSeries(req(`/api/classes/series/${SER}`, 'PATCH', {
+      scope: 'following', occurrence: '2026-10-13T21:00:00.000Z', meetUrl: 'https://zoom.us/j/7',
+    }), ctx(SER))).status).toBe(200)
+    expect(m.findTeacherClash).not.toHaveBeenCalled()
   })
 })

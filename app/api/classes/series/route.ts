@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
 import { getStudentById } from '@/lib/users'
 import { CLASS_ERRORS, classScopeFor, isUuid, rowScopeFor } from '@/lib/classAccess'
-import { createSeries, getEvent } from '@/lib/classes'
+import { createSeries, findTeacherClash, getEvent } from '@/lib/classes'
+import { seriesSlotsToCheck } from '@/lib/overlap'
 import { isDateStr, isDurationOk, normalizeWeekdays, normalizeZoomRoomUrl, parseTime, seriesToJson } from '@/lib/classSchedule'
 
 // Calendario — crear un HORARIO que se repite todas las semanas (C1; G1: varios días).
@@ -12,8 +13,10 @@ import { isDateStr, isDurationOk, normalizeWeekdays, normalizeZoomRoomUrl, parse
 //     replacesEventId?: uuid de una clase SUELTA del mismo alumno (G1: "Se repite"
 //     sobre una clase suelta → pasa a ser este horario, en el mismo paso) }
 // Día y hora en hora de Buenos Aires. teacher_id lo decide el servidor (classScopeFor).
+// Una clase por franja del profe: si alguna de sus clases de los próximos 90 días choca
+// con otra del profe → 409 (lib/overlap.ts, seriesSlotsToCheck).
 
-const err = (status: 400 | 401 | 403 | 404, msg: string) => NextResponse.json({ error: msg }, { status })
+const err = (status: 400 | 401 | 403 | 404 | 409, msg: string) => NextResponse.json({ error: msg }, { status })
 
 export async function POST(req: NextRequest) {
   const gate = await requireRole('admin', 'profesor')
@@ -45,6 +48,10 @@ export async function POST(req: NextRequest) {
       rowScopeFor(me, ev, await getStudentById(ev.studentId)).ok
     if (!ok) return err(404, CLASS_ERRORS.classNotFound)
   }
+
+  const slots = seriesSlotsToCheck({ weekdays: days, startMinute, durationMin, startsOn, endsOn: (endsOn as string | null | undefined) ?? null })
+  const replaced = (c: { eventId: string | null }) => replacesEventId !== undefined && c.eventId === replacesEventId
+  if (await findTeacherClash(scope.teacherId, slots, replaced)) return err(409, CLASS_ERRORS.overlap)
 
   const series = await createSeries({
     teacherId: scope.teacherId, studentId, weekdays: days, startMinute, durationMin, startsOn,
