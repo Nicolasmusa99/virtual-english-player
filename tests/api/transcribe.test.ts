@@ -13,9 +13,11 @@ const authMock = vi.hoisted(() =>
 vi.mock('@/lib/auth', () => ({ auth: authMock }))
 
 import { POST } from '@/app/api/transcribe/route'
+import { TRANSCRIPT_EMPTY_ERROR } from '@/lib/srt'
 import { geminiHandlers, FAKE_SRT, FAKE_UPLOAD_URL, FAKE_BLOB_URL } from '../mocks/gemini-handlers'
 
 const server = setupServer(...geminiHandlers)
+const GEN_RE = /generativelanguage\.googleapis\.com\/v1beta\/models\/.*generateContent/
 
 beforeAll(() => server.listen({ onUnhandledRequest: 'warn' }))
 afterEach(() => {
@@ -127,22 +129,56 @@ describe('POST /api/transcribe', () => {
     expect(data.error).toContain('Gemini error: 500')
   })
 
-  it('(g) Gemini devuelve SRT con code fence → route lo pasa crudo sin modificar (stripping es responsabilidad del cliente)', async () => {
-    const fencedSrt = '```srt\n1\n00:00:01,000 --> 00:00:03,000\nFenced text\n```'
-    server.use(
-      http.post(
-        /generativelanguage\.googleapis\.com\/v1beta\/models\/.*generateContent/,
-        () =>
-          HttpResponse.json({
-            candidates: [{ content: { parts: [{ text: fencedSrt }] } }],
-          })
-      )
-    )
+  // Paso 4: la ruta valida y normaliza la salida de Gemini (cleanSrt, lib/srt.ts).
+  const geminiSays = (text: string, finishReason = 'STOP') =>
+    server.use(http.post(GEN_RE, () => HttpResponse.json({ candidates: [{ content: { parts: [{ text }] }, finishReason }] })))
+
+  it('(g) SRT con code fence → la ruta lo devuelve limpio (sin fences)', async () => {
+    geminiSays('```srt\n1\n00:00:01,000 --> 00:00:03,000\nFenced text\n```')
     const res = await POST(makeRequest())
     expect(res.status).toBe(200)
-    const data = await res.json()
-    expect(data.srt).toBe(fencedSrt)          // pasa crudo, con fences
-    expect(data.srt).toContain('```srt')       // confirma que NO hizo stripping
+    expect((await res.json()).srt).toBe('1\n00:00:01,000 --> 00:00:03,000\nFenced text\n')
+  })
+
+  it('(k) un bloque roto (fin antes del inicio) se descarta y se renumera', async () => {
+    geminiSays('1\n00:00:01,000 --> 00:00:03,000\nGood\n\n2\n00:00:05,000 --> 00:00:04,000\nBroken\n\n3\n00:00:06,000 --> 00:00:08,000\nAlso good\n')
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    expect((await res.json()).srt).toBe('1\n00:00:01,000 --> 00:00:03,000\nGood\n\n2\n00:00:06,000 --> 00:00:08,000\nAlso good\n')
+  })
+
+  it.each([
+    ['vacía', '   '],
+    ['texto que no es SRT', 'Sorry, I cannot transcribe this video.'],
+    ['solo bloques rotos', '1\n00:00:05,000 --> 00:00:04,000\nBroken\n'],
+  ])('(l) salida %s → 500 con mensaje claro', async (_, text) => {
+    geminiSays(text)
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(500)
+    expect((await res.json()).error).toBe(TRANSCRIPT_EMPTY_ERROR)
+  })
+
+  it('(m) cortada por el tope de tokens (MAX_TOKENS) → se descarta el último bloque, que puede estar incompleto', async () => {
+    geminiSays('1\n00:00:01,000 --> 00:00:03,000\nComplete line\n\n2\n00:00:04,000 --> 00:00:06,000\nThis was cut in the mid', 'MAX_TOKENS')
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    expect((await res.json()).srt).toBe('1\n00:00:01,000 --> 00:00:03,000\nComplete line\n')
+  })
+
+  it('(n) pedido a Gemini: inglés fijo (sin auto-detectar), palabra por palabra, temperatura 0 y tope de 65536', async () => {
+    let body: { contents: { parts: { text?: string }[] }[]; generationConfig: { temperature: number; maxOutputTokens: number } } | null = null
+    server.use(http.post(GEN_RE, async ({ request }) => {
+      body = await request.json() as typeof body
+      return HttpResponse.json({ candidates: [{ content: { parts: [{ text: FAKE_SRT }] } }] })
+    }))
+    await POST(makeRequest())
+    expect(body!.generationConfig).toEqual({ temperature: 0, maxOutputTokens: 65536 })
+    const prompt = body!.contents[0].parts.map((p) => p.text ?? '').join('\n')
+    expect(prompt).toMatch(/in ENGLISH/)
+    expect(prompt).toMatch(/word for word/)
+    expect(prompt).toMatch(/Do not translate/)
+    expect(prompt).not.toMatch(/Auto-detect/i)
+    expect(prompt).toMatch(/HH:MM:SS,mmm/)
   })
 
   it('(h) API key se manda por header x-goog-api-key, no en query string', async () => {

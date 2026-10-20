@@ -115,7 +115,8 @@ export function ClassDialog({ mode, initial, zoomUrl, lockRepeat, student, busy,
   }
   function save() {
     const draft = { ...d, endsOn: d.repeat !== 'none' && endsMode === 'on' ? d.endsOn : null, link: ownLink ? d.link : '' }
-    const err = student && !who ? T.noStudent : draftError(draft)
+    // Al editar, si no se tocó cuándo es, una clase que ya pasó se puede guardar igual.
+    const err = student && !who ? T.noStudent : draftError(draft, new Date(), mode === 'create' ? undefined : initial)
     if (err) { setLocalError(err); return }
     onSave(draft, student ? who : undefined)
   }

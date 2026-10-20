@@ -100,6 +100,13 @@ export function zonedToUtc(date: string, minute: number, tz: string = CLASS_TZ):
   return new Date(guess - tzOffsetMs(first, tz))
 }
 
+// No agendar en el pasado: una clase que empieza antes de "ahora" no se puede crear ni mover.
+// Margen de 1 minuto para la diferencia de reloj (el profe elige "ahora mismo").
+export const PAST_TOLERANCE_MS = 60_000
+export function isPastStart(startsAt: Date, now: Date = new Date()): boolean {
+  return startsAt.getTime() < now.getTime() - PAST_TOLERANCE_MS
+}
+
 // Instante → día 'YYYY-MM-DD' en `tz`.
 export function dateInTz(instant: Date, tz: string = CLASS_TZ): string {
   const off = tzOffsetMs(instant.getTime(), tz)

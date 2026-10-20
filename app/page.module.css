@@ -149,12 +149,7 @@
 .plCk svg { width: 12px; height: 12px; color: var(--p1); }
 .plAct .plCk svg { color: var(--amarillo); }
 
-.kbHint { padding: 10px 18px 12px; flex-shrink: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.kbItem { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--tx2); }
-/* Pantallas bajas (laptops de 720–800 px): la leyenda de atajos cede su lugar a la lista de
-   frases. Los atajos siguen en los tooltips de la franja de controles y en "Repetir frase ↓". */
-@media (max-height: 800px) { .kbHint { display: none; } }
-.kbKey { font: 12px var(--font-sans); border: 1.5px solid var(--ln2); border-bottom-width: 3px; padding: 0 6px; border-radius: 4px; color: var(--tx); }
+/* Paso 5: la leyenda de atajos es "Atajos de teclado" (ShortcutsHelp, app/Tooltip.module.css). */
 
 .cancelBtn { margin-top: 14px; padding: 7px 16px; border-radius: 7px; border: 1px solid var(--ln2); background: transparent; color: var(--tx3); font-size: 11px; font-family: var(--font-sans); cursor: pointer; transition: all 0.12s; }
 .cancelBtn:hover { background: var(--p3); color: var(--tx2); border-color: var(--ln2); }
@@ -204,9 +199,9 @@
 .exitBtnCancel { padding: 8px 14px; border-radius: 4px; border: 1px solid transparent; background: transparent; color: var(--tx2); font-size: 14px; cursor: pointer; font-family: var(--font-sans); align-self: center; }
 .exitBtnCancel:hover { background: var(--p3); color: var(--tx2); }
 
-/* MODE TOGGLES (US-026/027/028/029) */
-.modeBtns { display: flex; gap: 6px; }
-.modeBtn { flex: 1 1 auto; height: 38px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 14px var(--font-sans); white-space: nowrap; cursor: pointer; }
+/* MODE TOGGLES (US-026/027/028/029). Paso 5: de a dos, para que entre la "i" de cada uno. */
+.modeBtns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.modeBtn { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 14px var(--font-sans); white-space: nowrap; cursor: pointer; }
 .modeBtn:hover { background: var(--p3); color: var(--tx); }
 .modeBtn:active { transform: scale(0.97); }
 .modeBtn:disabled { opacity: 0.35; cursor: not-allowed; }

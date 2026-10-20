@@ -24,6 +24,9 @@ import { resolveScope } from '@/lib/exercises'
 import { extrapolateTime } from '@/lib/playerTimeline'
 import { sessionKey, saveSession, loadSession } from '@/lib/session'
 import { cleanVideoName, normalizeVideoName, VIDEO_NAME_MAX } from '@/lib/videoName'
+import { MODE_HELP, PRACTICE_NEEDS_SELECTION, shouldIgnoreShortcut } from '@/lib/shortcuts'
+import Tooltip, { InfoMark } from './Tooltip'
+import ShortcutsHelp from './ShortcutsHelp'
 import type { SessionData } from '@/lib/session'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
@@ -261,6 +264,8 @@ export default function Player() {
   // Esquema por flechas (2026-09-03): →/← navegan frases (con barrido al
   // mantener), ↓ reinicia la frase, ↑ salta al inicio de la sección actual.
   // A/D/R/W eliminadas; el volumen queda solo por el slider (US-010).
+  // No se disparan mientras se escribe (input, textarea, select) ni con el foco en la ayuda
+  // de atajos (paso 5: shouldIgnoreShortcut, lib/shortcuts.ts).
   useEffect(() => {
     if (screen !== 'player') return
     const stopHold = () => { if (navHoldRef.current) { clearInterval(navHoldRef.current); navHoldRef.current = null } }
@@ -270,7 +275,7 @@ export default function Player() {
       navHoldRef.current = setInterval(() => { if (!step()) stopHold() }, NAV_HOLD_MS) // frená en el borde
     }
     const onKey = (e: KeyboardEvent) => {
-      if ((e.target as HTMLElement).tagName === 'INPUT') return
+      if (shouldIgnoreShortcut(e.target)) return
       switch (e.key) {
         case ' ':          e.preventDefault(); togglePlay(); break
         case 'ArrowRight': e.preventDefault(); if (!e.repeat) startHold(nextPhrase); break
@@ -1482,20 +1487,25 @@ export default function Player() {
                   ecualizador del video si se desmonta. */}
               <div className={styles.panelBody} hidden={panelTab !== 'player'}>
                 <div className={styles.section}>
+                  {/* Paso 5: cada modo con su explicación (Tooltip: mouse, foco y Escape; la "i" la marca). */}
                   <div className={styles.modeBtns} role="group" aria-label="Modo">
-                    <button className={`${styles.modeBtn} ${autoPause ? styles.modeBtnAct : ''}`} aria-pressed={autoPause}
-                            title="Pausa al terminar cada frase"
-                            onClick={() => { const next = !autoPause; setAutoPause(next); capture('autopause_toggled', { new_state: next ? 'on' : 'off' }) }}>Auto-pausa</button>
-                    <button className={`${styles.modeBtn} ${practiceMode ? styles.modeBtnAct : ''}`} aria-pressed={practiceMode}
-                            title="Pasa solo por las frases elegidas"
-                            disabled={selPhrases.length === 0}
-                            onClick={() => { const next = !practiceMode; setPracticeMode(next); capture('practice_mode_toggled', { new_state: next ? 'on' : 'off', selected_count: selPhrases.length }) }}>Práctica</button>
-                    <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`} aria-pressed={loopMode}
-                            title="Repite la frase actual sin parar"
-                            onClick={() => { const next = !loopMode; setLoopMode(next); capture('phrase_loop_changed', { enabled: next }) }}>Loop</button>
-                    <button className={`${styles.modeBtn} ${hideTexts ? styles.modeBtnAct : ''}`} aria-pressed={hideTexts}
-                            title="Oculta el texto de las frases (para escuchar sin leer)"
-                            onClick={() => { const next = !hideTexts; setHideTexts(next); capture('text_visibility_toggled', { hidden: next }) }}>Ocultar</button>
+                    <Tooltip text={MODE_HELP.autoPause} align="start">
+                      <button className={`${styles.modeBtn} ${autoPause ? styles.modeBtnAct : ''}`} aria-pressed={autoPause}
+                              onClick={() => { const next = !autoPause; setAutoPause(next); capture('autopause_toggled', { new_state: next ? 'on' : 'off' }) }}><InfoMark />Auto-pausa</button>
+                    </Tooltip>
+                    <Tooltip text={selPhrases.length === 0 ? `${MODE_HELP.practice} ${PRACTICE_NEEDS_SELECTION}` : MODE_HELP.practice} align="end">
+                      <button className={`${styles.modeBtn} ${practiceMode ? styles.modeBtnAct : ''}`} aria-pressed={practiceMode}
+                              disabled={selPhrases.length === 0}
+                              onClick={() => { const next = !practiceMode; setPracticeMode(next); capture('practice_mode_toggled', { new_state: next ? 'on' : 'off', selected_count: selPhrases.length }) }}><InfoMark />Práctica</button>
+                    </Tooltip>
+                    <Tooltip text={MODE_HELP.loop} align="start">
+                      <button className={`${styles.modeBtn} ${loopMode ? styles.modeBtnAct : ''}`} aria-pressed={loopMode}
+                              onClick={() => { const next = !loopMode; setLoopMode(next); capture('phrase_loop_changed', { enabled: next }) }}><InfoMark />Loop</button>
+                    </Tooltip>
+                    <Tooltip text={MODE_HELP.hide} align="end">
+                      <button className={`${styles.modeBtn} ${hideTexts ? styles.modeBtnAct : ''}`} aria-pressed={hideTexts}
+                              onClick={() => { const next = !hideTexts; setHideTexts(next); capture('text_visibility_toggled', { hidden: next }) }}><InfoMark />Ocultar</button>
+                    </Tooltip>
                   </div>
                 </div>
 
@@ -1607,11 +1617,7 @@ export default function Player() {
                   </div>
                 </div>
 
-                <div className={styles.kbHint}>
-                  {[['Espacio', 'pausa'], ['←', 'anterior'], ['→', 'siguiente'], ['↓', 'repetir'], ['↑', 'retroceder un poco']].map(([k, l]) => (
-                    <span key={k} className={styles.kbItem}><kbd className={styles.kbKey}>{k}</kbd>{l}</span>
-                  ))}
-                </div>
+                <ShortcutsHelp />
               </div>
               <div className={styles.panelBody} hidden={panelTab !== 'settings'}>
                 <VoiceBoostControl videoRef={vidRef} stageOpen={stageOpen} />

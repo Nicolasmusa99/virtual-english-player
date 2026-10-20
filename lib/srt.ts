@@ -59,3 +59,31 @@ export function mergePhrase(a: Phrase, b: Phrase): Phrase {
     sel:   a.sel || b.sel,
   }
 }
+
+// ─── Transcripción de Gemini: validar y normalizar lo que devuelve (paso 4) ───
+
+// Segundos → 'HH:MM:SS,mmm' (formato de SRT).
+export function srtTime(sec: number): string {
+  const ms = Math.max(0, Math.round(sec * 1000))
+  const h = Math.floor(ms / 3_600_000), m = Math.floor((ms % 3_600_000) / 60_000)
+  const s = Math.floor((ms % 60_000) / 1000), r = ms % 1000
+  const p = (n: number, w = 2) => String(n).padStart(w, '0')
+  return `${p(h)}:${p(m)}:${p(s)},${p(r, 3)}`
+}
+
+// Lo que devolvió Gemini, limpio: reusa parseSRT (saca fences, CRLF, acepta HH:MM:SS,mmm y
+// MM:SS) y además descarta los bloques con un fin imposible (antes del inicio, igual, o que
+// no se pudo leer). Los ordena por inicio y los renumera. `dropLast`: la salida se cortó por
+// el tope de tokens, así que el último bloque puede estar incompleto y se descarta.
+// Devuelve el SRT limpio, cuántos bloques quedaron y cuántos se descartaron.
+export function cleanSrt(text: string, opts: { dropLast?: boolean } = {}): { srt: string; phrases: number; dropped: number } {
+  const all = parseSRT(text)
+  let ok = all.filter((p) => Number.isFinite(p.start) && Number.isFinite(p.end) && p.end > p.start)
+    .sort((a, b) => a.start - b.start)
+  if (opts.dropLast && ok.length > 0) ok = ok.slice(0, -1)
+  const srt = ok.map((p, i) => `${i + 1}\n${srtTime(p.start)} --> ${srtTime(p.end)}\n${p.text}`).join('\n\n')
+  return { srt: ok.length ? srt + '\n' : '', phrases: ok.length, dropped: all.length - ok.length }
+}
+
+// Mensaje cuando Gemini no devolvió ningún bloque usable.
+export const TRANSCRIPT_EMPTY_ERROR = 'La transcripción salió vacía o mal formada, probá de nuevo.'

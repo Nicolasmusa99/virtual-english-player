@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
 import { getStudentById } from '@/lib/users'
 import { CLASS_ERRORS, isUuid, rowScopeFor } from '@/lib/classAccess'
-import { deleteSeries, getSeries, splitSeries, updateSeriesAll, type SeriesPatch } from '@/lib/classes'
+import { deleteSeries, findTeacherClash, getSeries, splitSeries, updateSeriesAll, type SeriesPatch } from '@/lib/classes'
+import { seriesSlotsToCheck, seriesTimingChanged } from '@/lib/overlap'
 import {
   dateInTz, isDateStr, isDurationOk, isOccurrence, normalizeWeekdays, normalizeZoomRoomUrl, parseTime,
   planSplit, seriesToJson,
@@ -22,8 +23,10 @@ import type { Role } from '@/lib/db/schema'
 //   · sin scope / 'all' → borra el horario y todas sus clases ("Todas las clases").
 //   · 'following'       → termina el horario el día anterior ("Esta y las siguientes").
 // Serie inexistente, de otro profe o del profe anterior del alumno → el MISMO 404.
+// Si cambia cuándo caen las clases y alguna de los próximos 90 días choca con otra clase
+// del profe (no de este mismo horario) → 409. Solo cambiar el link no chequea.
 
-const err = (status: 400 | 401 | 403 | 404, msg: string) => NextResponse.json({ error: msg }, { status })
+const err = (status: 400 | 401 | 403 | 404 | 409, msg: string) => NextResponse.json({ error: msg }, { status })
 type Ctx = { params: Promise<{ id: string }> }
 
 async function load(id: string, me: { id: string; role: Role | null }) {
@@ -96,6 +99,10 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
       meetUrl: 'meetUrl' in patch ? patch.meetUrl! : series.meetUrl,
     }
     if (next.endsOn !== null && next.endsOn < startsOn) return err(400, 'Fecha de fin inválida')
+    if (seriesTimingChanged({ ...series, startsOn }, next) &&
+        await findTeacherClash(series.teacherId, seriesSlotsToCheck(next), (c) => c.seriesId === series.id)) {
+      return err(409, CLASS_ERRORS.overlap)
+    }
     const plan = planSplit(series, occ, startsOn)
     if (plan.kind === 'split') {
       const created = await splitSeries(series.id, plan.oldEndsOn, plan.cutFrom, {
@@ -112,6 +119,14 @@ export async function PATCH(req: NextRequest, { params }: Ctx) {
   const startsOn = patch.startsOn ?? series.startsOn
   const endsOn = 'endsOn' in patch ? patch.endsOn! : series.endsOn
   if (endsOn !== null && endsOn < startsOn) return err(400, 'Fecha de fin inválida')
+  const next = {
+    weekdays: patch.weekdays ?? series.weekdays, startMinute: patch.startMinute ?? series.startMinute,
+    durationMin: patch.durationMin ?? series.durationMin, startsOn, endsOn,
+  }
+  if (seriesTimingChanged(series, next) &&
+      await findTeacherClash(series.teacherId, seriesSlotsToCheck(next), (c) => c.seriesId === series.id)) {
+    return err(409, CLASS_ERRORS.overlap)
+  }
   const updated = await updateSeriesAll(series.id, patch)
   if (!updated) return err(404, CLASS_ERRORS.classNotFound)
   return NextResponse.json({ series: seriesToJson(updated) })

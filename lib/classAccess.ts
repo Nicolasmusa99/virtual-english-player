@@ -22,6 +22,11 @@ export const CLASS_ERRORS = {
   forbidden: 'No autorizado',
   // G1: las clases usan SOLO Zoom (decisión del dueño). Mismo texto que "Mi sala de Zoom".
   zoomOnly: 'Tiene que ser un link de Zoom (https://…zoom.us/…)',
+  // Clases puntuales y "mover esta clase": no en una fecha u hora que ya pasó (los horarios
+  // que se repiten sí pueden empezar antes de hoy).
+  pastDate: 'No se puede agendar una clase en una fecha u hora que ya pasó',
+  // Una clase por franja del profe: no se cruza con otra de cualquiera de sus alumnos (409).
+  overlap: 'Ya tenés otra clase en ese horario',
 } as const
 
 // ¿`me` puede agendar clases a `student`? → a nombre de qué profe.

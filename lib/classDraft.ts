@@ -1,7 +1,7 @@
 // Calendario (G1) — ventana "Crear / Editar clase" (estilo Google Calendar): funciones
 // PURAS que pasan lo que el profe completa a lo que pide la API. Sin React ni DOM:
 // tests/lib/class-draft.test.ts. Todo en hora de Buenos Aires (la del profe).
-import { MAX_DURATION, MIN_DURATION, parseTime, weekdayOf } from '@/lib/classSchedule'
+import { MAX_DURATION, MIN_DURATION, isPastStart, parseTime, weekdayOf, zonedToUtc } from '@/lib/classSchedule'
 import { WEEKDAYS } from '@/lib/classView'
 
 export type RepeatMode = 'none' | 'weekly' | 'custom'
@@ -61,12 +61,20 @@ export function addMinutes(time: string, min: number): string {
 }
 
 // Lo que está mal en el borrador (para no mandar nada inválido), o null si está listo.
-export function draftError(d: ClassDraft): string | null {
+// `now`: para testear. `before`: al editar, el borrador como estaba (si no se tocó cuándo
+// es, una clase que ya pasó se puede guardar igual, por ejemplo para corregirle el link).
+export function draftError(d: ClassDraft, now: Date = new Date(), before?: ClassDraft): string | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date)) return 'Elegí la fecha'
   if (parseTime(d.start) === null || parseTime(d.end) === null) return 'Elegí la hora'
   if (draftDuration(d) === null) return `La clase tiene que durar entre ${MIN_DURATION} minutos y ${MAX_DURATION / 60} horas`
   if (d.repeat === 'custom' && d.days.length === 0) return 'Elegí al menos un día'
   if (d.repeat !== 'none' && d.endsOn !== null && d.endsOn < d.date) return 'El horario no puede terminar antes de empezar'
+  // Una clase que no se repite no puede ser en el pasado (hora de Buenos Aires). Los horarios
+  // que se repiten sí pueden empezar antes de hoy.
+  const unchanged = !!before && before.date === d.date && before.start === d.start
+  if (d.repeat === 'none' && !unchanged && isPastStart(zonedToUtc(d.date, parseTime(d.start)!), now)) {
+    return 'La clase no puede ser en el pasado'
+  }
   return null
 }
 

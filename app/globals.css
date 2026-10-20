@@ -1,5 +1,7 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
+  /* Tipografía: Verdana en toda la app (fuente de sistema; ver app/layout.tsx). */
+  --font-sans: Verdana, Geneva, Tahoma, sans-serif;
   /* ── Virtual English: paleta "la sala y el aula" (rediseño 2026-10) ──
      Tinta y Azul VE salen del logo. El amarillo es el del subtítulo y significa
      SOLO "acá y ahora" (frase actual, hoy, la raya de la hora): nunca decora. */
@@ -27,8 +29,8 @@
   /* Rojo aclarado para leerse sobre la tinta */
   --rd:#F08A84; --rd2:rgba(240,138,132,0.12); --rd3:rgba(240,138,132,0.32);
 }
-/* El video va sobre negro (letterbox). Un solo tipo de letra (--font-sans, next/font). */
-html, body { height: 100%; overflow: hidden; background: #000; color: var(--tx); font-family: var(--font-sans, 'Atkinson Hyperlegible Next', system-ui, sans-serif); font-size: 13px; -webkit-font-smoothing: antialiased; }
+/* El video va sobre negro (letterbox). Un solo tipo de letra: --font-sans (Verdana). */
+html, body { height: 100%; overflow: hidden; background: #000; color: var(--tx); font-family: var(--font-sans); font-size: 13px; -webkit-font-smoothing: antialiased; }
 ::-webkit-scrollbar { width: 2px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 2px; }
