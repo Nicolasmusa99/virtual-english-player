@@ -28,6 +28,8 @@ import { cleanVideoName, normalizeVideoName, VIDEO_NAME_MAX } from '@/lib/videoN
 import { MODE_HELP, PRACTICE_NEEDS_SELECTION, shouldIgnoreShortcut } from '@/lib/shortcuts'
 import Tooltip, { InfoMark } from './Tooltip'
 import ShortcutsHelp from './ShortcutsHelp'
+import CaptionEditor from './CaptionEditor'
+import type { CaptionDraft } from '@/lib/captionEdit'
 import type { SessionData } from '@/lib/session'
 import { useSession, signIn, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
@@ -93,6 +95,8 @@ export default function Player() {
   const subTextNodes = useMemo(() => hl(subText), [subText])
   const [subVisible, setSubVisible]       = useState(false)
   const [editingIdx, setEditingIdx]       = useState<number | null>(null)
+  // 2026-11: editar el subtítulo tocándolo en el video (texto arriba, lo fino en CaptionEditor).
+  const [capEdit, setCapEdit] = useState<{ idx: number; draft: CaptionDraft; caret: number; cut: number | null } | null>(null)
   const [editingText, setEditingText]     = useState('')
   const [editingStartTs, setEditingStartTs] = useState('')
   const [editingEndTs,   setEditingEndTs]   = useState('')
@@ -1004,6 +1008,45 @@ export default function Player() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a)
   }
 
+  // ─── Editar el subtítulo tocándolo en el video (2026-11) ──────────────────
+  // Se edita la frase que está sonando: el video se pausa, el subtítulo se vuelve editable
+  // en su lugar y abajo aparece CaptionEditor (tiempos al milisegundo y dividir).
+  function startCaptionEdit() {
+    const idx = curIdxRef.current
+    const p = phrasesRef.current[idx]
+    if (!p || stageOpenRef.current) return
+    vidRef.current?.pause(); setIsPlaying(false)
+    setEditingIdx(null)
+    setCapEdit({ idx, draft: { text: p.text, start: p.start, end: p.end }, caret: p.text.length, cut: null })
+  }
+  function cancelCaptionEdit() { setCapEdit(null) }
+  // Con la ventana para Zoom abierta el video del panel no suena: la edición se cierra.
+  useEffect(() => { if (stageOpen || screen !== 'player') setCapEdit(null) }, [stageOpen, screen])
+  function saveCaptionEdit() {
+    if (!capEdit) return
+    const { idx, draft } = capEdit
+    const orig = phrasesRef.current[idx]
+    if (!orig) { setCapEdit(null); return }
+    const text = draft.text.replace(/\s*\n\s*/g, ' ').trim()
+    setIsDirty(true)
+    setPhrases(prev => prev.map((p, i) => (i === idx ? { ...p, text, start: draft.start, end: draft.end } : p)))
+    capture('caption_edited_on_video', { phrase_index: idx, text_changed: text !== orig.text, start_delta_s: Math.round((draft.start - orig.start) * 1000) / 1000, end_delta_s: Math.round((draft.end - orig.end) * 1000) / 1000 })
+    setSubText(text)
+    setCapEdit(null)
+  }
+  function splitCaptionEdit([a, b]: [CaptionDraft, CaptionDraft]) {
+    if (!capEdit) return
+    const idx = capEdit.idx
+    const orig = phrasesRef.current[idx]
+    if (!orig) { setCapEdit(null); return }
+    setIsDirty(true)
+    setPhrases(prev => [...prev.slice(0, idx), { ...a, sel: orig.sel }, { ...b, sel: orig.sel }, ...prev.slice(idx + 1)])
+    capture('phrase_split', { phrase_index: idx, new_total: phrasesRef.current.length + 1, precise: true })
+    setCurIdx(prev => (prev > idx ? prev + 1 : prev))
+    setSubText(a.text)
+    setCapEdit(null)
+  }
+
   function startEdit(idx: number) {
     setEditingIdx(idx)
     setEditingText(phrases[idx].text)
@@ -1451,13 +1494,38 @@ export default function Player() {
               <div className={styles.videoWrap}>
                 <video ref={vidRef} src={stageOpen ? undefined : (videoUrl || storageUrl || undefined)} crossOrigin="anonymous"
                   style={{ width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
-                {ccOn && subText && !stageOpen && !hideTexts && (
+                {capEdit && !stageOpen ? (
                   <div className={styles.subOverlay}>
-                    <div className={styles.subBox}>{subTextNodes}</div>
+                    <textarea className={`${styles.subBox} ${styles.subEdit}`} aria-label="Texto del subtítulo" autoFocus
+                      rows={Math.min(3, Math.max(1, Math.ceil(capEdit.draft.text.length / 48)))}
+                      value={capEdit.draft.text}
+                      onChange={e => { const v = e.target.value; const c = e.target.selectionStart ?? v.length; setCapEdit(s => (s ? { ...s, draft: { ...s.draft, text: v }, caret: c } : s)) }}
+                      onSelect={e => { const c = (e.target as HTMLTextAreaElement).selectionStart ?? 0; setCapEdit(s => (s && s.caret !== c ? { ...s, caret: c } : s)) }}
+                      onKeyUp={e => { const c = e.currentTarget.selectionStart ?? 0; setCapEdit(s => (s && s.caret !== c ? { ...s, caret: c } : s)) }}
+                      onMouseUp={e => { const c = e.currentTarget.selectionStart ?? 0; setCapEdit(s => (s && s.caret !== c ? { ...s, caret: c } : s)) }}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveCaptionEdit() }
+                        if (e.key === 'Escape') { e.preventDefault(); cancelCaptionEdit() }
+                      }} />
+                  </div>
+                ) : ccOn && subText && !stageOpen && !hideTexts && (
+                  <div className={styles.subOverlay}>
+                    {/* 2026-11: tocar el subtítulo lo edita (el video se pausa). */}
+                    <div className={`${styles.subBox} ${styles.subClick}`} role="button" tabIndex={0}
+                      aria-label="Editar este subtítulo" title="Tocá para editar el subtítulo"
+                      onClick={startCaptionEdit}
+                      onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); startCaptionEdit() } }}>{subTextNodes}</div>
                   </div>
                 )}
               </div>
             </div>
+            {capEdit && !stageOpen && phrases[capEdit.idx] && (
+              <CaptionEditor index={capEdit.idx} total={phrases.length} draft={capEdit.draft} caret={capEdit.caret} cut={capEdit.cut}
+                delay={delay} video={() => vidRef.current}
+                onDraft={d => setCapEdit(s => (s ? { ...s, draft: d } : s))}
+                onCut={c => setCapEdit(s => (s ? { ...s, cut: c } : s))}
+                onSave={saveCaptionEdit} onCancel={cancelCaptionEdit} onSplit={splitCaptionEdit} />
+            )}
             <PlayerDock
               phrases={phrases} delay={delay} hideTexts={hideTexts} isPlaying={isPlaying} bufPct={bufPct}
               speeds={SPEEDS} speedIdx={speedIdx} vol={vol} ccOn={ccOn} curIdx={curIdx}
