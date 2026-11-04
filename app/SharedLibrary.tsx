@@ -4,8 +4,9 @@ import styles from './page.module.css'
 import type { SharedType, SharedLevel } from '@/lib/db/schema'
 import { TIPO_LABEL, NIVEL_LABEL } from './LibraryList'
 import AssignToStudents from './AssignToStudents'
-import fs from './folders.module.css'
-import { FolderIcon } from './FolderBox'
+import ms from './material.module.css'
+import { FolderGlyph } from './MaterialPicker'
+import { countLabel } from '@/lib/materialView'
 
 interface SharedVideoRow {
   id: string
@@ -132,8 +133,8 @@ export default function SharedLibrary({ onOpen, assignable }: { onOpen: (id: str
         groups.map((g) => (
           <section key={g.id} aria-label={g.name ?? undefined}>
             {g.name && (
-              <h3 className={fs.fName} style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '8px 0 12px' }}>
-                <FolderIcon className={fs.fIcon} />{g.name}<span className={fs.fCount}>{g.list.length === 1 ? '1 video' : `${g.list.length} videos`}</span>
+              <h3 className={ms.paneTitle} style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '8px 0 12px', fontSize: 18 }}>
+                <FolderGlyph className={ms.navIco} />{g.name}<span className={ms.paneCount} style={{ marginLeft: 0 }}>{countLabel(g.list.length)}</span>
               </h3>
             )}
             <div className={styles.sharedGrid}>{g.list.map(card)}</div>

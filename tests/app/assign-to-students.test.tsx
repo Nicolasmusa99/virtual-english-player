@@ -76,7 +76,7 @@ describe('AssignToStudents', () => {
     const onClose = vi.fn()
     render(<AssignToStudents videoId="v1" videoName="Matilda" onClose={onClose} />)
     await screen.findByText('a@x.com')
-    fireEvent.keyDown(window, { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
     expect(onClose).toHaveBeenCalled()
   })
 })
