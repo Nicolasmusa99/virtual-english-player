@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { accounts, sessions, users, verificationTokens } from '@/lib/db/schema'
 import { toPublicSession } from '@/lib/sessionPayload'
+import { googlePicture } from '@/lib/avatar'
+import { syncGoogleProfile } from '@/lib/users'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -26,13 +28,20 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   callbacks: {
     // Allowlist: SOLO entran emails ya registrados CON rol asignado. Corre ANTES de que el
     // adapter cree el usuario → un email desconocido NO crea fila y no cae en ningún rol.
-    async signIn({ user }) {
+    async signIn({ user, account, profile }) {
       if (!user.email) return false
       const [row] = await db
         .select({ role: users.role })
         .from(users)
         .where(eq(users.email, user.email))
-      return !!row?.role // deny si no existe fila o si la fila no tiene rol (fail-closed)
+      if (!row?.role) return false // deny si no existe fila o si la fila no tiene rol (fail-closed)
+      // 2026-11: la foto de Google (y el nombre, si estaba vacío) pasan a su perfil. Si la
+      // persona subió una foto propia, se respeta. Si falla, igual entra.
+      if (account?.provider === 'google') {
+        try { await syncGoogleProfile(user.email, googlePicture(profile?.picture ?? user.image), typeof profile?.name === 'string' ? profile.name : null) }
+        catch (e) { console.error('[auth] no se pudo guardar la foto de Google:', (e as Error).message) }
+      }
+      return true
     },
     // Exponer el rol en la sesión (estrategia database → `user` es la fila del adapter).
     // Forma EXPLÍCITA (lista blanca): lo que devuelve este callback viaja al navegador

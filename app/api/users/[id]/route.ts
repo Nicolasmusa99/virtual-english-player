@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
-import { deleteUser, getStudentById, getUserById, setUserName, setUserTeacher } from '@/lib/users'
+import { deleteUser, getPasswordHash, getStudentById, getUserById, setPassword, setUserName, setUserTeacher } from '@/lib/users'
+import { hashPassword, passwordProblem } from '@/lib/password'
 import { NAME_ERROR, normalizePersonName } from '@/lib/personName'
 
 const isUuid = (x: unknown): x is string => typeof x === 'string' && /^[0-9a-f-]{36}$/i.test(x)
@@ -20,6 +21,18 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
 
   const body = (await req.json().catch(() => null)) as Record<string, unknown> | null
+
+  // { password } (2026-11): SOLO el admin, a una cuenta que entra con contraseña. Cierra
+  // las sesiones abiertas de esa persona (si alguien la sabía, deja de estar adentro).
+  if (body && typeof body === 'object' && 'password' in body && !('name' in body)) {
+    if (me.role !== 'admin') return notFound()
+    if (!isUuid(id) || !(await getStudentById(id))) return notFound()
+    if (!(await getPasswordHash(id))) return NextResponse.json({ error: 'Esta cuenta entra con Google: no tiene contraseña.' }, { status: 400 })
+    const problem = passwordProblem(body.password)
+    if (problem) return NextResponse.json({ error: problem }, { status: 400 })
+    await setPassword(id, await hashPassword(body.password as string), null)
+    return NextResponse.json({ id, ok: true })
+  }
 
   if (body && typeof body === 'object' && 'teacherId' in body && !('name' in body)) {
     if (me.role !== 'admin') return notFound()

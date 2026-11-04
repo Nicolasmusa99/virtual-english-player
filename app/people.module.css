@@ -24,6 +24,8 @@
 /* Avatar */
 .avatar { flex-shrink: 0; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 15px var(--font-sans); letter-spacing: 0.02em; }
 .avatarBig { width: 52px; height: 52px; font-size: 18px; }
+.avatarImg { background: var(--tiza); overflow: hidden; }
+.avatarImg img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .c0 { background: #1F5FBF; }
 .c1 { background: #1F7A4F; }
 .c2 { background: #94407A; }
@@ -100,4 +102,22 @@
   .card { transition: none; }
   .card:hover:not(:disabled) { transform: none; }
   .skeleton { animation: none; }
+}
+
+/* Alta: cómo entra (Google o usuario y contraseña) — 2026-11 */
+.access { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 6px; }
+.accessOpts { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.accessOpt { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 8px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 14px var(--font-sans); text-align: left; cursor: pointer; }
+.accessOpt span { font-size: 13px; color: var(--pizarra); line-height: 1.35; }
+.accessOpt:hover { border-color: var(--pizarra); }
+.accessOn, .accessOn:hover { border-color: var(--azul); background: rgba(31, 95, 191, 0.06); box-shadow: inset 0 0 0 1px var(--azul); }
+.twoCols { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.pwRow { display: flex; align-items: center; gap: 6px; }
+.pwHelp { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-top: -6px; }
+.creds { display: grid; grid-template-columns: auto 1fr; gap: 8px 16px; margin: 0; padding: 14px 16px; border-radius: 8px; background: var(--p2); font-size: 16px; }
+.creds dt { color: var(--pizarra); }
+.creds dd { margin: 0; font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.02em; overflow-wrap: anywhere; }
+.accessOpt:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+@media (max-width: 560px) {
+  .accessOpts, .twoCols { grid-template-columns: 1fr; }
 }

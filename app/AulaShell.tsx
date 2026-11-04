@@ -5,6 +5,7 @@
 // Solo navega: qué hay en cada sección lo decide page.tsx.
 import type { ReactNode } from 'react'
 import styles from './aula.module.css'
+import Avatar from './Avatar'
 
 export type AulaNavItem = { id: string; label: string; short?: string; icon: ReactNode }
 
@@ -21,13 +22,15 @@ export const AULA_ICONS = {
   misVideos: svg(<><path d="M4 4h16v16H4z" /><path d="M4 9h16M9 4v16" /></>),
 } as const
 
-export const AULA_TEXTS = { nav: 'Secciones', signOut: 'Salir' } as const
+export const AULA_TEXTS = { nav: 'Secciones', signOut: 'Salir', profile: 'Mi perfil' } as const
 
-export default function AulaShell({ items, current, onGo, user, onSignOut, footer, children }: {
+export default function AulaShell({ items, current, onGo, user, onSignOut, onProfile, footer, children }: {
   items: AulaNavItem[]
   current: string
   onGo: (id: string) => void
-  user: { name: string; role: string }
+  user: { id?: string; name: string; role: string; image?: string | null }
+  /** Tocar la propia foto / nombre abre "Mi perfil" (current === 'profile'). */
+  onProfile?: () => void
   onSignOut: () => void
   /** Debajo de las secciones, en la barra lateral (p. ej. "Mi sala de Zoom" del profe). */
   footer?: ReactNode
@@ -50,7 +53,11 @@ export default function AulaShell({ items, current, onGo, user, onSignOut, foote
         <span className={styles.sp} />
         {footer && <div className={styles.foot}>{footer}</div>}
         <div className={styles.me}>
-          <div><b>{user.name}</b>{user.role}</div>
+          <button type="button" className={styles.meBtn} onClick={onProfile} disabled={!onProfile}
+            aria-current={current === 'profile' ? 'page' : undefined} title={AULA_TEXTS.profile}>
+            <Avatar id={user.id || user.name || 'yo'} name={user.name} image={user.image} size={36} />
+            <span className={styles.meTxt}><b>{user.name}</b>{user.role}</span>
+          </button>
           <button type="button" className={styles.txtBtn} onClick={onSignOut}>{AULA_TEXTS.signOut}</button>
         </div>
       </nav>
@@ -59,7 +66,14 @@ export default function AulaShell({ items, current, onGo, user, onSignOut, foote
       <header className={styles.topbar}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/logo-ve.jpeg" alt="Virtual English" />
-        <button type="button" className={styles.txtBtn} onClick={onSignOut}>{AULA_TEXTS.signOut}</button>
+        <span className={styles.topRight}>
+          {onProfile && (
+            <button type="button" className={styles.topMe} onClick={onProfile} aria-label={AULA_TEXTS.profile}>
+              <Avatar id={user.id || user.name || 'yo'} name={user.name} image={user.image} size={32} />
+            </button>
+          )}
+          <button type="button" className={styles.txtBtn} onClick={onSignOut}>{AULA_TEXTS.signOut}</button>
+        </span>
       </header>
 
       <main className={styles.main}>{children}</main>

@@ -17,6 +17,8 @@ import ZoomRoomStatus from './ZoomRoomStatus'
 import aula from './aula.module.css'
 import MyAgenda from './MyAgenda'
 import StudentApp from './StudentApp'
+import ProfilePanel from './ProfilePanel'
+import PasswordLogin from './PasswordLogin'
 import VoiceBoostControl from './VoiceBoostControl'
 import PlayerDock, { type DockClock } from './PlayerDock'
 import { StageChannel } from '@/lib/stageChannel'
@@ -68,7 +70,7 @@ export default function Player() {
   const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student' | 'agenda'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student' | 'agenda' | 'profile'>('load')
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; email: string; name: string | null } | null>(null)
   const [editingName, setEditingName] = useState(false)
   // A dónde vuelve la pantalla del alumno: a "Alumnos", a "Agenda" (G2) o a "Hoy" (rediseño).
@@ -117,7 +119,7 @@ export default function Player() {
   const [sizeWarn, setSizeWarn]           = useState<{ file: File; durationMin: number } | null>(null)
   // Biblioteca (Bloque 13)
   const libraryVideoIdRef = useRef<string | null>(null)
-  const { data: sessionData, status: authStatus } = useSession()
+  const { data: sessionData, status: authStatus, update: refreshSession } = useSession()
   const userRole = sessionData?.user?.role ?? null
   // Fase 1 — allowlist: NextAuth redirige a /?error=AccessDenied cuando el email no está habilitado.
   const [accessDenied, setAccessDenied] = useState(false)
@@ -1175,7 +1177,8 @@ export default function Player() {
   // lo demás, así el alumno nunca ve una pantalla del profe (y las rutas del profe le
   // responden 403). Va después de todos los hooks, que quedan inertes para el alumno.
   if (authStatus === 'authenticated' && userRole === 'alumno') {
-    return <StudentApp name={sessionData?.user?.name ?? null} email={sessionData?.user?.email ?? null} />
+    return <StudentApp id={sessionData?.user?.id ?? ''} name={sessionData?.user?.name ?? null} email={sessionData?.user?.email ?? null}
+      image={sessionData?.user?.image ?? null} onProfileChanged={() => { refreshSession() }} />
   }
 
   // ─── La sala (rediseño fase 3): debajo del título del video ───────────────────
@@ -1186,7 +1189,7 @@ export default function Player() {
 
   // ─── El aula (rediseño fase 2): secciones de la barra lateral según el rol ─────
   type Screen = typeof screen
-  const AULA_SCREENS: Screen[] = ['load', 'library', 'exercises', 'users', 'shared', 'student', 'agenda']
+  const AULA_SCREENS: Screen[] = ['load', 'library', 'exercises', 'users', 'shared', 'student', 'agenda', 'profile']
   const aulaNav: AulaNavItem[] = userRole === 'profesor' ? [
     { id: 'load', label: 'Hoy', icon: AULA_ICONS.hoy },
     { id: 'agenda', label: 'Agenda', icon: AULA_ICONS.agenda },
@@ -1236,6 +1239,8 @@ export default function Player() {
               </svg>
               Iniciar sesión con Google
             </button>
+            {/* 2026-11: las cuentas que crea el admin con usuario y contraseña. */}
+            <PasswordLogin />
             {accessDenied && (
               <div className={styles.wAccessDenied}>
                 Tu cuenta no está habilitada. Pedí acceso a tu profesor o administrador.
@@ -1251,8 +1256,8 @@ export default function Player() {
       {authStatus === 'authenticated' && AULA_SCREENS.includes(screen) && (
         <div className={styles.lightScope}>
           <AulaShell items={aulaNav} current={aulaCurrent} onGo={goAula}
-            user={{ name: sessionData?.user?.name || sessionData?.user?.email || '', role: userRole === 'admin' ? 'Admin' : 'Profe' }}
-            onSignOut={() => signOut()}
+            user={{ id: sessionData?.user?.id, name: sessionData?.user?.name || sessionData?.user?.email || '', role: userRole === 'admin' ? 'Admin' : 'Profe', image: sessionData?.user?.image }}
+            onSignOut={() => signOut()} onProfile={() => setScreen('profile')}
             footer={userRole === 'profesor' ? <ZoomRoomStatus /> : undefined}>
 
             {screen === 'load' && userRole === 'profesor' && (
@@ -1427,6 +1432,12 @@ export default function Player() {
 
             {screen === 'agenda' && (
               <MyAgenda onOpenStudent={(id, email, name) => openStudent(id, email, 'agenda', name)} />
+            )}
+
+            {screen === 'profile' && (
+              <AulaPage title="Mi perfil" lead="Tu foto, tu nombre y cómo entrás.">
+                <ProfilePanel onChanged={() => { refreshSession() }} />
+              </AulaPage>
             )}
           </AulaShell>
         </div>

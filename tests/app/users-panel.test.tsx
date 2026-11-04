@@ -237,3 +237,76 @@ describe('UsersPanel — acciones del admin (menú "⋯")', () => {
     expect(JSON.parse(String(patch[1].body))).toEqual({ teacherId: 'pr-1' })
   })
 })
+
+describe('UsersPanel — cuentas con usuario y contraseña (2026-11)', () => {
+  it('la foto de cada persona, si tiene; si no, sus iniciales', async () => {
+    users[0] = { ...users[0], image: 'https://lh3.googleusercontent.com/a/martina' } as typeof users[0]
+    render(<UsersPanel role="admin" />)
+    await flush()
+    expect(within(personOf('Martina Pérez')).getByTestId('avatar').querySelector('img')).toHaveAttribute('src', 'https://lh3.googleusercontent.com/a/martina')
+    expect(within(personOf('Laura Sosa')).getByTestId('avatar')).toHaveTextContent('LS')
+  })
+
+  it('el admin crea una cuenta con usuario y contraseña: propone el usuario y muestra los datos para pasarle', async () => {
+    render(<UsersPanel role="admin" />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: T.newUser }))
+    const dlg = screen.getByRole('dialog', { name: T.createTitleAdmin })
+    fireEvent.change(within(dlg).getByLabelText('Nombre y apellido'), { target: { value: 'Tomás Ruiz' } })
+    fireEvent.click(within(dlg).getByRole('radio', { name: new RegExp(T.accessPassword) }))
+    expect(within(dlg).getByLabelText(T.username)).toHaveValue('tomas.ruiz')
+    fireEvent.change(within(dlg).getByLabelText(T.password), { target: { value: 'clave-segura-1' } })
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Crear' })) })
+    await flush()
+    expect(JSON.parse(String(calls('POST')[0][1].body))).toEqual({
+      name: 'Tomás Ruiz', role: 'alumno', access: 'password', username: 'tomas.ruiz', password: 'clave-segura-1',
+    })
+    const creds = screen.getByRole('dialog', { name: T.credsTitle('Tomás Ruiz') })
+    expect(creds).toHaveTextContent('tomas.ruiz')
+    expect(creds).toHaveTextContent('clave-segura-1')
+  })
+
+  it('"Generar una" pone una contraseña válida a la vista', async () => {
+    render(<UsersPanel role="admin" />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: T.newUser }))
+    const dlg = screen.getByRole('dialog')
+    fireEvent.click(within(dlg).getByRole('radio', { name: new RegExp(T.accessPassword) }))
+    fireEvent.click(within(dlg).getByRole('button', { name: T.generate }))
+    const pw = within(dlg).getByLabelText(T.password) as HTMLInputElement
+    expect(pw.type).toBe('text')
+    expect(pw.value).toMatch(/^[a-zA-Z2-9]{10}$/)
+  })
+
+  it('el profe solo da de alta con Google (no ve la opción)', async () => {
+    users = users.filter((u) => u.role === 'alumno')
+    render(<UsersPanel role="profesor" />)
+    await flush()
+    fireEvent.click(screen.getByRole('button', { name: T.newStudent }))
+    expect(within(screen.getByRole('dialog')).queryByRole('radio', { name: new RegExp(T.accessPassword) })).toBeNull()
+  })
+
+  it('el usuario se ve en la fila y el admin le puede cambiar la contraseña', async () => {
+    users.push({ id: 'al-9', name: 'Tomás Ruiz', email: null as unknown as string, role: 'alumno', teacherId: null, username: 'tomas.ruiz', hasPassword: true } as typeof users[0])
+    render(<UsersPanel role="admin" />)
+    await flush()
+    expect(personOf('Tomás Ruiz')).toHaveTextContent('Usuario: tomas.ruiz')
+    openActions('Tomás Ruiz')
+    fireEvent.click(menuItem(T.resetPassword))
+    const dlg = screen.getByRole('dialog', { name: T.resetTitle('Tomás Ruiz') })
+    fireEvent.change(within(dlg).getByLabelText(T.password), { target: { value: 'nueva-clave-9' } })
+    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: T.save })) })
+    await flush()
+    const p = calls('PATCH')[0]
+    expect(p[0]).toBe('/api/users/al-9')
+    expect(JSON.parse(String(p[1].body))).toEqual({ password: 'nueva-clave-9' })
+    expect(screen.getByRole('dialog', { name: T.credsTitle('Tomás Ruiz') })).toHaveTextContent('nueva-clave-9')
+  })
+
+  it('a una cuenta de Google no se le ofrece cambiar la contraseña', async () => {
+    render(<UsersPanel role="admin" />)
+    await flush()
+    openActions('Martina Pérez')
+    expect(within(screen.getByRole('menu')).queryByRole('menuitem', { name: T.resetPassword })).toBeNull()
+  })
+})

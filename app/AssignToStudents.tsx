@@ -1,9 +1,8 @@
 'use client'
 import { useEffect, useMemo, useState } from 'react'
 import ms from './material.module.css'
-import ps from './people.module.css'
 import { Modal } from './ClassDialog'
-import { avatarColor, initials } from '@/lib/peopleView'
+import Avatar from './Avatar'
 
 // Video-centric: dado un video, a qué alumnos MÍOS está asignado. Cruza GET /api/users
 // (alumnos) con GET /api/assignments (para saber cuáles ya lo tienen). Solo endpoints
@@ -11,7 +10,7 @@ import { avatarColor, initials } from '@/lib/peopleView'
 // "guardar"), así que cerrar no pierde nada.
 // Rediseño 2026-11: la ventana del aula, con buscador y cada alumno con su avatar. Va sin
 // carpeta: para ordenarlo, está la pantalla del alumno.
-interface StudentRow { id: string; name?: string | null; email: string | null; role: string | null }
+interface StudentRow { id: string; name?: string | null; email: string | null; role: string | null; image?: string | null; username?: string | null }
 
 export default function AssignToStudents({
   videoId,
@@ -96,9 +95,9 @@ export default function AssignToStudents({
           const isA = assignedTo.has(s.id)
           return (
             <div key={s.id} className={`${ms.pkRow} ${isA ? ms.pkRowOn : ''}`} style={{ cursor: 'default' }}>
-              <span className={`${ps.avatar} ${ps['c' + avatarColor(s.id)]}`} aria-hidden="true">{initials(s.name, s.email)}</span>
+              <Avatar id={s.id} name={s.name} email={s.email} image={s.image} />
               <span className={ms.vName}>
-                <b>{s.name || s.email}</b>
+                <b>{s.name || s.email || s.username}</b>
                 {s.name && s.email && <span className={ms.vMeta}>{s.email}</span>}
               </span>
               {isA && <span className={ms.inLabel}>Asignado</span>}

@@ -17,9 +17,9 @@ import ActionMenu, { type MenuItem } from './ActionMenu'
 import type { Role } from '@/lib/db/schema'
 import { NAME_ERROR, NAME_MAX, normalizePersonName } from '@/lib/personName'
 import { CLASS_TZ } from '@/lib/classSchedule'
-import {
-  avatarColor, deleteConsequences, initials, nextClassText, sortPeople, studentsLabel, videosLabel,
-} from '@/lib/peopleView'
+import { deleteConsequences, nextClassText, sortPeople, studentsLabel, videosLabel } from '@/lib/peopleView'
+import Avatar from './Avatar'
+import { PASSWORD_MIN, USERNAME_ERROR, makePassword, normalizeUsername, passwordProblem, suggestUsername } from '@/lib/passwordRules'
 import { byNextClass, isSameDayInTz } from '@/lib/materialView'
 import StudentNameDialog from './StudentNameDialog'
 
@@ -29,6 +29,9 @@ interface UserRow {
   email: string | null
   role: Role | null
   teacherId: string | null
+  image?: string | null
+  username?: string | null
+  hasPassword?: boolean
 }
 type Stats = { materialCount: number; folderCount: number; nextClassAt: string | null }
 type Filter = 'all' | Role | 'noTeacher'
@@ -49,6 +52,20 @@ export const PEOPLE_TEXTS = {
   deleted: (n: string) => `Se eliminó la cuenta de ${n}.`,
   created: (n: string) => `Usuario creado: ${n}`,
   teacherTitle: (n: string) => `Profe de ${n}`, save: 'Guardar',
+  userLine: (u: string) => `Usuario: ${u}`,
+  resetPassword: 'Cambiar contraseña',
+  resetTitle: (n: string) => `Nueva contraseña de ${n}`,
+  resetNote: 'Se cierran las sesiones que tenga abiertas. Pasale la nueva para que vuelva a entrar.',
+  resetDone: (n: string) => `Se cambió la contraseña de ${n}.`,
+  accessLabel: 'Cómo entra',
+  accessGoogle: 'Con Google', accessPassword: 'Con usuario y contraseña',
+  accessGoogleHint: 'Entra con la cuenta de Google de este mail.',
+  accessPasswordHint: 'Le armás un usuario y una contraseña. Después la puede cambiar desde su perfil.',
+  username: 'Usuario', password: 'Contraseña', generate: 'Generar una', show: 'Ver', hide: 'Ocultar',
+  emailOptional: 'Email (opcional)',
+  credsTitle: (n: string) => `Cuenta creada para ${n}`,
+  credsNote: 'Pasale estos datos para que entre. La contraseña no se vuelve a mostrar.',
+  copy: 'Copiar los datos', copied: 'Copiado', done: 'Listo',
   sort: 'Ordenar', sortName: 'Nombre', sortNext: 'Próxima clase',
   colName: 'Nombre', colTeacher: 'Profe', colMaterial: 'Material', colNext: 'Próxima clase', colStudents: 'Alumnos',
   statMaterial: 'Material', statFolders: 'Carpetas', statNext: 'Próxima clase',
@@ -70,6 +87,8 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
   const [editing, setEditing] = useState<UserRow | null>(null)
   const [removing, setRemoving] = useState<UserRow | null>(null)
   const [reassigning, setReassigning] = useState<UserRow | null>(null)
+  const [resetting, setResetting] = useState<UserRow | null>(null)
+  const [credentials, setCredentials] = useState<{ name: string; username: string; password: string } | null>(null)
   const [toast, setToast] = useState('')
   const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -130,10 +149,10 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
     return sortBy === 'next' ? byNextClass(list, (u) => stats[u.id]?.nextClassAt ?? null) : sortPeople(list)
   }, [users, q, filter, sortBy, stats])
 
-  const display = (u: UserRow) => u.name || u.email || ''
-  const avatar = (u: UserRow, big = false) => (
-    <span className={`${styles.avatar} ${big ? styles.avatarBig : ''} ${styles['c' + avatarColor(u.id)]}`} aria-hidden="true">{initials(u.name, u.email)}</span>
-  )
+  const display = (u: UserRow) => u.name || u.email || u.username || ''
+  const avatar = (u: UserRow, big = false) => <Avatar id={u.id} name={u.name} email={u.email} image={u.image} size={big ? 52 : 40} />
+  // Debajo del nombre: el mail, o "Usuario: martina.p" si entra con contraseña.
+  const subline = (u: UserRow) => [u.name && u.email, u.username && T.userLine(u.username)].filter(Boolean).join(', ')
   const nextNode = (s: Stats | undefined, withLabel: boolean) => {
     if (!s) return <span className={styles.soft}>…</span>
     if (!s.nextClassAt) return <span className={styles.soft}>{withLabel ? T.noClass : T.notScheduled}</span>
@@ -144,6 +163,7 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
   const menuFor = (u: UserRow): MenuItem[] => {
     const items: MenuItem[] = [{ label: u.name ? T.rename : T.addName, onSelect: () => setEditing(u) }]
     if (u.role === 'alumno') items.push({ label: T.changeTeacher, onSelect: () => setReassigning(u) })
+    if (u.hasPassword) items.push({ label: T.resetPassword, onSelect: () => setResetting(u) })
     if (u.role === 'alumno' || u.role === 'profesor') items.push({ kind: 'sep' }, { label: T.remove, danger: true, onSelect: () => setRemoving(u) })
     return items
   }
@@ -159,7 +179,7 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
             {avatar(u, true)}
             <span className={styles.who}>
               <span className={styles.name}>{display(u)}</span>
-              {u.name && u.email && <span className={styles.mail}>{u.email}</span>}
+              {subline(u) && <span className={styles.mail}>{subline(u)}</span>}
               {!u.name && <span className={styles.mail}>{T.noName}</span>}
             </span>
           </span>
@@ -187,7 +207,7 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
           {avatar(u)}
           <span className={styles.who}>
             <span className={styles.name}>{display(u)}</span>
-            {u.name && u.email && <span className={styles.mail}>{u.email}</span>}
+            {subline(u) && <span className={styles.mail}>{subline(u)}</span>}
             {!u.name && isStudent && <span className={styles.mail}>Sin nombre: agregalo desde su pantalla</span>}
           </span>
         </span>
@@ -297,7 +317,12 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
 
       {creating && (
         <CreateDialog isAdmin={isAdmin} teachers={teachers} onClose={() => setCreating(false)}
-          onCreated={(n) => { setCreating(false); say(T.created(n)); load() }} />
+          onCreated={(n, creds) => { setCreating(false); if (creds) setCredentials({ name: n, ...creds }); else say(T.created(n)); load() }} />
+      )}
+      {credentials && <CredentialsDialog {...credentials} onClose={() => { setCredentials(null); say(T.created(credentials.name)) }} />}
+      {resetting && (
+        <PasswordResetDialog user={resetting} onClose={() => setResetting(null)}
+          onSaved={(creds) => { const n = display(resetting); setResetting(null); setCredentials({ name: n, ...creds }) }} />
       )}
       {editing && (
         <StudentNameDialog userId={editing.id} name={editing.name} title={editing.role ? NAME_TITLE[editing.role] : undefined}
@@ -324,17 +349,29 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
 }
 
 // ── Alta (ventana) ──
+// El admin elige cómo entra la persona: con Google (por su mail) o con usuario y
+// contraseña (el mail es opcional). El profe da de alta alumnos con Google.
 function CreateDialog({ isAdmin, teachers, onClose, onCreated }: {
-  isAdmin: boolean; teachers: UserRow[]; onClose: () => void; onCreated: (name: string) => void
+  isAdmin: boolean; teachers: UserRow[]; onClose: () => void
+  onCreated: (name: string, creds?: { username: string; password: string }) => void
 }) {
   const T = PEOPLE_TEXTS
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [newRole, setNewRole] = useState<Role>('alumno')
   const [teacherId, setTeacherId] = useState('') // '' = sin profe
+  const [access, setAccess] = useState<'google' | 'password'>('google')
+  const [username, setUsername] = useState('')
+  const [usernameTouched, setUsernameTouched] = useState(false)
+  const [password, setPassword] = useState('')
+  const [showPw, setShowPw] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [formError, setFormError] = useState('')
   const title = isAdmin ? T.createTitleAdmin : T.createTitleTeacher
+  const withPassword = isAdmin && access === 'password'
+
+  // El usuario se propone solo a partir del nombre ("Martina Pérez" → "martina.perez").
+  useEffect(() => { if (!usernameTouched) setUsername(suggestUsername(name)) }, [name, usernameTouched])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
@@ -342,19 +379,26 @@ function CreateDialog({ isAdmin, teachers, onClose, onCreated }: {
     const fullName = normalizePersonName(name)
     if (!fullName) { setFormError(NAME_ERROR); return }
     const mail = email.trim()
-    if (!isValidEmail(mail)) { setFormError('Ingresá un email válido.'); return }
+    if (!withPassword && !isValidEmail(mail)) { setFormError('Ingresá un email válido.'); return }
+    if (withPassword && mail && !isValidEmail(mail)) { setFormError('Ese email no es válido (o dejalo vacío).'); return }
+    const user = withPassword ? normalizeUsername(username) : null
+    if (withPassword && !user) { setFormError(USERNAME_ERROR); return }
+    const pwProblem = withPassword ? passwordProblem(password) : null
+    if (pwProblem) { setFormError(pwProblem); return }
 
     // El rol a crear sale del rol del creador: un profesor solo crea alumnos.
     const roleToCreate: Role = isAdmin ? newRole : 'alumno'
-    const body: Record<string, unknown> = { name: fullName, email: mail, role: roleToCreate }
+    const body: Record<string, unknown> = { name: fullName, role: roleToCreate }
+    if (mail) body.email = mail
+    if (withPassword) Object.assign(body, { access: 'password', username: user, password })
     if (isAdmin && roleToCreate === 'alumno' && teacherId) body.teacherId = teacherId
 
     setSubmitting(true)
     try {
       const res = await fetch('/api/users', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
       const data = await res.json().catch(() => ({}))
-      if (res.status === 201) onCreated(data.name ?? fullName)
-      else if (res.status === 409) setFormError('Ya existe un usuario con ese email.')
+      if (res.status === 201) onCreated(data.name ?? fullName, withPassword ? { username: user!, password } : undefined)
+      else if (res.status === 409) setFormError(data.error || 'Ya existe un usuario con ese email.')
       else if (res.status === 400) setFormError(data.error || 'Datos inválidos.')
       else if (res.status === 403) setFormError('No tenés permiso para crear ese usuario.')
       else setFormError(data.error || 'No se pudo crear el usuario.')
@@ -383,11 +427,56 @@ function CreateDialog({ isAdmin, teachers, onClose, onCreated }: {
           <span className={styles.fieldLbl}>Nombre y apellido</span>
           <input data-autofocus className={ms.input} maxLength={NAME_MAX} value={name} onChange={(e) => setName(e.target.value)} />
         </label>
-        <label className={styles.field}>
-          <span className={styles.fieldLbl}>{isAdmin ? 'Email' : 'Email del alumno'}</span>
-          <input className={ms.input} type="email" placeholder="email@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
-          <span className={styles.hint}>Entra con esta cuenta de Google.</span>
-        </label>
+
+        {isAdmin && (
+          <fieldset className={styles.access}>
+            <legend className={styles.fieldLbl}>{T.accessLabel}</legend>
+            <div className={styles.accessOpts} role="radiogroup" aria-label={T.accessLabel}>
+              {(['google', 'password'] as const).map((a) => (
+                <button key={a} type="button" role="radio" aria-checked={access === a}
+                  className={`${styles.accessOpt} ${access === a ? styles.accessOn : ''}`} onClick={() => setAccess(a)}>
+                  <b>{a === 'google' ? T.accessGoogle : T.accessPassword}</b>
+                  <span>{a === 'google' ? T.accessGoogleHint : T.accessPasswordHint}</span>
+                </button>
+              ))}
+            </div>
+          </fieldset>
+        )}
+
+        {withPassword ? (
+          <>
+            <div className={styles.twoCols}>
+              <label className={styles.field}>
+                <span className={styles.fieldLbl}>{T.username}</span>
+                <input className={ms.input} autoComplete="off" spellCheck={false} maxLength={30} value={username}
+                  onChange={(e) => { setUsername(e.target.value); setUsernameTouched(true) }} />
+              </label>
+              <label className={styles.field}>
+                <span className={styles.fieldLbl}>{T.password}</span>
+                <span className={styles.pwRow}>
+                  <input className={ms.input} type={showPw ? 'text' : 'password'} autoComplete="new-password" value={password}
+                    onChange={(e) => setPassword(e.target.value)} />
+                  <button type="button" className={ms.linkBtn} onClick={() => setShowPw((v) => !v)}>{showPw ? T.hide : T.show}</button>
+                </span>
+              </label>
+            </div>
+            <div className={styles.pwHelp}>
+              <span className={styles.hint}>Al menos {PASSWORD_MIN} caracteres.</span>
+              <button type="button" className={ms.linkBtn} onClick={() => { setPassword(makePassword()); setShowPw(true) }}>{T.generate}</button>
+            </div>
+            <label className={styles.field}>
+              <span className={styles.fieldLbl}>{T.emailOptional}</span>
+              <input className={ms.input} type="email" placeholder="email@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            </label>
+          </>
+        ) : (
+          <label className={styles.field}>
+            <span className={styles.fieldLbl}>{isAdmin ? 'Email' : 'Email del alumno'}</span>
+            <input className={ms.input} type="email" placeholder="email@ejemplo.com" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <span className={styles.hint}>Entra con esta cuenta de Google.</span>
+          </label>
+        )}
+
         {isAdmin && newRole === 'alumno' && (
           <label className={styles.field}>
             <span className={styles.fieldLbl}>Profe</span>
@@ -405,6 +494,73 @@ function CreateDialog({ isAdmin, teachers, onClose, onCreated }: {
           <button className={cd.tcPrimary} type="submit" disabled={submitting}>
             {submitting ? 'Creando…' : isAdmin ? 'Crear' : 'Crear alumno'}
           </button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+// ── Los datos para entrar, recién creados (o la contraseña nueva) ──
+function CredentialsDialog({ name, username, password, onClose }: { name: string; username: string; password: string; onClose: () => void }) {
+  const T = PEOPLE_TEXTS
+  const [copied, setCopied] = useState(false)
+  const text = `Virtual English\nUsuario: ${username}\nContraseña: ${password}\n${typeof window !== 'undefined' ? window.location.origin : ''}`
+  async function copy() {
+    try { await navigator.clipboard.writeText(text); setCopied(true) } catch { /* sin portapapeles: se ve igual */ }
+  }
+  return (
+    <Modal label={T.credsTitle(name)} onClose={onClose}>
+      <h3 className={cd.cdTitle}>{T.credsTitle(name)}</h3>
+      <p className={cd.tcHint} style={{ margin: '0 0 14px', fontSize: 16 }}>{T.credsNote}</p>
+      <dl className={styles.creds}>
+        <dt>{T.username}</dt><dd>{username}</dd>
+        <dt>{T.password}</dt><dd>{password}</dd>
+      </dl>
+      <div className={cd.cdBtns}>
+        <button type="button" className={cd.tcBtn} onClick={copy}>{copied ? T.copied : T.copy}</button>
+        <button type="button" className={cd.tcPrimary} onClick={onClose} data-autofocus>{T.done}</button>
+      </div>
+    </Modal>
+  )
+}
+
+// ── Cambiar la contraseña de alguien (admin) ──
+function PasswordResetDialog({ user, onClose, onSaved }: { user: UserRow; onClose: () => void; onSaved: (c: { username: string; password: string }) => void }) {
+  const T = PEOPLE_TEXTS
+  const [password, setPassword] = useState(() => makePassword())
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState('')
+  const display = user.name || user.username || ''
+  async function save(e: FormEvent) {
+    e.preventDefault()
+    const p = passwordProblem(password)
+    if (p) { setError(p); return }
+    setBusy(true); setError('')
+    try {
+      const res = await fetch(`/api/users/${encodeURIComponent(user.id)}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }),
+      })
+      const data = await res.json().catch(() => null)
+      if (!res.ok) { setError(typeof data?.error === 'string' ? data.error : 'No se pudo cambiar la contraseña.'); return }
+      onSaved({ username: user.username ?? '', password })
+    } catch { setError('No se pudo cambiar la contraseña.') } finally { setBusy(false) }
+  }
+  return (
+    <Modal label={T.resetTitle(display)} onClose={onClose}>
+      <form onSubmit={save} className={styles.form}>
+        <h3 className={cd.cdTitle}>{T.resetTitle(display)}</h3>
+        <label className={styles.field}>
+          <span className={styles.fieldLbl}>{T.password}</span>
+          <span className={styles.pwRow}>
+            <input data-autofocus className={ms.input} autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+            <button type="button" className={ms.linkBtn} onClick={() => setPassword(makePassword())}>{T.generate}</button>
+          </span>
+        </label>
+        <p className={cd.tcHint} style={{ margin: 0 }}>{T.resetNote}</p>
+        {error && <div role="alert" className={cd.tcError}>{error}</div>}
+        <div className={cd.cdBtns}>
+          <button type="button" className={cd.tcBtn} onClick={onClose} disabled={busy}>{T.cancel}</button>
+          <button type="submit" className={cd.tcPrimary} disabled={busy}>{busy ? '…' : T.save}</button>
         </div>
       </form>
     </Modal>
