@@ -1,0 +1,60 @@
+/* Carpetas (2026-11), en el aula (.lightScope): el material de un alumno (StudentView) y
+   las carpetas de la biblioteca (admin: LibraryFolders; profe: biblioteca compartida). */
+
+.head { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: 28px 0 12px; }
+.title { flex: 1; margin: 0; font-size: 22px; font-weight: 700; color: var(--tinta); letter-spacing: -0.01em; }
+.btn { height: 40px; padding: 0 14px; border-radius: 6px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.btn:hover { border-color: var(--pizarra); }
+.btnPri { border: 0; background: var(--azul); color: #fff; font-weight: 700; }
+.btnPri:hover { background: var(--azulHover); }
+.btn:disabled { opacity: 0.55; cursor: default; }
+
+/* Una carpeta */
+.folder { border: 1.5px solid var(--tiza); border-radius: 8px; background: #fff; margin-bottom: 12px; }
+.loose { border-style: dashed; }
+.fHead { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border-bottom: 1.5px solid var(--tiza); }
+.fIcon { width: 22px; height: 22px; color: var(--azul); flex-shrink: 0; }
+.loose .fIcon { color: var(--pizarra); }
+.fName { flex: 1; min-width: 0; margin: 0; font-size: 17px; font-weight: 700; color: var(--tinta); overflow-wrap: anywhere; }
+.fCount { font-weight: 400; color: var(--pizarra); font-size: 14px; margin-left: 6px; font-variant-numeric: tabular-nums; }
+.fActs { display: flex; align-items: center; gap: 2px; flex-shrink: 0; }
+.icoBtn { width: 34px; height: 34px; border-radius: 6px; border: 0; background: transparent; color: var(--pizarra); font-size: 16px; cursor: pointer; display: grid; place-items: center; }
+.icoBtn:hover { background: var(--p2); color: var(--tinta); }
+.icoBtn:disabled { opacity: 0.3; cursor: default; background: transparent; }
+.txt { height: 34px; padding: 0 10px; border-radius: 6px; border: 0; background: transparent; color: var(--azul); font: 500 14px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.txt:hover { background: var(--p2); }
+.danger { color: var(--rojo); }
+.danger:hover { background: rgba(185, 58, 51, 0.08); }
+.nameInput { flex: 1; min-width: 0; height: 36px; padding: 0 10px; border-radius: 6px; border: 1.5px solid var(--azul); background: #fff; color: var(--tinta); font: 700 16px var(--font-sans); }
+.nameInput:focus { outline: 2px solid rgba(31, 95, 191, 0.25); }
+
+/* Los videos de una carpeta */
+.items { list-style: none; margin: 0; padding: 0; }
+.item { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; padding: 10px 14px; border-top: 1.5px solid var(--tiza); font-size: 15px; color: var(--tinta); }
+.item:first-child { border-top: 0; }
+.itemOff { opacity: 0.55; }
+.thumb { width: 54px; height: 32px; border-radius: 4px; background: linear-gradient(150deg, var(--tinta), var(--azul)); display: grid; place-items: center; color: #fff; flex-shrink: 0; }
+.thumb svg { width: 14px; height: 14px; }
+.itemName { flex: 1 1 12em; min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow-wrap: anywhere; }
+.itemName b { font-weight: 700; }
+.itemMeta { font-size: 13px; color: var(--pizarra); }
+.move { height: 34px; max-width: 200px; padding: 0 8px; border-radius: 6px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 14px var(--font-sans); }
+.emptyFolder { padding: 12px 14px; font-size: 14px; color: var(--pizarra); }
+.note { font-size: 15px; color: var(--pizarra); margin: 0 0 12px; }
+.err { padding: 10px 14px; border-radius: 6px; background: rgba(185, 58, 51, 0.08); color: var(--rojo); font-size: 15px; margin-bottom: 12px; }
+
+/* Nueva carpeta (en línea) */
+.newRow { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+
+/* Elegir material para asignar */
+.picker { border: 1.5px solid var(--tiza); border-radius: 8px; padding: 16px; background: var(--p2); margin-top: 12px; }
+.pickerHead { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+.pickerTitle { flex: 1; margin: 0; font-size: 17px; font-weight: 700; color: var(--tinta); }
+.dest { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--pizarra); }
+
+.btn:focus-visible, .icoBtn:focus-visible, .txt:focus-visible, .move:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+
+@media (max-width: 640px) {
+  .fHead { flex-wrap: wrap; }
+  .item { padding: 10px; }
+}

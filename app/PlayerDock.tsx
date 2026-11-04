@@ -5,7 +5,9 @@
 // directo, sin re-render de React: avanza fluida y no carga al resto del player.
 // Rediseño (fase 3): la frase que suena se marca en amarillo en la barra ("ahora"), y
 // "Repetir frase", "Anterior" y "Siguiente" llevan texto, no solo ícono.
-import { useEffect, useRef, useState, type PointerEvent } from 'react'
+// 2026-11: mismo estilo que el player del alumno: la hora a los dos lados de la barra y
+// botones redondos con su nombre debajo (el nombre completo sigue en aria-label).
+import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import styles from './PlayerDock.module.css'
 import { fmtTime, type Phrase } from '@/lib/srt'
 import { timeAtX } from '@/lib/studentView'
@@ -24,7 +26,9 @@ export const DOCK_TEXTS = {
   speed: 'Velocidad',
   cc: 'Subtítulos',
   repeat: 'Repetir frase (↓)',
-  repeatShort: 'Repetir frase', prevShort: 'Anterior', nextShort: 'Siguiente',
+  repeatShort: 'Repetir', prevShort: 'Anterior', nextShort: 'Siguiente',
+  back10Short: '−10 s', fwd10Short: '+10 s', playShort: 'Play', pauseShort: 'Pausa', speedShort: 'Velocidad',
+  ccOn: 'Subtítulos: sí', ccOff: 'Subtítulos: no',
   sel: (n: number) => `elegida ${n}`,
 } as const
 
@@ -149,8 +153,15 @@ export default function PlayerDock(p: Props) {
   const hSel = hIdx >= 0 ? selNumber(p.phrases, hIdx) : null
   const hPct = hover != null && dur > 0 ? (hover / dur) * 100 : 0
 
+  // Un control: el botón redondo y su nombre debajo (como en el player del alumno).
+  const grp = (btn: ReactNode, label: string, extra = '') => (
+    <div className={`${styles.grp} ${extra}`}>{btn}<span className={styles.lbl} aria-hidden="true">{label}</span></div>
+  )
+
   return (
     <div className={styles.dock}>
+      <div className={styles.timeRow}>
+      <span ref={curRef} className={styles.time}>0:00</span>
       <div ref={trackRef} data-testid="prog-track"
         className={`${styles.tl} ${hover != null ? styles.tlHover : ''} ${dragging ? styles.tlDrag : ''}`}
         role="slider" aria-label={DOCK_TEXTS.timeline} aria-valuemin={0} aria-valuemax={Math.round(dur)}
@@ -181,39 +192,41 @@ export default function PlayerDock(p: Props) {
         )}
       </div>
 
-      <div className={styles.ctrls}>
-        <div className={styles.time}><span ref={curRef}>0:00</span> <span className={styles.tot}>/ <span ref={totRef}>0:00</span></span></div>
+      <span ref={totRef} className={`${styles.time} ${styles.tot}`}>0:00</span>
+      </div>
 
-        <div className={styles.mid}>
-          {p.onRepeat && (
-            <button type="button" className={`${styles.cb} ${styles.cbTxt}`} onClick={p.onRepeat} aria-label={DOCK_TEXTS.repeat} title={DOCK_TEXTS.repeat}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
-              <span>{DOCK_TEXTS.repeatShort}</span>
-            </button>
-          )}
-          <button type="button" className={`${styles.cb} ${styles.skip}`} onClick={() => p.onSkip(-10)} aria-label={DOCK_TEXTS.back10} title={DOCK_TEXTS.back10}>
+      <div className={styles.ctrls}>
+        {p.onRepeat && grp(
+          <button type="button" className={styles.cb} onClick={p.onRepeat} aria-label={DOCK_TEXTS.repeat} title={DOCK_TEXTS.repeat}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8" /><path d="M3 3v5h5" /></svg>
+          </button>, DOCK_TEXTS.repeatShort)}
+        {grp(
+          <button type="button" className={styles.cb} onClick={() => p.onSkip(-10)} aria-label={DOCK_TEXTS.back10} title={DOCK_TEXTS.back10}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M1 4v6h6" /><path d="M3.5 15A9 9 0 1 0 4 8.5" /></svg>
-          </button>
-          <button type="button" className={`${styles.cb} ${styles.cbTxt}`} onClick={p.onPrev} aria-label={DOCK_TEXTS.prev} title={DOCK_TEXTS.prev}>
+          </button>, DOCK_TEXTS.back10Short, styles.skip)}
+        {grp(
+          <button type="button" className={styles.cb} onClick={p.onPrev} aria-label={DOCK_TEXTS.prev} title={DOCK_TEXTS.prev}>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M19 20L9 12l10-8v16zM5 4h2v16H5z" /></svg>
-            <span>{DOCK_TEXTS.prevShort}</span>
-          </button>
+          </button>, DOCK_TEXTS.prevShort)}
+        {grp(
           <button type="button" className={`${styles.cb} ${styles.play}`} onClick={p.onTogglePlay}
             aria-label={p.isPlaying ? DOCK_TEXTS.pause : DOCK_TEXTS.play} title={p.isPlaying ? DOCK_TEXTS.pause : DOCK_TEXTS.play}>
             {p.isPlaying
-              ? <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" /><rect x="14" y="4" width="4" height="16" /></svg>
+              ? <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>
               : <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z" /></svg>}
-          </button>
-          <button type="button" className={`${styles.cb} ${styles.cbTxt}`} onClick={p.onNext} aria-label={DOCK_TEXTS.next} title={DOCK_TEXTS.next}>
-            <span>{DOCK_TEXTS.nextShort}</span>
+          </button>, p.isPlaying ? DOCK_TEXTS.pauseShort : DOCK_TEXTS.playShort)}
+        {grp(
+          <button type="button" className={styles.cb} onClick={p.onNext} aria-label={DOCK_TEXTS.next} title={DOCK_TEXTS.next}>
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M5 4l10 8-10 8V4zM17 4h2v16h-2z" /></svg>
-          </button>
-          <button type="button" className={`${styles.cb} ${styles.skip}`} onClick={() => p.onSkip(10)} aria-label={DOCK_TEXTS.fwd10} title={DOCK_TEXTS.fwd10}>
+          </button>, DOCK_TEXTS.nextShort)}
+        {grp(
+          <button type="button" className={styles.cb} onClick={() => p.onSkip(10)} aria-label={DOCK_TEXTS.fwd10} title={DOCK_TEXTS.fwd10}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="M23 4v6h-6" /><path d="M20.5 15A9 9 0 1 1 20 8.5" /></svg>
-          </button>
-        </div>
+          </button>, DOCK_TEXTS.fwd10Short, styles.skip)}
 
-        <div className={styles.right}>
+        <span className={styles.sep} aria-hidden="true" />
+
+        {grp(
           <div className={styles.vol}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" /><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" /></svg>
             <div className={styles.vTrack}>
@@ -222,9 +235,13 @@ export default function PlayerDock(p: Props) {
               <input type="range" className={styles.vRange} min={0} max={100} value={p.vol}
                 aria-label={DOCK_TEXTS.volume} onChange={e => p.onVol(+e.target.value)} />
             </div>
-          </div>
+          </div>, DOCK_TEXTS.volume)}
+
+        <span className={styles.sep} aria-hidden="true" />
+
+        {grp(
           <div ref={speedRef} className={styles.speedWrap}>
-            <button type="button" className={`${styles.pill} ${speedOpen ? styles.pillOn : ''}`}
+            <button type="button" className={`${styles.cb} ${styles.txtBtn} ${speedOpen ? styles.on : ''}`}
               aria-label={DOCK_TEXTS.speed} aria-haspopup="menu" aria-expanded={speedOpen} title={DOCK_TEXTS.speed}
               onClick={() => setSpeedOpen(o => !o)}>{p.speeds[p.speedIdx]}×</button>
             {speedOpen && (
@@ -238,10 +255,11 @@ export default function PlayerDock(p: Props) {
                 ))}
               </div>
             )}
-          </div>
-          <button type="button" className={`${styles.pill} ${p.ccOn ? styles.pillOn : ''}`}
-            aria-label={DOCK_TEXTS.cc} aria-pressed={p.ccOn} title={DOCK_TEXTS.cc} onClick={p.onToggleCc}>{DOCK_TEXTS.cc}</button>
-        </div>
+          </div>, DOCK_TEXTS.speedShort)}
+        {grp(
+          <button type="button" className={`${styles.cb} ${styles.txtBtn} ${p.ccOn ? styles.on : ''}`}
+            aria-label={DOCK_TEXTS.cc} aria-pressed={p.ccOn} title={DOCK_TEXTS.cc} onClick={p.onToggleCc}>CC</button>,
+          p.ccOn ? DOCK_TEXTS.ccOn : DOCK_TEXTS.ccOff)}
       </div>
     </div>
   )

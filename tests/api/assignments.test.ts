@@ -30,6 +30,8 @@ const {
 vi.mock('@/lib/auth', () => ({ auth: authMock }))
 vi.mock('@/lib/users', () => ({ getStudentById: getStudentByIdMock }))
 vi.mock('@/lib/library', () => ({ getAccessibleVideo: getAccessibleVideoMock }))
+// Carpetas (2026-11): sin carpetas en estos tests (sus casos están en folders-api.test.ts).
+vi.mock('@/lib/folders', () => ({ getFolder: vi.fn(async () => null), setAssignmentFolder: vi.fn(async () => true) }))
 vi.mock('@/lib/assignments', () => ({
   assignVideo: assignVideoMock,
   unassignVideo: unassignVideoMock,

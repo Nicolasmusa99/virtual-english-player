@@ -22,6 +22,8 @@ vi.mock('@/lib/assignments', () => ({
   listAssignmentsForStudent: listForStudentMock,
   getStudentMaterial: getStudentMaterialMock,
 }))
+// Carpetas (2026-11): el alumno sin carpetas (sus casos están en folders-api.test.ts).
+vi.mock('@/lib/folders', () => ({ listStudentFolders: vi.fn(async () => []) }))
 
 import { GET as LIST } from '@/app/api/student/material/route'
 import { GET as ONE } from '@/app/api/student/material/[videoId]/route'
@@ -74,6 +76,7 @@ describe('GET /api/student/material — su lista', () => {
     sharedType: 'pelicula',
     sharedLevel: 'b1',
     durationSec: 120,
+    folderId: null,
     publishedAt: active ? new Date('2026-09-01') : null,
     active,
     assignedAt: new Date('2026-09-20'),
@@ -101,7 +104,7 @@ describe('GET /api/student/material — su lista', () => {
     listForStudentMock.mockResolvedValue([row(VID, true)])
     const { material } = await (await LIST()).json()
     expect(Object.keys(material[0]).sort()).toEqual(
-      ['assignedAt', 'durationSec', 'originalName', 'sharedLevel', 'sharedType', 'videoId'].sort()
+      ['assignedAt', 'durationSec', 'folderId', 'originalName', 'sharedLevel', 'sharedType', 'videoId'].sort()
     )
     expect(JSON.stringify(material)).not.toContain('prof-1')
   })
@@ -110,7 +113,7 @@ describe('GET /api/student/material — su lista', () => {
     as(ALUMNO_A, 'alumno')
     const res = await LIST()
     expect(res.status).toBe(200)
-    expect(await res.json()).toEqual({ material: [] })
+    expect(await res.json()).toEqual({ material: [], folders: [] })
   })
 })
 

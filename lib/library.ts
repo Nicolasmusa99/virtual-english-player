@@ -40,3 +40,16 @@ export async function getAccessibleVideo(userId: string, videoId: string) {
     )
   return row ?? null
 }
+
+// Carpetas de la biblioteca (2026-11): los ids de los videos PUBLICADOS (lo único que un
+// profe puede ver dentro de una carpeta).
+export async function listSharedVideoIds(): Promise<string[]> {
+  const rows = await db.select({ id: videos.id }).from(videos).where(isNotNull(videos.publishedAt))
+  return rows.map((r) => r.id)
+}
+
+// ¿Existe el video? (para meterlo en una carpeta de la biblioteca: lo hace el admin).
+export async function videoExists(videoId: string): Promise<boolean> {
+  const [row] = await db.select({ id: videos.id }).from(videos).where(eq(videos.id, videoId))
+  return !!row
+}

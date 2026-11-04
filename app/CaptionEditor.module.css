@@ -1,0 +1,36 @@
+/* Editar el subtítulo (2026-11): panel de la sala (oscuro), debajo del video, fuera del área
+   que se comparte en Zoom. Tokens de app/globals.css. */
+.ed { flex-shrink: 0; max-height: 44vh; overflow-y: auto; background: var(--p2); border-top: 1px solid var(--ln2); padding: 10px 22px 12px; color: var(--tx); font-family: var(--font-sans); }
+.head { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.title { flex: 1; min-width: 0; margin: 0; font-size: 17px; font-weight: 700; color: var(--tx); }
+.of { margin-left: 10px; font-size: 14px; font-weight: 400; color: var(--tx2); font-variant-numeric: tabular-nums; }
+.hint { margin: 2px 0 8px; font-size: 14px; color: var(--tx2); }
+.btn { height: 40px; padding: 0 14px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 500 14px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.btn:hover { background: var(--p3); }
+.pri { border: 0; background: var(--acDeep); color: #fff; font-weight: 700; }
+.pri:hover { background: var(--acDeepHover); }
+.errBox { margin: 0 0 10px; padding: 8px 12px; border-radius: 4px; background: var(--rd2); color: var(--rd); font-size: 14px; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); gap: 8px 24px; }
+.tf { display: flex; flex-direction: column; gap: 3px; }
+.tfLbl { font-size: 13px; color: var(--tx2); }
+.tfRow { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.step { height: 34px; min-width: 52px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 13px var(--font-sans); font-variant-numeric: tabular-nums; cursor: pointer; }
+.step:hover { background: var(--p3); }
+.time { width: 108px; height: 34px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--ln2); background: var(--p1); color: var(--tx); font: 700 15px var(--font-sans); font-variant-numeric: tabular-nums; text-align: center; }
+.time:focus { outline: 2px solid var(--ac); outline-offset: 0; border-color: var(--ac); }
+.timeBad { border-color: var(--rd); }
+.txt { height: 34px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--ac); font: 500 13px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.txt:hover { background: var(--p3); }
+.now { margin-left: 8px; font-size: 14px; color: var(--tx2); }
+.now b { color: var(--tx); font-variant-numeric: tabular-nums; }
+.err { font-size: 13px; color: var(--rd); }
+
+.split { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--ln2); display: grid; grid-template-columns: repeat(auto-fit, minmax(440px, 1fr)); align-items: end; gap: 8px 24px; }
+.splitTop { display: flex; flex-direction: column; gap: 4px; }
+.splitTitle { margin: 0; font-size: 15px; font-weight: 700; color: var(--tx); }
+.parts { display: flex; flex-direction: column; gap: 2px; font-size: 14px; color: var(--tx2); }
+.parts b { color: var(--tx); font-weight: 700; }
+.splitBtns { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.btn:focus-visible, .step:focus-visible, .txt:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }

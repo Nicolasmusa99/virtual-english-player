@@ -92,6 +92,10 @@
 .shareHint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; font-size: 12px; color: rgba(255,255,255,0.45); display: flex; align-items: center; gap: 6px; pointer-events: none; white-space: nowrap; background: rgba(0,0,0,0.45); padding: 4px 12px; border-radius: 4px; }
 .shareHintDot { width: 4px; height: 4px; border-radius: 50%; background: var(--ac); flex-shrink: 0; }
 .videoWrap { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; min-height: 0; }
+/* 2026-11: el subtítulo se toca para editarlo; editándolo, es un campo con el mismo aspecto. */
+.subClick { pointer-events: auto; cursor: text; }
+.subClick:hover, .subClick:focus-visible { outline: 2px dashed rgba(255,255,255,0.45); outline-offset: 4px; }
+.subEdit { pointer-events: auto; width: min(90%, 960px); resize: none; border: 0; outline: 2px solid var(--ac); outline-offset: 4px; overflow: hidden; }
 .subOverlay { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; align-items: flex-end; padding: 0 6% 5%; pointer-events: none; z-index: 20; }
 .subBox { background: rgba(0,0,0,0.78); padding: 10px 28px 12px; border-radius: 4px; font-family: var(--font-sans); font-size: clamp(18px, 2.4vw, 34px); font-weight: 400; color: #ffffff; line-height: 1.4; text-align: center; max-width: 960px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); animation: subFadeIn 0.15s ease; }
 
@@ -131,16 +135,18 @@
 .plFilterAct:hover { background: var(--tx); color: var(--p1); }
 .pl { flex: 1; overflow-y: auto; padding: 2px 0 8px; scroll-behavior: smooth; }
 .plEmpty { padding: 18px; font-size: 14px; color: var(--tx3); text-align: center; }
-.plItem { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; align-items: start; gap: 10px; padding: 9px 18px 9px 12px; cursor: pointer; transition: background 0.08s; }
+/* 2026-11: el guion del profe como el del alumno: la hora a la izquierda, el texto al lado,
+   una línea entre frases y la que suena en amarillo. */
+.plItem { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; align-items: start; gap: 10px; padding: 11px 18px 11px 12px; border-top: 1px solid var(--ln); cursor: pointer; transition: background 0.08s; }
 .plItem:hover { background: rgba(255,255,255,0.04); }
 /* La frase que suena: amarillo con texto tinta (el "ahora" de la sala). */
 .plAct, .plAct:hover { background: var(--amarillo) !important; }
 .plN { font-size: 13px; color: var(--ac); padding-top: 2px; text-align: right; font-variant-numeric: tabular-nums; }
 .plAct .plN, .plAct .plT, .plAct .plTx, .plAct .plEditBtn { color: var(--tinta); }
-.plB { min-width: 0; }
-.plT { font-size: 13px; color: var(--tx3); font-variant-numeric: tabular-nums; }
+.plB { min-width: 0; display: flex; align-items: baseline; gap: 12px; }
+.plT { width: 38px; flex-shrink: 0; font-size: 13px; color: var(--tx3); font-variant-numeric: tabular-nums; }
 
-.plTx { flex: 1 1 100%; min-width: 0; font-size: 15px; color: var(--tx2); line-height: 1.4; overflow-wrap: anywhere; }
+.plTx { flex: 1 1 100%; min-width: 0; font-size: 16px; color: var(--tx); line-height: 1.4; overflow-wrap: anywhere; }
 .plAct .plTx { font-weight: 700; }
 .plCk { width: 18px; height: 18px; border-radius: 3px; border: 1.5px solid var(--tx3); margin-top: 3px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
 .plAct .plCk { border-color: var(--tinta); }

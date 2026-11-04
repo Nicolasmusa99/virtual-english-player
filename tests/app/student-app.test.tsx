@@ -490,7 +490,7 @@ describe('StudentPlayer — para practicar', () => {
 
   it('el guion: la frase que suena va marcada (y en la barra); tocar una frase va ahí', async () => {
     const { st, video } = mountPlayer()
-    const script = screen.getByRole('complementary', { name: PLAYER_TEXTS.script })
+    const script = screen.getByRole('region', { name: PLAYER_TEXTS.script })
     expect(script).toHaveTextContent('2 frases')
     const [first, second] = within(script).getAllByTestId('script-phrase')
     expect(first).toHaveTextContent('0:01Hello there')
@@ -546,5 +546,24 @@ describe('StudentPlayer — para practicar', () => {
     mountPlayer({ ...DATA, phrases: [] })
     for (const n of [PLAYER_TEXTS.prev, PLAYER_TEXTS.repeat, PLAYER_TEXTS.next]) expect(screen.getByRole('button', { name: n })).toBeDisabled()
     expect(screen.getByText(PLAYER_TEXTS.noScript)).toBeInTheDocument()
+  })
+})
+// ─────────────────────────────────────────────────────────────────
+// 2026-11 — "Sonido" en el player del alumno (el mismo control que el del profe).
+describe('StudentPlayer — Sonido', () => {
+  const DATA: StudentVideoData = {
+    id: VID_A, originalName: 'Frozen (demo).mp4', storageUrl: 'https://blob.example/frozen.mp4',
+    durationSec: 185, phrases: DETAIL.captions.phrases, delay: 0,
+  }
+  it('pestañas Guion y Sonido: Sonido muestra los ajustes; el video pide el audio con crossOrigin', () => {
+    const { container } = render(<StudentPlayer data={DATA} onBack={() => {}} />)
+    expect(container.querySelector('video')).toHaveAttribute('crossorigin', 'anonymous')
+    expect(screen.getByRole('tab', { name: PLAYER_TEXTS.script })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('button', { name: /Voces claras/ })).toBeNull() // oculto mientras se ve el guion
+    fireEvent.click(screen.getByRole('tab', { name: PLAYER_TEXTS.sound }))
+    expect(screen.getByRole('tab', { name: PLAYER_TEXTS.sound })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('button', { name: /Voces claras/ })).toBeInTheDocument()
+    expect(screen.getByText(/Filtro de voz/)).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: PLAYER_TEXTS.script })).toBeNull()
   })
 })

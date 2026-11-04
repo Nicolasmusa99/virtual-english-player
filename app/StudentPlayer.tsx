@@ -11,6 +11,7 @@
 // Es un componente aparte a propósito: el player del profe (page.tsx) no se toca.
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import styles from './student.module.css'
+import VoiceBoostControl from './VoiceBoostControl'
 import { fmtTime } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import {
@@ -51,6 +52,8 @@ export const PLAYER_TEXTS = {
   ccOn: 'Subtítulos: sí',
   ccOff: 'Subtítulos: no',
   script: 'Guion',
+  sound: 'Sonido',
+  panel: 'Guion y sonido',
   phraseOf: (i: number, n: number) => `Frase ${i} de ${n}`,
   phrases: (n: number) => (n === 1 ? '1 frase' : `${n} frases`),
   noScript: 'Este video no tiene guion.',
@@ -81,6 +84,7 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
   const [error, setError] = useState(false)
   const [cc, setCc] = useState(true)
   const [slow, setSlow] = useState(false)
+  const [tab, setTab] = useState<'script' | 'sound'>('script')
   const phrases = data.phrases
 
   // Subtítulos y tiempo al ritmo del video: un loop de requestAnimationFrame mientras
@@ -253,7 +257,8 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
       <div className={styles.pMain}>
         <div className={styles.pLeft}>
           <div className={styles.pStage}>
-            <video ref={vidRef} src={data.storageUrl} className={styles.video} playsInline preload="metadata" />
+            {/* crossOrigin: para que "Sonido" pueda procesar el audio (igual que el player del profe). */}
+            <video ref={vidRef} src={data.storageUrl} className={styles.video} playsInline preload="metadata" crossOrigin="anonymous" />
             {cc && sub && (
               <div className={styles.subOverlay}>
                 <div className={styles.subBox} data-testid="student-sub">{hl(sub)}</div>
@@ -352,9 +357,23 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
           </div>
         </div>
 
-        <aside className={styles.script} aria-label={T.script}>
+        <aside className={styles.script} aria-label={T.panel}>
+          {/* 2026-11: "Sonido" como en el player del profe (voces claras, filtro de voz, ajuste
+              manual; se recuerda). Queda montado aunque no se vea: si se desmonta, desconecta el
+              ecualizador del video. */}
+          <div className={styles.sTabs} role="tablist">
+            {(['script', 'sound'] as const).map((t) => (
+              <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`tab-${t}`}
+                className={`${styles.sTab} ${tab === t ? styles.sTabOn : ''}`} onClick={() => setTab(t)}>
+                {t === 'script' ? T.script : T.sound}
+              </button>
+            ))}
+          </div>
+          <div className={styles.soundPane} hidden={tab !== 'sound'}>
+            <VoiceBoostControl videoRef={vidRef} stageOpen={false} />
+          </div>
+          <div className={styles.scriptPane} hidden={tab !== 'script'} role="region" aria-label={T.script}>
           <div className={styles.scriptHead}>
-            <h2 className={styles.scriptTitle}>{T.script}</h2>
             {!noPhrases && (
               <span className={styles.scriptCount}>
                 {started >= 0 ? T.phraseOf(started + 1, phrases.length) : T.phrases(phrases.length)}
@@ -378,6 +397,7 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
               </ol>
             )}
           {!noPhrases && <p className={styles.scriptKeys}>{T.keys}</p>}
+          </div>
         </aside>
       </div>
     </div>

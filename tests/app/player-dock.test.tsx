@@ -206,15 +206,19 @@ describe('PlayerDock — rediseño (fase 3)', () => {
     const onRepeat = vi.fn()
     mount({ onRepeat })
     const btn = screen.getByRole('button', { name: DOCK_TEXTS.repeat })
-    expect(btn).toHaveTextContent(DOCK_TEXTS.repeatShort)
+    expect(btn.parentElement).toHaveTextContent(DOCK_TEXTS.repeatShort) // el nombre va debajo del botón
     fireEvent.click(btn)
     expect(onRepeat).toHaveBeenCalledTimes(1)
   })
 
-  it('Anterior / Siguiente / Subtítulos se leen con texto, no solo ícono', () => {
+  it('cada botón lleva su nombre debajo, como en el player del alumno (2026-11)', () => {
     mount()
-    expect(screen.getByRole('button', { name: DOCK_TEXTS.prev })).toHaveTextContent(DOCK_TEXTS.prevShort)
-    expect(screen.getByRole('button', { name: DOCK_TEXTS.next })).toHaveTextContent(DOCK_TEXTS.nextShort)
-    expect(screen.getByRole('button', { name: DOCK_TEXTS.cc })).toHaveTextContent('Subtítulos')
+    const label = (name: string) => screen.getByRole('button', { name }).parentElement!.textContent
+    expect(label(DOCK_TEXTS.prev)).toBe(DOCK_TEXTS.prevShort)
+    expect(label(DOCK_TEXTS.next)).toBe(DOCK_TEXTS.nextShort)
+    expect(label(DOCK_TEXTS.play)).toBe(DOCK_TEXTS.playShort)
+    expect(label(DOCK_TEXTS.back10)).toBe(DOCK_TEXTS.back10Short)
+    expect(label(DOCK_TEXTS.cc)).toBe('CC' + DOCK_TEXTS.ccOn) // el círculo dice CC y debajo si está prendido
+    expect(screen.getByRole('button', { name: DOCK_TEXTS.speed }).parentElement!.parentElement!.textContent).toBe('1×' + DOCK_TEXTS.speedShort)
   })
 })
