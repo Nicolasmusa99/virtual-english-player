@@ -18,3 +18,14 @@
 .submit:disabled { opacity: 0.6; cursor: wait; }
 .note { margin: 0; font-size: 13px; line-height: 1.4; color: var(--pizarra); text-align: center; }
 .link:focus-visible, .show:focus-visible, .submit:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+
+/* Entrar / crear cuenta (WelcomeAuth) */
+.panel { display: flex; flex-direction: column; align-items: center; gap: 18px; width: min(340px, 88vw); font-family: var(--font-sans); color: var(--tinta); }
+.panel > .wrap, .panel > .form { margin-top: 0; }
+.title { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em; text-align: center; }
+.lead { margin: -8px 0 0; font-size: 14px; line-height: 1.45; color: var(--pizarra); text-align: center; }
+.switch { margin: 0; font-size: 14px; color: var(--pizarra); text-align: center; }
+.switch .link { padding: 4px; font-size: 14px; }
+.linkInline { border: 0; background: transparent; padding: 0; color: var(--azul); font: 700 14px var(--font-sans); text-decoration: underline; cursor: pointer; }
+.hint { font-size: 12px; color: var(--pizarra); }
+.panel > .err { width: 100%; }

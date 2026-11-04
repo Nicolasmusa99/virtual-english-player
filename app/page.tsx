@@ -18,7 +18,7 @@ import aula from './aula.module.css'
 import MyAgenda from './MyAgenda'
 import StudentApp from './StudentApp'
 import ProfilePanel from './ProfilePanel'
-import PasswordLogin from './PasswordLogin'
+import WelcomeAuth from './WelcomeAuth'
 import VoiceBoostControl from './VoiceBoostControl'
 import PlayerDock, { type DockClock } from './PlayerDock'
 import { StageChannel } from '@/lib/stageChannel'
@@ -31,7 +31,7 @@ import { MODE_HELP, PRACTICE_NEEDS_SELECTION, shouldIgnoreShortcut } from '@/lib
 import Tooltip, { InfoMark } from './Tooltip'
 import ShortcutsHelp from './ShortcutsHelp'
 import type { SessionData } from '@/lib/session'
-import { useSession, signIn, signOut } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
@@ -1230,22 +1230,8 @@ export default function Player() {
           <div className={styles.wCenter}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className={styles.wLogo} src="/logo-ve.jpeg" alt="Virtual English" />
-            <button className={styles.wSignInBtn} onClick={() => signIn('google')}>
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                <path d="M17.64 9.2a10.34 10.34 0 0 0-.164-1.84H9v3.48h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908C16.658 14.252 17.64 11.945 17.64 9.2z" fill="#4285F4"/>
-                <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.258a5.37 5.37 0 0 1-3.048.86c-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A9 9 0 0 0 9 18z" fill="#34A853"/>
-                <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A9 9 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.892 11.426 0 9 0A9 9 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-              </svg>
-              Iniciar sesión con Google
-            </button>
-            {/* 2026-11: las cuentas que crea el admin con usuario y contraseña. */}
-            <PasswordLogin />
-            {accessDenied && (
-              <div className={styles.wAccessDenied}>
-                Tu cuenta no está habilitada. Pedí acceso a tu profesor o administrador.
-              </div>
-            )}
+            {/* 2026-11: entrar (Google o usuario y contraseña) o crear cuenta (entra como alumno). */}
+            <WelcomeAuth googleClassName={styles.wSignInBtn} accessDenied={accessDenied} />
           </div>
         </div>
       )}

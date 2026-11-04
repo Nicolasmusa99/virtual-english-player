@@ -68,7 +68,7 @@ export async function setZoomUrl(userId: string, zoomUrl: string | null): Promis
 }
 
 export async function insertUser(data: {
-  name: string; email: string | null; role: Role; teacherId: string | null; username?: string | null; passwordHash?: string | null
+  name: string | null; email: string | null; role: Role; teacherId: string | null; username?: string | null; passwordHash?: string | null
 }): Promise<PublicUser> {
   const { hasPassword: _omit, ...cols } = PUBLIC_COLS
   void _omit
