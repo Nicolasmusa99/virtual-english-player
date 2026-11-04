@@ -1,0 +1,91 @@
+# Migraciones de la base (Neon) desde GitHub, sin depender de ninguna compu.
+#
+# Se corre a mano (pestaña Actions > "Migrar la base" > Run workflow) o desde la línea
+# de comandos / Claude:  gh workflow run migrar-base.yml --ref <rama> -f migracion=cuentas -f base=pruebas -f modo=apply
+#
+#   · migracion: el nombre del script drizzle/verify_<nombre>.mjs (ej. cuentas, carpetas).
+#   · base: pruebas o produccion.
+#   · modo: check (solo lee) o apply (aplica el .sql, idempotente, y después chequea).
+#   · ref (la rama): de dónde se toman el .sql y el script; puede ser una rama sin mergear.
+#
+# Secretos del repo (Settings > Secrets and variables > Actions):
+#   · DATABASE_URL_PRUEBAS     la connection string UNPOOLED de la branch de pruebas de Neon.
+#   · DATABASE_URL_PRODUCCION  la UNPOOLED de producción.
+# Producción corre en el environment "produccion": si le ponés "Required reviewers" en
+# Settings > Environments, GitHub frena y pide tu aprobación antes de tocar la base real.
+# La guarda anti-prod (lib/db/guard.mjs) solo deja pasar a producción en ese job
+# (ALLOW_PROD_DB=1 se pone ahí y en ningún otro lado).
+name: Migrar la base
+
+on:
+  workflow_dispatch:
+    inputs:
+      migracion:
+        description: 'Script drizzle/verify_<nombre>.mjs (ej. cuentas)'
+        required: true
+        type: string
+      base:
+        description: 'Qué base'
+        required: true
+        type: choice
+        options: [pruebas, produccion]
+        default: pruebas
+      modo:
+        description: 'check = solo lee; apply = aplica y chequea'
+        required: true
+        type: choice
+        options: [check, apply]
+        default: check
+
+concurrency:
+  group: migrar-base-${{ inputs.base }}
+  cancel-in-progress: false
+
+jobs:
+  pruebas:
+    if: inputs.base == 'pruebas'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Validar el nombre
+        env: { MIGRACION: '${{ inputs.migracion }}' }
+        run: |
+          [[ "$MIGRACION" =~ ^[a-z_]+$ ]] || { echo "Nombre inválido: $MIGRACION"; exit 1; }
+          test -f "drizzle/verify_${MIGRACION}.mjs" || { echo "No existe drizzle/verify_${MIGRACION}.mjs en esta rama"; exit 1; }
+      - name: ${{ inputs.modo }} en pruebas
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_PRUEBAS }}
+          MIGRACION: '${{ inputs.migracion }}'
+          MODO: '${{ inputs.modo }}'
+        run: |
+          [ -n "$DATABASE_URL_UNPOOLED" ] || { echo "Falta el secreto DATABASE_URL_PRUEBAS"; exit 1; }
+          node "drizzle/verify_${MIGRACION}.mjs" "$MODO"
+
+  produccion:
+    if: inputs.base == 'produccion'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: produccion
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci --ignore-scripts
+      - name: Validar el nombre
+        env: { MIGRACION: '${{ inputs.migracion }}' }
+        run: |
+          [[ "$MIGRACION" =~ ^[a-z_]+$ ]] || { echo "Nombre inválido: $MIGRACION"; exit 1; }
+          test -f "drizzle/verify_${MIGRACION}.mjs" || { echo "No existe drizzle/verify_${MIGRACION}.mjs en esta rama"; exit 1; }
+      - name: ${{ inputs.modo }} en PRODUCCIÓN
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_PRODUCCION }}
+          ALLOW_PROD_DB: '1'
+          MIGRACION: '${{ inputs.migracion }}'
+          MODO: '${{ inputs.modo }}'
+        run: |
+          [ -n "$DATABASE_URL_UNPOOLED" ] || { echo "Falta el secreto DATABASE_URL_PRODUCCION"; exit 1; }
+          node "drizzle/verify_${MIGRACION}.mjs" "$MODO"
