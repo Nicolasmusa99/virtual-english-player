@@ -19,20 +19,29 @@ export type AssignmentVideo = {
   active: boolean // publishedAt !== null: si el admin despublicó, la fila persiste pero queda inerte
   assignedAt: Date
   assignedBy: string | null
+  folderId: string | null // carpeta del alumno donde está (2026-11); null = sin carpeta
 }
 
 // Alta idempotente. El caller (ruta) ya validó que el alumno es del profe y que el
 // video es accesible/publicado. Re-asignar el mismo par no crea fila ni falla.
+// Carpetas (2026-11): `folderId` (ya validado: es del alumno) la pone en esa carpeta; si
+// ya estaba asignado, la mueve ahí.
 export async function assignVideo(data: {
   studentId: string
   videoId: string
   assignedBy: string
+  folderId?: string | null
 }): Promise<{ created: boolean }> {
+  const values = { studentId: data.studentId, videoId: data.videoId, assignedBy: data.assignedBy, folderId: data.folderId ?? null }
   const rows = await db
     .insert(assignments)
-    .values({ studentId: data.studentId, videoId: data.videoId, assignedBy: data.assignedBy })
+    .values(values)
     .onConflictDoNothing({ target: [assignments.studentId, assignments.videoId] })
     .returning({ studentId: assignments.studentId })
+  if (rows.length === 0 && data.folderId !== undefined) {
+    await db.update(assignments).set({ folderId: data.folderId })
+      .where(and(eq(assignments.studentId, data.studentId), eq(assignments.videoId, data.videoId)))
+  }
   return { created: rows.length > 0 }
 }
 
@@ -54,6 +63,7 @@ export async function listAssignmentsForStudent(studentId: string): Promise<Assi
       videoId: assignments.videoId,
       assignedAt: assignments.assignedAt,
       assignedBy: assignments.assignedBy,
+      folderId: assignments.folderId,
       originalName: videos.originalName,
       sharedType: videos.sharedType,
       sharedLevel: videos.sharedLevel,
@@ -72,6 +82,7 @@ const teacherAssignmentCols = {
   videoId: assignments.videoId,
   assignedAt: assignments.assignedAt,
   assignedBy: assignments.assignedBy,
+  folderId: assignments.folderId,
   originalName: videos.originalName,
   sharedType: videos.sharedType,
   sharedLevel: videos.sharedLevel,

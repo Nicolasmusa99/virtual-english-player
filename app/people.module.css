@@ -1,0 +1,88 @@
+/* Personas (2026-11): "Usuarios" del admin y "Alumnos" del profe, en el aula (.lightScope:
+   tinta, Azul VE, pizarra, tiza). Cada persona con su avatar (iniciales), lo que importa de
+   ella a la vista y sus acciones. Sin mayúsculas espaciadas ni "·". */
+
+.wrap { display: flex; flex-direction: column; gap: 18px; color: var(--tinta); font-family: var(--font-sans); }
+
+/* Barra: buscar, filtros con cantidades y "+ Nuevo" */
+.bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; }
+.search { flex: 1 1 260px; min-width: 0; height: 44px; padding: 0 14px; border-radius: 6px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 16px var(--font-sans); }
+.search:focus { outline: 2px solid var(--azul); outline-offset: 0; border-color: var(--azul); }
+.filters { display: flex; flex-wrap: wrap; gap: 4px; }
+.filter { height: 40px; padding: 0 14px; border-radius: 6px; border: 0; background: transparent; color: var(--pizarra); font: 15px var(--font-sans); cursor: pointer; }
+.filter:hover { background: var(--p2); color: var(--tinta); }
+.filterOn, .filterOn:hover { background: var(--tiza); color: var(--tinta); font-weight: 700; }
+.count { margin-left: 6px; font-weight: 400; font-variant-numeric: tabular-nums; color: var(--pizarra); }
+.newBtn { height: 44px; padding: 0 18px; border-radius: 6px; border: 0; background: var(--azul); color: #fff; font: 700 15px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.newBtn:hover { background: var(--azulHover); }
+
+/* Alta */
+.form { display: flex; flex-direction: column; gap: 12px; padding: 18px; border-radius: 8px; border: 1.5px solid var(--tiza); background: var(--p2); }
+.formTitle { margin: 0; font-size: 17px; font-weight: 700; }
+.formRow { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; }
+.field { display: flex; flex-direction: column; gap: 4px; flex: 1 1 180px; min-width: 0; }
+.fieldLbl { font-size: 14px; color: var(--pizarra); }
+.input { height: 44px; padding: 0 12px; border-radius: 6px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 16px var(--font-sans); min-width: 0; }
+.input:focus { outline: 2px solid var(--azul); outline-offset: 0; border-color: var(--azul); }
+.formBtns { display: flex; gap: 10px; flex-wrap: wrap; }
+.primary { height: 44px; padding: 0 18px; border-radius: 6px; border: 0; background: var(--azul); color: #fff; font: 700 15px var(--font-sans); cursor: pointer; }
+.primary:hover { background: var(--azulHover); }
+.primary:disabled { opacity: 0.6; cursor: wait; }
+.ghost { height: 44px; padding: 0 16px; border-radius: 6px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; }
+.ghost:hover { border-color: var(--pizarra); }
+.hint { font-size: 14px; color: var(--pizarra); }
+.err { padding: 10px 14px; border-radius: 6px; background: rgba(185, 58, 51, 0.08); color: var(--rojo); font-size: 15px; }
+.ok { padding: 10px 14px; border-radius: 6px; background: var(--tiza); color: var(--tinta); font-size: 15px; }
+
+/* Secciones (Profes, Alumnos, Admins) */
+.section { display: flex; flex-direction: column; gap: 10px; }
+.sectionTitle { margin: 6px 0 0; font-size: 19px; font-weight: 700; }
+.sectionTitle span { font-weight: 400; color: var(--pizarra); font-variant-numeric: tabular-nums; }
+.empty { padding: 18px 0; border-top: 1.5px solid var(--tiza); border-bottom: 1.5px solid var(--tiza); color: var(--pizarra); font-size: 15px; }
+
+/* Una persona: avatar, quién es, lo que importa y las acciones */
+.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.card { display: flex; align-items: flex-start; gap: 14px; padding: 16px 18px; border-radius: 8px; border: 1.5px solid var(--tiza); background: #fff; }
+.gridCard { flex-direction: column; align-items: stretch; }
+.gridTop { display: flex; align-items: center; gap: 14px; }
+.avatar { flex-shrink: 0; width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; color: #fff; font: 700 16px var(--font-sans); letter-spacing: 0.02em; }
+.c0 { background: #1F5FBF; }
+.c1 { background: #1F7A4F; }
+.c2 { background: #94407A; }
+.c3 { background: #8C5A14; }
+.c4 { background: #5B4BB0; }
+.c5 { background: #0E6E70; }
+.c6 { background: #5F6B12; }
+.c7 { background: #4A5A75; }
+.who { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.nameRow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.name { font-size: 17px; font-weight: 700; overflow-wrap: anywhere; }
+.role { padding: 1px 8px; border-radius: 4px; background: var(--tiza); color: var(--pizarra); font-size: 13px; }
+.mail { font-size: 14px; color: var(--pizarra); overflow-wrap: anywhere; }
+.facts { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 6px; font-size: 14px; color: var(--tinta); }
+.fact { display: inline-flex; align-items: center; gap: 6px; }
+.fact svg { width: 15px; height: 15px; color: var(--pizarra); flex-shrink: 0; }
+.factWarn { color: var(--rojo); }
+.factWarn svg { color: var(--rojo); }
+.factSoft { color: var(--pizarra); }
+.acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px 4px; flex-shrink: 0; }
+.gridCard .acts { justify-content: flex-start; margin-top: 12px; padding-top: 12px; border-top: 1.5px solid var(--tiza); }
+.open { height: 40px; padding: 0 16px; border-radius: 6px; border: 1.5px solid var(--azul); background: #fff; color: var(--azul); font: 700 15px var(--font-sans); cursor: pointer; }
+.open:hover { background: var(--azul); color: #fff; }
+.txt { height: 40px; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; color: var(--azul); font: 500 14px var(--font-sans); cursor: pointer; }
+.txt:hover { background: var(--p2); }
+.danger { color: var(--rojo); }
+.danger:hover { background: rgba(185, 58, 51, 0.08); }
+.search:focus-visible, .filter:focus-visible, .newBtn:focus-visible, .primary:focus-visible, .ghost:focus-visible,
+.open:focus-visible, .txt:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+
+/* Ventana de borrar */
+.consequences { margin: 4px 0 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; font-size: 16px; line-height: 1.45; }
+
+@media (max-width: 700px) {
+  .grid { grid-template-columns: minmax(0, 1fr); }
+  .card { flex-wrap: wrap; }
+  .acts { flex-basis: 100%; justify-content: flex-start; padding-left: 60px; }
+  .gridCard .acts { padding-left: 0; }
+}

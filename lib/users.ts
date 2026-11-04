@@ -86,3 +86,17 @@ export async function listStudentNames(teacherId: string): Promise<{ id: string;
     .from(users)
     .where(and(eq(users.teacherId, teacherId), eq(users.role, 'alumno')))
 }
+
+// Borrar una cuenta (solo el admin; ver DELETE /api/users/[id]). La base borra en cascada
+// lo que cuelga del usuario (sesiones, cuentas de Google, asignaciones, carpetas, clases) y
+// a los alumnos de un profe borrado les deja teacher_id en NULL. Sin la fila, el login
+// (allowlist) ya no lo deja entrar.
+export async function deleteUser(id: string): Promise<boolean> {
+  const rows = await db.delete(users).where(eq(users.id, id)).returning({ id: users.id })
+  return rows.length > 0
+}
+
+// "Cambiar profe" de un alumno (solo el admin). null = sin profe.
+export async function setUserTeacher(id: string, teacherId: string | null): Promise<void> {
+  await db.update(users).set({ teacherId }).where(eq(users.id, id))
+}

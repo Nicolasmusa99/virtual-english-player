@@ -3,6 +3,7 @@ import { requireRole } from '@/lib/authz'
 import type { Role } from '@/lib/db/schema'
 import { getStudentById } from '@/lib/users'
 import { getAccessibleVideo } from '@/lib/library'
+import { getFolder, setAssignmentFolder } from '@/lib/folders'
 import {
   assignVideo,
   unassignVideo,
@@ -13,6 +14,15 @@ import {
 
 const err = (status: 400 | 401 | 403 | 404, msg: string) =>
   NextResponse.json({ error: msg }, { status })
+
+// Carpetas (2026-11): `folderId` tiene que ser una carpeta DE ESE alumno (null = sin
+// carpeta). Una ajena o inexistente es un 400 (no se mezcla material entre alumnos).
+async function checkFolder(folderId: unknown, studentId: string): Promise<{ ok: true; folderId: string | null } | { ok: false; res: NextResponse }> {
+  if (folderId === null) return { ok: true, folderId: null }
+  const folder = typeof folderId === 'string' && /^[0-9a-f-]{36}$/i.test(folderId) ? await getFolder(folderId) : null
+  if (!folder || folder.studentId !== studentId) return { ok: false, res: err(400, 'Esa carpeta no es de este alumno') }
+  return { ok: true, folderId: folder.id }
+}
 
 // Guard del alumno: existe, es 'alumno', y —si el que pide es PROFE— es SUYO
 // (teacher_id === su id, chequeado server-side, nunca del body). Admin: cualquiera.
@@ -40,7 +50,7 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json().catch(() => null)
   if (!body || typeof body !== 'object') return err(400, 'Body inválido')
-  const { studentId, videoId } = body as Record<string, unknown> // mass-assignment cerrado
+  const { studentId, videoId, folderId } = body as Record<string, unknown> // mass-assignment cerrado
 
   const chk = await checkStudent(studentId, me)
   if (!chk.ok) return chk.res
@@ -51,8 +61,40 @@ export async function POST(req: NextRequest) {
   if (!video) return err(404, 'Video no encontrado')
   if (!video.publishedAt) return err(400, 'El video no está publicado')
 
-  const { created } = await assignVideo({ studentId: chk.student.id, videoId, assignedBy: me.id })
+  // Carpetas: asignar directo dentro de una carpeta del alumno (opcional).
+  let folder: string | null | undefined
+  if (folderId !== undefined) {
+    const f = await checkFolder(folderId, chk.student.id)
+    if (!f.ok) return f.res
+    folder = f.folderId
+  }
+
+  const { created } = await assignVideo({
+    studentId: chk.student.id, videoId, assignedBy: me.id, ...(folder !== undefined ? { folderId: folder } : {}),
+  })
   return NextResponse.json({ ok: true, created }, { status: created ? 201 : 200 })
+}
+
+// ─── PATCH /api/assignments — pasar un video asignado a otra carpeta ──────────
+// { studentId, videoId, folderId: uuid | null } (null = sin carpeta). Mismo guard.
+export async function PATCH(req: NextRequest) {
+  const gate = await requireRole('admin', 'profesor')
+  if (!gate.ok) return err(gate.status, gate.status === 401 ? 'No autenticado' : 'No autorizado')
+  const me = gate.session.user
+
+  const body = await req.json().catch(() => null)
+  if (!body || typeof body !== 'object') return err(400, 'Body inválido')
+  const { studentId, videoId, folderId } = body as Record<string, unknown>
+
+  const chk = await checkStudent(studentId, me)
+  if (!chk.ok) return chk.res
+  if (typeof videoId !== 'string' || !videoId) return err(400, 'videoId requerido')
+  if (folderId === undefined) return err(400, 'folderId requerido (null = sin carpeta)')
+  const f = await checkFolder(folderId, chk.student.id)
+  if (!f.ok) return f.res
+
+  if (!(await setAssignmentFolder(chk.student.id, videoId, f.folderId))) return err(404, 'La asignación no existe')
+  return NextResponse.json({ ok: true })
 }
 
 // ─── DELETE /api/assignments — desasignar ────────────────────────────────────

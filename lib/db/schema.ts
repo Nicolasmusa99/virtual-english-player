@@ -169,6 +169,9 @@ export const assignments = pgTable(
       .references(() => videos.id, { onDelete: 'cascade' }),
     assignedBy: uuid('assigned_by').references(() => users.id, { onDelete: 'set null' }),
     assignedAt: timestamp('assigned_at', { mode: 'date' }).notNull().defaultNow(),
+    // Carpetas (2026-11): en qué carpeta DEL ALUMNO está este video. NULL = sin carpeta.
+    // Borrar la carpeta no le saca el video al alumno: queda sin carpeta (set null).
+    folderId: uuid('folder_id').references((): AnyPgColumn => folders.id, { onDelete: 'set null' }),
   },
   (t) => [primaryKey({ columns: [t.studentId, t.videoId] })]
 )
@@ -237,4 +240,40 @@ export const classEvents = pgTable(
     unique('class_events_series_original_uq').on(t.seriesId, t.originalStartsAt),
     index('class_events_student_teacher_starts_idx').on(t.studentId, t.teacherId, t.startsAt),
   ]
+)
+// --- Carpetas (2026-11) ---
+// Una carpeta agrupa videos. Dos clases, según student_id:
+//   · student_id NULL → carpeta de la BIBLIOTECA: la arma el admin para ordenar los videos
+//     (los profes las ven en la biblioteca compartida, solo con lo publicado). Los videos
+//     van en folder_videos (un video puede estar en varias).
+//   · student_id = un alumno → carpeta DE ESE ALUMNO: la arma su profe (o el admin). Lo
+//     que hay adentro son SUS asignaciones (assignments.folder_id): el acceso sigue siendo
+//     la asignación; la carpeta solo ordena. El alumno ve su material por carpetas.
+// position ordena las carpetas entre hermanas (mismo student_id). owner_id = quién la creó.
+// Todo idempotente y en cascada: si se borra el alumno, se van sus carpetas.
+export const folders = pgTable(
+  'folders',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    ownerId: uuid('owner_id').references(() => users.id, { onDelete: 'set null' }),
+    studentId: uuid('student_id').references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    position: integer('position').notNull().default(0),
+    createdAt: timestamp('created_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [index('folders_student_idx').on(t.studentId)]
+)
+
+export const folderVideos = pgTable(
+  'folder_videos',
+  {
+    folderId: uuid('folder_id')
+      .notNull()
+      .references(() => folders.id, { onDelete: 'cascade' }),
+    videoId: uuid('video_id')
+      .notNull()
+      .references(() => videos.id, { onDelete: 'cascade' }),
+    addedAt: timestamp('added_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.folderId, t.videoId] })]
 )

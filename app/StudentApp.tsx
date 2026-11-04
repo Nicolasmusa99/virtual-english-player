@@ -23,6 +23,7 @@ import {
 } from '@/lib/studentView'
 import type { SharedLevel, SharedType } from '@/lib/db/schema'
 import type { StudentPhrase } from '@/lib/assignments'
+import { groupByFolder, type FolderRef } from '@/lib/folderView'
 
 export type MaterialItem = {
   videoId: string
@@ -31,6 +32,7 @@ export type MaterialItem = {
   sharedLevel: SharedLevel | null
   durationSec: number | null
   assignedAt: string
+  folderId?: string | null // carpeta donde lo puso su profe (2026-11)
 }
 
 export const STUDENT_TEXTS = {
@@ -45,6 +47,7 @@ export const STUDENT_TEXTS = {
   calendar: 'Calendario',
   material: 'Tu material',
   isNew: 'Nuevo',
+  otherVideos: 'Otros videos',
   loading: 'Cargando tu material…',
   emptyTitle: 'Todavía no tenés material',
   emptySub: 'Cuando tu profe te asigne un video, aparece acá para que lo practiques.',
@@ -58,7 +61,7 @@ export const STUDENT_TEXTS = {
   close: 'cerrar',
 } as const
 
-type ListState = { kind: 'loading' } | { kind: 'error' } | { kind: 'ok'; items: MaterialItem[] }
+type ListState = { kind: 'loading' } | { kind: 'error' } | { kind: 'ok'; items: MaterialItem[]; folders: FolderRef[] }
 
 // Lo que llega de la API, validado: si algo no tiene la forma esperada, no se usa.
 function toVideoData(body: unknown): StudentVideoData | null {
@@ -96,7 +99,11 @@ export default function StudentApp({ name, email }: { name: string | null; email
       const res = await fetch('/api/student/material')
       if (!res.ok) throw new Error(String(res.status))
       const data = await res.json()
-      setList({ kind: 'ok', items: Array.isArray(data?.material) ? data.material : [] })
+      setList({
+        kind: 'ok',
+        items: Array.isArray(data?.material) ? data.material : [],
+        folders: Array.isArray(data?.folders) ? data.folders.filter((f: unknown) => typeof (f as FolderRef)?.id === 'string' && typeof (f as FolderRef)?.name === 'string') : [],
+      })
     } catch {
       if (!opts?.silent) setList({ kind: 'error' })
     }
@@ -134,6 +141,8 @@ export default function StudentApp({ name, email }: { name: string | null; email
 
   const hello = T.hello(firstName(name, email))
   const items = list.kind === 'ok' ? newestFirst(list.items) : []
+  const folders = list.kind === 'ok' ? list.folders : []
+  const groups = groupByFolder(items.map((m) => ({ ...m, folderId: m.folderId ?? null })), folders, { dropEmpty: true })
   const noMaterial = list.kind === 'ok' && items.length === 0
   const noClasses = classes.kind === 'ok' && !hasUpcoming(classes.classes, now)
   // Armado del inicio: con material, dos columnas; sin material, la clase es lo principal;
@@ -195,28 +204,39 @@ export default function StudentApp({ name, email }: { name: string | null; email
         </div>
       )}
 
-      {items.length > 0 && (
-        <ul className={styles.list}>
-          {items.map((m) => {
-            const meta = [typeLabel(m.sharedType), levelLabel(m.sharedLevel), durationLabel(m.durationSec)].filter(Boolean).join(', ')
-            const fresh = isNewAssignment(m.assignedAt, now)
-            return (
-              <li key={m.videoId}>
-                <button type="button" className={styles.card} onClick={() => open(m.videoId)} disabled={!!openingId}>
-                  <span className={styles.thumb} aria-hidden="true">
-                    {fresh && <span className={styles.newTag}>{T.isNew}</span>}
-                    <svg width="28" height="28" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg>
-                  </span>
-                  <span className={styles.cTitle}>{displayVideoName(m.originalName)}</span>
-                  {fresh && <span className={styles.srOnly}>, {T.isNew}</span>}
-                  {meta && <span className={styles.cMeta}>{meta}</span>}
-                  <span className={styles.cWhen}>{assignedAgo(m.assignedAt, now)}</span>
-                </button>
-              </li>
-            )
-          })}
-        </ul>
-      )}
+      {/* Carpetas (2026-11): si su profe armó carpetas, el material va agrupado en ellas (las
+          vacías no se muestran); lo que no está en ninguna va al final, en "Otros videos". */}
+      {items.length > 0 && groups.map(({ folder, items: group }) => (
+        <div key={folder?.id ?? 'loose'} className={styles.fGroup}>
+          {folders.length > 0 && (
+            <h3 className={styles.fTitle}>
+              <svg className={styles.fIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+              {folder ? folder.name : T.otherVideos}
+              <span className={styles.fCount}>{group.length === 1 ? '1 video' : `${group.length} videos`}</span>
+            </h3>
+          )}
+          <ul className={styles.list}>
+            {group.map((m) => {
+              const meta = [typeLabel(m.sharedType), levelLabel(m.sharedLevel), durationLabel(m.durationSec)].filter(Boolean).join(', ')
+              const fresh = isNewAssignment(m.assignedAt, now)
+              return (
+                <li key={m.videoId}>
+                  <button type="button" className={styles.card} onClick={() => open(m.videoId)} disabled={!!openingId}>
+                    <span className={styles.thumb} aria-hidden="true">
+                      {fresh && <span className={styles.newTag}>{T.isNew}</span>}
+                      <svg width="28" height="28" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg>
+                    </span>
+                    <span className={styles.cTitle}>{displayVideoName(m.originalName)}</span>
+                    {fresh && <span className={styles.srOnly}>, {T.isNew}</span>}
+                    {meta && <span className={styles.cMeta}>{meta}</span>}
+                    <span className={styles.cWhen}>{assignedAgo(m.assignedAt, now)}</span>
+                  </button>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      ))}
     </section>
   )
 

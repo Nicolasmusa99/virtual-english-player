@@ -37,6 +37,11 @@
 .thumb { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; background: linear-gradient(150deg, var(--tinta), var(--azul)); display: grid; place-items: center; color: #fff; margin-bottom: 10px; transition: filter 0.15s; }
 .card:hover .thumb { filter: brightness(1.12); }
 .card:focus-visible { outline: 2px solid var(--azul); outline-offset: 4px; border-radius: 4px; }
+/* Carpetas (2026-11): un grupo por carpeta que armó el profe. */
+.fGroup + .fGroup { margin-top: 28px; }
+.fTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--tinta); }
+.fIcon { width: 22px; height: 22px; color: var(--azul); flex-shrink: 0; }
+.fCount { font-size: 14px; font-weight: 400; color: var(--pizarra); }
 /* "Nuevo": asignado en los últimos 7 días. Etiqueta blanca (el amarillo es solo "ahora"). */
 .newTag { position: absolute; top: 10px; left: 10px; padding: 3px 8px; border-radius: 3px; background: #fff; color: var(--azul); font: 700 13px var(--font-sans); }
 .cTitle { display: block; font-size: 17px; font-weight: 700; color: var(--tinta); line-height: 1.3; overflow-wrap: anywhere; }

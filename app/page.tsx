@@ -6,6 +6,7 @@ import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
 import UsersPanel from './UsersPanel'
+import LibraryFolders from './LibraryFolders'
 import LibraryList, { type LibraryVideoRow } from './LibraryList'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
@@ -1330,13 +1331,18 @@ export default function Player() {
                 ) : libraryVideos.length === 0 ? (
                   <div className={styles.progSub}>Todavía no guardaste ningún video.</div>
                 ) : (
-                  <LibraryList
-                    videos={libraryVideos}
-                    role={userRole}
-                    onOpen={openFromLibrary}
-                    onDelete={deleteFromLibrary}
-                    onChanged={fetchLibrary}
-                  />
+                  <>
+                    {/* Carpetas (2026-11): el admin ordena la biblioteca en carpetas. */}
+                    {userRole === 'admin' && <LibraryFolders videos={libraryVideos} onOpen={openFromLibrary} />}
+                    {userRole === 'admin' && <h2 className={styles.secTitle} style={{ marginTop: 0 }}>Todos los videos</h2>}
+                    <LibraryList
+                      videos={libraryVideos}
+                      role={userRole}
+                      onOpen={openFromLibrary}
+                      onDelete={deleteFromLibrary}
+                      onChanged={fetchLibrary}
+                    />
+                  </>
                 )}
                 {userRole === 'admin' && (
                   <button className={`${aula.btn} ${aula.btnSec}`} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir otro video</button>
@@ -1359,7 +1365,7 @@ export default function Player() {
             {screen === 'users' && (
               <AulaPage title={userRole === 'admin' ? 'Usuarios' : 'Alumnos'}
                 lead={userRole === 'admin' ? 'Creá usuarios y asigná cada alumno a su profe.' : 'Sumá alumnos y abrí uno para ver sus clases y asignarle material.'}>
-                <div style={{ maxWidth: 760 }}>
+                <div style={{ maxWidth: 900 }}>
                   {userRole && (
                     <UsersPanel role={userRole} onOpenStudent={(id, email, name) => openStudent(id, email, 'users', name)} />
                   )}
