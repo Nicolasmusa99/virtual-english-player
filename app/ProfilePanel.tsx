@@ -23,7 +23,6 @@ type Profile = {
   image: string | null
   imageCustom: boolean
   hasGoogleImage: boolean
-  username: string | null
   hasPassword: boolean
   hasGoogle: boolean
 }
@@ -36,9 +35,9 @@ export const PROFILE_TEXTS = {
   uploading: 'Subiendo…',
   photoError: 'No se pudo subir la foto. Probá con otra imagen.',
   notImage: 'Elegí una imagen (JPG, PNG o WEBP).',
-  data: 'Tus datos', name: 'Nombre y apellido', email: 'Email', username: 'Usuario',
+  data: 'Tus datos', name: 'Nombre y apellido', email: 'Mail',
   save: 'Guardar', saved: 'Guardado.',
-  signIn: 'Cómo entrás', withGoogle: 'Con Google', withPassword: 'Con usuario y contraseña',
+  signIn: 'Cómo entrás', withGoogle: 'Con Google', withPassword: 'Con mail y contraseña',
   password: 'Contraseña', current: 'Contraseña actual', next: 'Contraseña nueva', repeat: 'Repetila',
   changePassword: 'Cambiar la contraseña', mismatch: 'Las dos contraseñas nuevas no coinciden.',
   passwordSaved: 'Listo: tu contraseña cambió. Las otras sesiones abiertas se cerraron.',
@@ -174,7 +173,7 @@ export default function ProfilePanel({ onChanged }: {
             {photoBusy && <span className={styles.photoBusy}>{T.uploading}</span>}
           </div>
           <div className={styles.photoInfo}>
-            <h2 className={styles.who}>{p.name || p.username || p.email}</h2>
+            <h2 className={styles.who}>{p.name || p.email}</h2>
             <p className={styles.sub}>{[p.role && T.roles[p.role], p.email].filter(Boolean).join(', ')}</p>
             <div className={styles.photoBtns}>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/webp" hidden aria-label={T.upload}
@@ -204,9 +203,6 @@ export default function ProfilePanel({ onChanged }: {
           </label>
           {p.email && (
             <div className={styles.field}><span className={styles.lbl}>{T.email}</span><span className={styles.ro}>{p.email}</span></div>
-          )}
-          {p.username && (
-            <div className={styles.field}><span className={styles.lbl}>{T.username}</span><span className={styles.ro}>{p.username}</span></div>
           )}
           <div className={styles.field}>
             <span className={styles.lbl}>{T.signIn}</span>

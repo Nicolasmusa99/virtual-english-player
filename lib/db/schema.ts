@@ -58,12 +58,10 @@ export const users = pgTable('user', {
   // Calendario (G0): "Mi sala de Zoom" del profe (su link personal). Las clases sin link
   // propio usan este. NULL = no cargó ninguno. Solo https de zoom.us.
   zoomUrl: text('zoom_url'),
-  // Cuentas y fotos (2026-11, migración 0006). Entrar con usuario y contraseña (las crea
-  // el admin): `username` en minúsculas y único; `passwordHash` = scrypt (lib/password.ts).
-  // NULL en los dos = solo entra con Google. Foto: `image` es la que se muestra; la de
+  // Cuentas y fotos (2026-11, migración 0006). Entrar con mail y contraseña: `passwordHash`
+  // = scrypt (lib/password.ts); NULL = solo entra con Google. El mail es el de siempre. Foto: `image` es la que se muestra; la de
   // Google se guarda aparte (`googleImage`) para volver a ella si se quita la subida.
   // `imageCustom` = la subió la persona (entrar con Google no la pisa).
-  username: text('username').unique(),
   passwordHash: text('password_hash'),
   googleImage: text('google_image'),
   imageCustom: boolean('image_custom').notNull().default(false),

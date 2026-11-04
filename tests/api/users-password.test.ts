@@ -7,7 +7,7 @@ import { NextRequest } from 'next/server'
 import { verifyPassword } from '@/lib/password'
 
 const m = vi.hoisted(() => ({
-  auth: vi.fn(), getUserByEmail: vi.fn(), getUserByUsername: vi.fn(), getUserById: vi.fn(), insertUser: vi.fn(),
+  auth: vi.fn(), getUserByEmail: vi.fn(), getUserById: vi.fn(), insertUser: vi.fn(),
   listAllUsers: vi.fn(), listStudentsOf: vi.fn(), getStudentById: vi.fn(), getPasswordHash: vi.fn(), setPassword: vi.fn(),
   setUserName: vi.fn(), setUserTeacher: vi.fn(), deleteUser: vi.fn(),
 }))
@@ -28,50 +28,46 @@ const patch = (id: string, body: unknown) => PATCH(new NextRequest(`http://local
 beforeEach(() => {
   Object.values(m).forEach((f) => f.mockReset())
   m.getUserByEmail.mockResolvedValue(null)
-  m.getUserByUsername.mockResolvedValue(null)
   m.insertUser.mockImplementation(async (d: Record<string, unknown>) => ({ id: 'new', ...d }))
 })
 
-describe('POST /api/users — con usuario y contraseña', () => {
-  it('el admin crea un alumno con usuario y contraseña, sin mail; la contraseña se guarda hasheada', async () => {
+describe('POST /api/users — con mail y contraseña', () => {
+  it('el admin crea un alumno con mail y contraseña; la contraseña se guarda hasheada', async () => {
     m.auth.mockResolvedValue(ADMIN)
-    const res = await post({ name: 'Martina Pérez', role: 'alumno', access: 'password', username: ' Martina.P ', password: 'clave-segura-1' })
+    const res = await post({ name: 'Martina Pérez', email: 'Martina@X.com', role: 'alumno', access: 'password', password: 'clave-segura-1' })
     expect(res.status).toBe(201)
     const data = m.insertUser.mock.calls[0][0]
-    expect(data).toMatchObject({ name: 'Martina Pérez', email: null, role: 'alumno', username: 'martina.p' })
+    expect(data).toMatchObject({ name: 'Martina Pérez', email: 'martina@x.com', role: 'alumno' })
     expect(data.passwordHash).not.toContain('clave-segura-1')
     expect(await verifyPassword('clave-segura-1', data.passwordHash)).toBe(true)
     expect(JSON.stringify(await res.json())).not.toContain('scrypt')
   })
 
-  it('también con mail (opcional) si se lo pasan', async () => {
+  it('el mail es obligatorio también con contraseña', async () => {
     m.auth.mockResolvedValue(ADMIN)
-    await post({ name: 'Pablo Díaz', role: 'profesor', access: 'password', username: 'pablo', password: 'clave-segura-1', email: 'Pablo@X.com' })
-    expect(m.insertUser.mock.calls[0][0]).toMatchObject({ email: 'pablo@x.com', role: 'profesor', username: 'pablo' })
+    expect((await post({ name: 'Pablo Díaz', role: 'profesor', access: 'password', password: 'clave-segura-1' })).status).toBe(400)
+    expect(m.insertUser).not.toHaveBeenCalled()
   })
 
   it('el profe NO crea cuentas con contraseña', async () => {
     m.auth.mockResolvedValue(PROFE)
-    const res = await post({ name: 'Ana Gómez', role: 'alumno', access: 'password', username: 'ana', password: 'clave-segura-1' })
+    const res = await post({ name: 'Ana Gómez', email: 'ana@x.com', role: 'alumno', access: 'password', password: 'clave-segura-1' })
     expect(res.status).toBe(403)
     expect(m.insertUser).not.toHaveBeenCalled()
   })
 
-  it('usuario o contraseña inválidos → 400; usuario repetido → 409', async () => {
+  it('contraseña inválida o forma rara → 400; mail repetido → 409', async () => {
     m.auth.mockResolvedValue(ADMIN)
-    expect((await post({ name: 'Ana Gómez', role: 'alumno', access: 'password', username: 'a b', password: 'clave-segura-1' })).status).toBe(400)
-    expect((await post({ name: 'Ana Gómez', role: 'alumno', access: 'password', username: 'ana', password: 'corta' })).status).toBe(400)
-    expect((await post({ name: 'Ana Gómez', role: 'alumno', access: 'raro' })).status).toBe(400)
-    m.getUserByUsername.mockResolvedValue({ id: 'x' })
-    const dup = await post({ name: 'Ana Gómez', role: 'alumno', access: 'password', username: 'ana', password: 'clave-segura-1' })
-    expect(dup.status).toBe(409)
+    expect((await post({ name: 'Ana Gómez', email: 'ana@x.com', role: 'alumno', access: 'password', password: 'corta' })).status).toBe(400)
+    expect((await post({ name: 'Ana Gómez', email: 'ana@x.com', role: 'alumno', access: 'raro' })).status).toBe(400)
+    m.getUserByEmail.mockResolvedValue({ id: 'x' })
+    expect((await post({ name: 'Ana Gómez', email: 'ana@x.com', role: 'alumno', access: 'password', password: 'clave-segura-1' })).status).toBe(409)
     expect(m.insertUser).not.toHaveBeenCalled()
   })
 
-  it('con Google, como siempre: el mail es obligatorio y no se guarda usuario ni contraseña', async () => {
+  it('con Google, como siempre: no se guarda contraseña aunque la manden', async () => {
     m.auth.mockResolvedValue(ADMIN)
-    expect((await post({ name: 'Ana Gómez', role: 'alumno' })).status).toBe(400)
-    await post({ name: 'Ana Gómez', role: 'alumno', email: 'ana@x.com', username: 'colado', password: 'clave-segura-1' })
+    await post({ name: 'Ana Gómez', role: 'alumno', email: 'ana@x.com', password: 'clave-segura-1' })
     expect(m.insertUser.mock.calls[0][0]).toEqual({ name: 'Ana Gómez', email: 'ana@x.com', role: 'alumno', teacherId: null })
   })
 })

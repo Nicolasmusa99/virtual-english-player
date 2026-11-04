@@ -38,11 +38,11 @@ describe('/api/me', () => {
     expect((await patchMe(req('PATCH', { name: 'Ana Gómez' }))).status).toBe(401)
   })
   it('GET devuelve SU perfil, sin la foto de Google cruda', async () => {
-    m.getProfile.mockResolvedValue({ id: ME, name: 'Ana', email: null, role: 'alumno', image: 'i', imageCustom: false, googleImage: 'g', username: 'ana', hasPassword: true, hasGoogle: false })
+    m.getProfile.mockResolvedValue({ id: ME, name: 'Ana', email: null, role: 'alumno', image: 'i', imageCustom: false, googleImage: 'g', hasPassword: true, hasGoogle: false })
     const res = await getMe()
     const { profile } = await res.json()
     expect(m.getProfile).toHaveBeenCalledWith(ME)
-    expect(profile).toMatchObject({ id: ME, username: 'ana', hasPassword: true, hasGoogleImage: true })
+    expect(profile).toMatchObject({ id: ME, hasPassword: true, hasGoogleImage: true })
     expect(profile).not.toHaveProperty('googleImage')
     expect(JSON.stringify(profile)).not.toMatch(/hash/i)
   })

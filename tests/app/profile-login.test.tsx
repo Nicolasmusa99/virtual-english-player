@@ -18,7 +18,7 @@ let profile: Record<string, unknown>
 const calls = (method: string, url: string) => fetchMock.mock.calls.filter(([u, i]) => String(u) === url && (i?.method ?? 'GET') === method)
 
 beforeEach(() => {
-  profile = { id: ME, name: 'Martina Pérez', email: 'martina@x.com', role: 'alumno', image: 'https://lh3.googleusercontent.com/a/m', imageCustom: false, hasGoogleImage: true, username: null, hasPassword: false, hasGoogle: true }
+  profile = { id: ME, name: 'Martina Pérez', email: 'martina@x.com', role: 'alumno', image: 'https://lh3.googleusercontent.com/a/m', imageCustom: false, hasGoogleImage: true, hasPassword: false, hasGoogle: true }
   fetchMock = vi.fn((url: string, init?: RequestInit) => {
     const m = init?.method ?? 'GET'
     if (url === '/api/me' && m === 'GET') return Promise.resolve(json(200, { profile }))
@@ -26,7 +26,7 @@ beforeEach(() => {
     if (url === '/api/me/photo' && m === 'PUT') return Promise.resolve(json(200, { image: JSON.parse(String(init!.body)).url }))
     if (url === '/api/me/photo' && m === 'DELETE') return Promise.resolve(json(200, { image: 'https://lh3.googleusercontent.com/a/m' }))
     if (url === '/api/me/password') return Promise.resolve(json(200, { ok: true }))
-    if (url === '/api/login') return Promise.resolve(json(401, { error: 'Usuario o contraseña incorrectos.' }))
+    if (url === '/api/login') return Promise.resolve(json(401, { error: 'Mail o contraseña incorrectos.' }))
     return Promise.resolve(json(404, {}))
   })
   vi.stubGlobal('fetch', fetchMock)
@@ -94,10 +94,10 @@ describe('ProfilePanel', () => {
   })
 
   it('con contraseña: cambiarla pide la actual y que coincidan las nuevas', async () => {
-    profile = { ...profile, username: 'martina.p', hasPassword: true, hasGoogle: false, email: null, image: null, hasGoogleImage: false }
+    profile = { ...profile, hasPassword: true, hasGoogle: false, image: null, hasGoogleImage: false }
     render(<ProfilePanel />)
     await flush()
-    expect(screen.getByText('martina.p')).toBeInTheDocument()
+    expect(screen.getByText(P.withPassword)).toBeInTheDocument()
     const box = screen.getByRole('region', { name: P.password })
     fireEvent.change(within(box).getByLabelText(P.current), { target: { value: 'vieja-clave-1' } })
     fireEvent.change(within(box).getByLabelText(P.next), { target: { value: 'nueva-clave-1' } })
@@ -114,13 +114,13 @@ describe('ProfilePanel', () => {
 describe('PasswordLogin', () => {
   it('arranca cerrado; abre el formulario, manda usuario y contraseña y muestra el error', async () => {
     render(<PasswordLogin onSignedIn={() => {}} />)
-    expect(screen.queryByLabelText(L.username)).toBeNull()
+    expect(screen.queryByLabelText(L.email)).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: L.open }))
-    fireEvent.change(screen.getByLabelText(L.username), { target: { value: ' martina.p ' } })
+    fireEvent.change(screen.getByLabelText(L.email), { target: { value: ' martina@x.com ' } })
     fireEvent.change(screen.getByLabelText(L.password), { target: { value: 'clave-mala' } })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: L.submit })) })
-    expect(JSON.parse(String(calls('POST', '/api/login')[0][1].body))).toEqual({ username: 'martina.p', password: 'clave-mala' })
-    expect(screen.getByRole('alert')).toHaveTextContent('Usuario o contraseña incorrectos.')
+    expect(JSON.parse(String(calls('POST', '/api/login')[0][1].body))).toEqual({ email: 'martina@x.com', password: 'clave-mala' })
+    expect(screen.getByRole('alert')).toHaveTextContent('Mail o contraseña incorrectos.')
   })
 
   it('si entra bien, avisa (la página se recarga)', async () => {
@@ -128,7 +128,7 @@ describe('PasswordLogin', () => {
     const onSignedIn = vi.fn()
     render(<PasswordLogin onSignedIn={onSignedIn} />)
     fireEvent.click(screen.getByRole('button', { name: L.open }))
-    fireEvent.change(screen.getByLabelText(L.username), { target: { value: 'martina.p' } })
+    fireEvent.change(screen.getByLabelText(L.email), { target: { value: 'martina@x.com' } })
     fireEvent.change(screen.getByLabelText(L.password), { target: { value: 'clave-buena-1' } })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: L.submit })) })
     expect(onSignedIn).toHaveBeenCalled()

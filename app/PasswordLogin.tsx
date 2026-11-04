@@ -1,17 +1,17 @@
 'use client'
-// Entrar con usuario y contraseña (2026-11), en la bienvenida, debajo de "Iniciar sesión con
+// Entrar con mail y contraseña (2026-11), en la bienvenida, debajo de "Iniciar sesión con
 // Google". Arranca cerrado (la mayoría entra con Google) y se abre con un link. Habla con
 // POST /api/login; si sale bien, la página se recarga y ya hay sesión.
 import { useState, type FormEvent } from 'react'
 import styles from './login.module.css'
 
 export const LOGIN_TEXTS = {
-  open: 'Entrar con usuario y contraseña',
+  open: 'Entrar con mail y contraseña',
   or: 'o',
-  username: 'Usuario', password: 'Contraseña',
+  email: 'Mail', password: 'Contraseña',
   submit: 'Entrar', busy: 'Entrando…',
   show: 'Ver', hide: 'Ocultar',
-  empty: 'Escribí tu usuario y tu contraseña.',
+  empty: 'Escribí tu mail y tu contraseña.',
   network: 'No se pudo conectar. Probá de nuevo.',
   forgot: '¿Te olvidaste la contraseña? Pedile una nueva a tu profe o al administrador.',
 } as const
@@ -19,7 +19,7 @@ export const LOGIN_TEXTS = {
 export default function PasswordLogin({ onSignedIn }: { onSignedIn?: () => void }) {
   const T = LOGIN_TEXTS
   const [open, setOpen] = useState(false)
-  const [username, setUsername] = useState('')
+  const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -27,10 +27,10 @@ export default function PasswordLogin({ onSignedIn }: { onSignedIn?: () => void 
 
   async function submit(e: FormEvent) {
     e.preventDefault()
-    if (!username.trim() || !password) { setError(T.empty); return }
+    if (!email.trim() || !password) { setError(T.empty); return }
     setBusy(true); setError('')
     try {
-      const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.trim(), password }) })
+      const res = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email: email.trim(), password }) })
       const data = await res.json().catch(() => null)
       if (!res.ok) { setError(typeof data?.error === 'string' ? data.error : T.network); setBusy(false); return }
       if (onSignedIn) onSignedIn(); else window.location.reload()
@@ -50,9 +50,9 @@ export default function PasswordLogin({ onSignedIn }: { onSignedIn?: () => void 
     <form className={styles.form} onSubmit={submit} aria-label={T.open}>
       <div className={styles.or}><span>{T.or}</span></div>
       <label className={styles.field}>
-        <span className={styles.lbl}>{T.username}</span>
-        <input className={styles.input} autoFocus autoComplete="username" autoCapitalize="none" spellCheck={false}
-          value={username} onChange={(e) => { setUsername(e.target.value); setError('') }} />
+        <span className={styles.lbl}>{T.email}</span>
+        <input className={styles.input} type="email" autoFocus autoComplete="email" autoCapitalize="none" spellCheck={false}
+          value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} />
       </label>
       <label className={styles.field}>
         <span className={styles.lbl}>{T.password}</span>

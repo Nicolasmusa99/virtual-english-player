@@ -247,22 +247,22 @@ describe('UsersPanel — cuentas con usuario y contraseña (2026-11)', () => {
     expect(within(personOf('Laura Sosa')).getByTestId('avatar')).toHaveTextContent('LS')
   })
 
-  it('el admin crea una cuenta con usuario y contraseña: propone el usuario y muestra los datos para pasarle', async () => {
+  it('el admin crea una cuenta con mail y contraseña y ve los datos para pasarle', async () => {
     render(<UsersPanel role="admin" />)
     await flush()
     fireEvent.click(screen.getByRole('button', { name: T.newUser }))
     const dlg = screen.getByRole('dialog', { name: T.createTitleAdmin })
     fireEvent.change(within(dlg).getByLabelText('Nombre y apellido'), { target: { value: 'Tomás Ruiz' } })
+    fireEvent.change(within(dlg).getByLabelText(/^Email/), { target: { value: 'Tomas@X.com' } })
     fireEvent.click(within(dlg).getByRole('radio', { name: new RegExp(T.accessPassword) }))
-    expect(within(dlg).getByLabelText(T.username)).toHaveValue('tomas.ruiz')
     fireEvent.change(within(dlg).getByLabelText(T.password), { target: { value: 'clave-segura-1' } })
     await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: 'Crear' })) })
     await flush()
     expect(JSON.parse(String(calls('POST')[0][1].body))).toEqual({
-      name: 'Tomás Ruiz', role: 'alumno', access: 'password', username: 'tomas.ruiz', password: 'clave-segura-1',
+      name: 'Tomás Ruiz', email: 'Tomas@X.com', role: 'alumno', access: 'password', password: 'clave-segura-1',
     })
     const creds = screen.getByRole('dialog', { name: T.credsTitle('Tomás Ruiz') })
-    expect(creds).toHaveTextContent('tomas.ruiz')
+    expect(creds).toHaveTextContent('tomas@x.com')
     expect(creds).toHaveTextContent('clave-segura-1')
   })
 
@@ -286,11 +286,10 @@ describe('UsersPanel — cuentas con usuario y contraseña (2026-11)', () => {
     expect(within(screen.getByRole('dialog')).queryByRole('radio', { name: new RegExp(T.accessPassword) })).toBeNull()
   })
 
-  it('el usuario se ve en la fila y el admin le puede cambiar la contraseña', async () => {
-    users.push({ id: 'al-9', name: 'Tomás Ruiz', email: null as unknown as string, role: 'alumno', teacherId: null, username: 'tomas.ruiz', hasPassword: true } as typeof users[0])
+  it('el admin le puede cambiar la contraseña a una cuenta con contraseña', async () => {
+    users.push({ id: 'al-9', name: 'Tomás Ruiz', email: 'tomas@x.com', role: 'alumno', teacherId: null, hasPassword: true } as typeof users[0])
     render(<UsersPanel role="admin" />)
     await flush()
-    expect(personOf('Tomás Ruiz')).toHaveTextContent('Usuario: tomas.ruiz')
     openActions('Tomás Ruiz')
     fireEvent.click(menuItem(T.resetPassword))
     const dlg = screen.getByRole('dialog', { name: T.resetTitle('Tomás Ruiz') })

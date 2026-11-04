@@ -1,16 +1,16 @@
 'use client'
 // La bienvenida (2026-11): entrar o crear cuenta.
-//   · Entrar: "Iniciar sesión con Google" y, abajo, "Entrar con usuario y contraseña".
-//   · Crear cuenta: con Google o con usuario y contraseña. Quien se registra entra directo
+//   · Entrar: "Iniciar sesión con Google" y, abajo, "Entrar con mail y contraseña".
+//   · Crear cuenta: con Google o con nombre y apellido, mail y contraseña. Quien se registra entra directo
 //     como alumno, sin profe (el admin le asigna uno). El rol nunca se elige acá.
 // "Crear cuenta con Google" deja la cookie de intención (lib/signup.ts) antes de ir a Google:
 // sin ella, un mail que no existe no crea cuenta.
-import { useEffect, useState, type FormEvent } from 'react'
+import { useState, type FormEvent } from 'react'
 import { signIn } from 'next-auth/react'
 import styles from './login.module.css'
 import PasswordLogin from './PasswordLogin'
 import { NAME_ERROR, NAME_MAX, normalizePersonName } from '@/lib/personName'
-import { PASSWORD_MIN, USERNAME_ERROR, normalizeUsername, passwordProblem, suggestUsername } from '@/lib/passwordRules'
+import { EMAIL_ERROR, PASSWORD_MIN, normalizeEmail, passwordProblem } from '@/lib/passwordRules'
 import { SIGNUP_INTENT_COOKIE, SIGNUP_INTENT_MAX_AGE_S } from '@/lib/signup'
 
 export const WELCOME_TEXTS = {
@@ -20,8 +20,8 @@ export const WELCOME_TEXTS = {
   haveAccount: '¿Ya tenés cuenta?', signIn: 'Iniciar sesión',
   title: 'Crear cuenta',
   lead: 'Entrás como alumno. Tu profe te asigna el material y las clases.',
-  or: 'o con usuario y contraseña',
-  name: 'Nombre y apellido', username: 'Usuario', password: 'Contraseña', email: 'Email (opcional)',
+  or: 'o con tu mail',
+  name: 'Nombre y apellido', email: 'Mail', password: 'Contraseña',
   show: 'Ver', hide: 'Ocultar',
   submit: 'Crear cuenta', busy: 'Creando…',
   min: `Al menos ${PASSWORD_MIN} caracteres.`,
@@ -86,29 +86,26 @@ export default function WelcomeAuth({ googleClassName, accessDenied = false, onS
 function SignupForm({ onSignedIn }: { onSignedIn?: () => void }) {
   const T = WELCOME_TEXTS
   const [name, setName] = useState('')
-  const [username, setUsername] = useState('')
-  const [touched, setTouched] = useState(false)
-  const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
   const [show, setShow] = useState(false)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  useEffect(() => { if (!touched) setUsername(suggestUsername(name)) }, [name, touched])
 
   async function submit(e: FormEvent) {
     e.preventDefault()
     setError('')
     const n = normalizePersonName(name)
     if (!n) { setError(NAME_ERROR); return }
-    const u = normalizeUsername(username)
-    if (!u) { setError(USERNAME_ERROR); return }
+    const m = normalizeEmail(email)
+    if (!m) { setError(EMAIL_ERROR); return }
     const p = passwordProblem(password)
     if (p) { setError(p); return }
     setBusy(true)
     try {
       const res = await fetch('/api/signup', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: n, username: u, password, ...(email.trim() ? { email: email.trim() } : {}) }),
+        body: JSON.stringify({ name: n, email: m, password }),
       })
       const data = await res.json().catch(() => null)
       if (!res.ok) { setError(typeof data?.error === 'string' ? data.error : T.network); setBusy(false); return }
@@ -124,9 +121,9 @@ function SignupForm({ onSignedIn }: { onSignedIn?: () => void }) {
         <input className={styles.input} autoComplete="name" maxLength={NAME_MAX} value={name} onChange={(e) => { setName(e.target.value); setError('') }} />
       </label>
       <label className={styles.field}>
-        <span className={styles.lbl}>{T.username}</span>
-        <input className={styles.input} autoComplete="username" autoCapitalize="none" spellCheck={false} maxLength={30}
-          value={username} onChange={(e) => { setUsername(e.target.value); setTouched(true); setError('') }} />
+        <span className={styles.lbl}>{T.email}</span>
+        <input className={styles.input} type="email" autoComplete="email" autoCapitalize="none" spellCheck={false}
+          value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} />
       </label>
       <label className={styles.field}>
         <span className={styles.lbl}>{T.password}</span>
@@ -137,10 +134,6 @@ function SignupForm({ onSignedIn }: { onSignedIn?: () => void }) {
         </span>
       </label>
       <span className={styles.hint} style={{ marginTop: -8 }}>{T.min}</span>
-      <label className={styles.field}>
-        <span className={styles.lbl}>{T.email}</span>
-        <input className={styles.input} type="email" autoComplete="email" value={email} onChange={(e) => { setEmail(e.target.value); setError('') }} />
-      </label>
       {error && <div className={styles.err} role="alert">{error}</div>}
       <button type="submit" className={styles.submit} disabled={busy}>{busy ? T.busy : T.submit}</button>
     </form>

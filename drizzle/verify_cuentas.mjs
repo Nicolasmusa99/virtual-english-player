@@ -34,12 +34,9 @@ try {
   const u = Object.fromEntries((await client.query(
     `SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'user'`)).rows.map((r) => [r.column_name, r]))
-  ok(u.username?.data_type === 'text' && u.username?.is_nullable === 'YES', 'user.username text NULL')
   ok(u.password_hash?.data_type === 'text' && u.password_hash?.is_nullable === 'YES', 'user.password_hash text NULL')
   ok(u.google_image?.data_type === 'text', 'user.google_image text')
   ok(u.image_custom?.data_type === 'boolean' && u.image_custom?.is_nullable === 'NO', 'user.image_custom boolean NOT NULL')
-  const { rows: c } = await client.query(`SELECT 1 FROM pg_constraint WHERE conname = 'user_username_unique'`)
-  ok(c.length === 1, 'usuario único (user_username_unique)')
   const { rows: [{ n }] } = await client.query('SELECT count(*)::int AS n FROM "user" WHERE password_hash IS NOT NULL')
   console.log(`  (cuentas con contraseña: ${n})`)
   const after = await count()

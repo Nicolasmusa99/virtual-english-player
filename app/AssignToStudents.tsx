@@ -10,7 +10,7 @@ import Avatar from './Avatar'
 // "guardar"), así que cerrar no pierde nada.
 // Rediseño 2026-11: la ventana del aula, con buscador y cada alumno con su avatar. Va sin
 // carpeta: para ordenarlo, está la pantalla del alumno.
-interface StudentRow { id: string; name?: string | null; email: string | null; role: string | null; image?: string | null; username?: string | null }
+interface StudentRow { id: string; name?: string | null; email: string | null; role: string | null; image?: string | null }
 
 export default function AssignToStudents({
   videoId,
@@ -97,7 +97,7 @@ export default function AssignToStudents({
             <div key={s.id} className={`${ms.pkRow} ${isA ? ms.pkRowOn : ''}`} style={{ cursor: 'default' }}>
               <Avatar id={s.id} name={s.name} email={s.email} image={s.image} />
               <span className={ms.vName}>
-                <b>{s.name || s.email || s.username}</b>
+                <b>{s.name || s.email}</b>
                 {s.name && s.email && <span className={ms.vMeta}>{s.email}</span>}
               </span>
               {isA && <span className={ms.inLabel}>Asignado</span>}

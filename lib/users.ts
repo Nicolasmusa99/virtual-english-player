@@ -15,7 +15,6 @@ const PUBLIC_COLS = {
   role: users.role,
   teacherId: users.teacherId,
   image: users.image,
-  username: users.username,
   hasPassword: sql<boolean>`(${users.passwordHash} is not null)`,
 }
 
@@ -26,7 +25,6 @@ export type PublicUser = {
   role: Role | null
   teacherId: string | null
   image: string | null
-  username: string | null
   hasPassword: boolean
 }
 
@@ -68,7 +66,7 @@ export async function setZoomUrl(userId: string, zoomUrl: string | null): Promis
 }
 
 export async function insertUser(data: {
-  name: string | null; email: string | null; role: Role; teacherId: string | null; username?: string | null; passwordHash?: string | null
+  name: string | null; email: string | null; role: Role; teacherId: string | null; passwordHash?: string | null
 }): Promise<PublicUser> {
   const { hasPassword: _omit, ...cols } = PUBLIC_COLS
   void _omit
@@ -117,17 +115,12 @@ export async function setUserTeacher(id: string, teacherId: string | null): Prom
 
 // ─── Cuentas con usuario y contraseña y fotos (2026-11) ──────────────────────
 
-export async function getUserByUsername(username: string) {
-  const [row] = await db.select({ id: users.id }).from(users).where(eq(users.username, username))
-  return row ?? null
-}
-
 // Para el login: lo justo para comparar la contraseña y saber si puede entrar.
-export async function getLoginByUsername(username: string): Promise<{ id: string; role: Role | null; passwordHash: string | null } | null> {
+export async function getLoginByEmail(email: string): Promise<{ id: string; role: Role | null; passwordHash: string | null } | null> {
   const [row] = await db
     .select({ id: users.id, role: users.role, passwordHash: users.passwordHash })
     .from(users)
-    .where(eq(users.username, username))
+    .where(eq(users.email, email))
   return row ?? null
 }
 
@@ -158,7 +151,6 @@ export type Profile = {
   image: string | null
   imageCustom: boolean
   googleImage: string | null
-  username: string | null
   hasPassword: boolean
   hasGoogle: boolean
 }
@@ -167,7 +159,7 @@ export async function getProfile(id: string): Promise<Profile | null> {
   const [row] = await db
     .select({
       id: users.id, name: users.name, email: users.email, role: users.role, image: users.image,
-      imageCustom: users.imageCustom, googleImage: users.googleImage, username: users.username,
+      imageCustom: users.imageCustom, googleImage: users.googleImage,
       hasPassword: sql<boolean>`(${users.passwordHash} is not null)`,
     })
     .from(users)
@@ -203,4 +195,18 @@ export async function syncGoogleProfile(email: string, picture: string | null, n
   await db.update(users)
     .set({ googleImage: picture, image, ...(row.name ? {} : normalizePersonName(name) ? { name: normalizePersonName(name)! } : {}) })
     .where(eq(users.id, row.id))
+}
+
+// La PRIMERA vez que alguien entra con Google a una cuenta que tenía contraseña, se le saca
+// la contraseña y se cierran sus sesiones: Google prueba que el mail es suyo, y así nadie
+// que haya creado la cuenta con un mail ajeno (no se verifican los mails) se queda adentro.
+// Desde ahí entra con Google. Devuelve true si la sacó.
+export async function claimPasswordAccountByGoogle(email: string): Promise<boolean> {
+  const [row] = await db.select({ id: users.id, h: users.passwordHash }).from(users).where(eq(users.email, email))
+  if (!row?.h) return false
+  const [g] = await db.select({ p: accounts.provider }).from(accounts).where(and(eq(accounts.userId, row.id), eq(accounts.provider, 'google')))
+  if (g) return false
+  await db.update(users).set({ passwordHash: null }).where(eq(users.id, row.id))
+  await db.delete(sessions).where(eq(sessions.userId, row.id))
+  return true
 }

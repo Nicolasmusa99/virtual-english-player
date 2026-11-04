@@ -6,7 +6,7 @@ import { db } from '@/lib/db'
 import { accounts, sessions, users, verificationTokens } from '@/lib/db/schema'
 import { toPublicSession } from '@/lib/sessionPayload'
 import { googlePicture } from '@/lib/avatar'
-import { insertUser, syncGoogleProfile } from '@/lib/users'
+import { claimPasswordAccountByGoogle, insertUser, syncGoogleProfile } from '@/lib/users'
 import { cookies } from 'next/headers'
 import { canSignUpWithGoogle, SIGNUP_INTENT_COOKIE, SIGNUP_ROLE } from '@/lib/signup'
 import { normalizePersonName } from '@/lib/personName'
@@ -55,6 +55,10 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       // 2026-11: la foto de Google (y el nombre, si estaba vacío) pasan a su perfil. Si la
       // persona subió una foto propia, se respeta. Si falla, igual entra.
       if (account?.provider === 'google') {
+        // Primera vez con Google en una cuenta que tenía contraseña: se la saca (el mail de
+        // las cuentas con contraseña no se verifica; Google sí). Ver lib/users.ts.
+        try { await claimPasswordAccountByGoogle(user.email) }
+        catch (e) { console.error('[auth] no se pudo revisar la contraseña:', (e as Error).message) }
         try { await syncGoogleProfile(user.email, googlePicture(profile?.picture ?? user.image), typeof profile?.name === 'string' ? profile.name : null) }
         catch (e) { console.error('[auth] no se pudo guardar la foto de Google:', (e as Error).message) }
       }

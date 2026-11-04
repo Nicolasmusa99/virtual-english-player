@@ -1,5 +1,5 @@
 // Contraseñas del lado del servidor (2026-11). Puro (solo node:crypto). Tests:
-// tests/lib/password.test.ts. Las reglas (usuario, largo) están en lib/passwordRules.ts.
+// tests/lib/password.test.ts. Las reglas (mail, largo) están en lib/passwordRules.ts.
 //   · La contraseña se guarda con scrypt y sal propia: "scrypt$<N>$<sal b64>$<hash b64>".
 //   · Comparar es en tiempo constante (timingSafeEqual).
 import { randomBytes, scrypt as scryptCb, timingSafeEqual, type ScryptOptions } from 'node:crypto'
@@ -10,7 +10,7 @@ const scrypt = (pw: string, salt: Buffer, keylen: number, opts: ScryptOptions) =
 const N = 16384 // 2^14: ~50 ms por intento, sin pasarse de memoria en una función de Vercel
 const KEYLEN = 64
 
-export { PASSWORD_ERROR, PASSWORD_MAX, PASSWORD_MIN, USERNAME_ERROR, normalizeUsername, passwordProblem } from '@/lib/passwordRules'
+export { EMAIL_ERROR, PASSWORD_ERROR, PASSWORD_MAX, PASSWORD_MIN, normalizeEmail, passwordProblem } from '@/lib/passwordRules'
 
 export async function hashPassword(password: string): Promise<string> {
   const salt = randomBytes(16)

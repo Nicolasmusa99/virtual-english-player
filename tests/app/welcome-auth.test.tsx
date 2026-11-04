@@ -36,31 +36,36 @@ describe('WelcomeAuth', () => {
     expect(signInMock).toHaveBeenCalledWith('google')
   })
 
-  it('crear cuenta con usuario y contraseña: propone el usuario y entra', async () => {
+  it('crear cuenta: nombre y apellido, mail y contraseña, y entra', async () => {
     const onSignedIn = vi.fn()
     render(<WelcomeAuth googleClassName="g" onSignedIn={onSignedIn} />)
     fireEvent.click(screen.getByRole('button', { name: W.create }))
+    expect(screen.queryByLabelText(/Usuario/)).toBeNull()
     fireEvent.change(screen.getByLabelText(W.name), { target: { value: 'Sofía Gómez' } })
-    expect(screen.getByLabelText(W.username)).toHaveValue('sofia.gomez')
+    fireEvent.change(screen.getByLabelText(W.email), { target: { value: ' Sofi@Gmail.com ' } })
     fireEvent.change(screen.getByLabelText(W.password), { target: { value: 'clave-segura-1' } })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: W.submit })) })
-    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({ name: 'Sofía Gómez', username: 'sofia.gomez', password: 'clave-segura-1' })
     expect(fetchMock.mock.calls[0][0]).toBe('/api/signup')
+    expect(JSON.parse(String(fetchMock.mock.calls[0][1].body))).toEqual({ name: 'Sofía Gómez', email: 'sofi@gmail.com', password: 'clave-segura-1' })
     expect(onSignedIn).toHaveBeenCalled()
   })
 
-  it('contraseña corta: avisa sin llamar al servidor; usuario tomado: muestra el error', async () => {
+  it('sin mail, o con la contraseña corta: avisa sin llamar al servidor; mail tomado: muestra el error', async () => {
     render(<WelcomeAuth googleClassName="g" onSignedIn={() => {}} />)
     fireEvent.click(screen.getByRole('button', { name: W.create }))
     fireEvent.change(screen.getByLabelText(W.name), { target: { value: 'Sofía Gómez' } })
+    fireEvent.change(screen.getByLabelText(W.password), { target: { value: 'clave-segura-1' } })
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: W.submit })) })
+    expect(screen.getByRole('alert')).toHaveTextContent('mail válido')
+    fireEvent.change(screen.getByLabelText(W.email), { target: { value: 'sofi@gmail.com' } })
     fireEvent.change(screen.getByLabelText(W.password), { target: { value: 'corta' } })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: W.submit })) })
     expect(screen.getByRole('alert')).toHaveTextContent('al menos 8')
     expect(fetchMock).not.toHaveBeenCalled()
-    fetchMock.mockResolvedValue(json(409, { error: 'Ese usuario ya existe. Elegí otro.' }))
+    fetchMock.mockResolvedValue(json(409, { error: 'Ya hay una cuenta con ese mail. Entrá con ella.' }))
     fireEvent.change(screen.getByLabelText(W.password), { target: { value: 'clave-segura-1' } })
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: W.submit })) })
-    expect(screen.getByRole('alert')).toHaveTextContent('Ese usuario ya existe')
+    expect(screen.getByRole('alert')).toHaveTextContent('Ya hay una cuenta con ese mail')
   })
 
   it('si volvió de Google sin cuenta, ofrece crearla', () => {
