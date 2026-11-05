@@ -49,8 +49,9 @@ async function navigateToPlayerViaLibrary(container: HTMLElement) {
   expect(libBtn).not.toBeUndefined()
   await act(async () => { fireEvent.click(libBtn!); await tick(150) })
 
+  // 2026-11-05: en Mi biblioteca se abre tocando la miniatura ("Abrir <nombre>").
   const abrirBtn = Array.from(container.querySelectorAll('button'))
-    .find(b => b.textContent?.trim() === 'Abrir')
+    .find(b => /^Abrir /.test(b.getAttribute('aria-label') ?? ''))
   expect(abrirBtn).not.toBeUndefined()
   await act(async () => { fireEvent.click(abrirBtn!); await tick(150) })
 }

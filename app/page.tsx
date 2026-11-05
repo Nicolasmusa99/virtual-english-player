@@ -6,8 +6,8 @@ import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
 import UsersPanel from './UsersPanel'
-import LibraryFolders from './LibraryFolders'
-import LibraryList, { type LibraryVideoRow } from './LibraryList'
+import LibraryBrowser from './LibraryBrowser'
+import type { LibraryVideoRow } from './LibraryBrowser'
 import SharedLibrary from './SharedLibrary'
 import StudentView from './StudentView'
 import StudentNameDialog from './StudentNameDialog'
@@ -1352,24 +1352,13 @@ export default function Player() {
                 {libraryError && <div className={styles.errorBox}>{libraryError}</div>}
                 {libraryLoading ? (
                   <div className={styles.progSub}>Cargando...</div>
-                ) : libraryVideos.length === 0 ? (
-                  <div className={styles.progSub}>Todavía no guardaste ningún video.</div>
                 ) : (
-                  <>
-                    {/* Carpetas (2026-11): el admin ordena la biblioteca en carpetas. */}
-                    {userRole === 'admin' && <LibraryFolders videos={libraryVideos} onOpen={openFromLibrary} />}
-                    {userRole === 'admin' && <h2 className={styles.secTitle} style={{ marginTop: 0 }}>Todos los videos</h2>}
-                    <LibraryList
-                      videos={libraryVideos}
-                      role={userRole}
-                      onOpen={openFromLibrary}
-                      onDelete={deleteFromLibrary}
-                      onChanged={fetchLibrary}
-                    />
-                  </>
-                )}
-                {userRole === 'admin' && (
-                  <button className={`${aula.btn} ${aula.btnSec}`} style={{ marginTop: 16 }} onClick={() => setScreen('load')}>+ Subir otro video</button>
+                  // Rediseño 2026-11-05: el mismo diseño que la Biblioteca compartida (LibraryBrowser).
+                  <div style={{ maxWidth: 1180 }}>
+                    <LibraryBrowser mode="mine" videos={libraryVideos} onOpen={openFromLibrary}
+                      canManage={userRole === 'admin'} assignable={userRole === 'admin'}
+                      onChanged={fetchLibrary} onDelete={deleteFromLibrary} onUpload={() => setScreen('load')} />
+                  </div>
                 )}
               </AulaPage>
             )}
