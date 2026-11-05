@@ -1376,12 +1376,12 @@ export default function Player() {
 
             {showShared && (
               <AulaPage title={userRole === 'profesor' ? 'Biblioteca' : 'Biblioteca compartida'}
-                lead="El material publicado para las clases: abrilo en el player o asignáselo a un alumno.">
+                lead={userRole === 'admin' ? 'El material publicado para las clases, ordenado en carpetas.' : 'El material publicado para las clases: abrilo en el player o asignáselo a un alumno.'}>
                 {userRole === 'profesor' && (
                   <button className={aula.txtBtn} style={{ margin: '-18px 0 18px' }} onClick={() => { setScreen('library'); fetchLibrary() }}>Tus videos subidos</button>
                 )}
-                <div style={{ maxWidth: 760 }}>
-                  <SharedLibrary onOpen={openFromLibrary} assignable={userRole === 'admin' || userRole === 'profesor'} />
+                <div style={{ maxWidth: 1180 }}>
+                  <SharedLibrary onOpen={openFromLibrary} assignable={userRole === 'admin' || userRole === 'profesor'} canManage={userRole === 'admin'} />
                 </div>
               </AulaPage>
             )}

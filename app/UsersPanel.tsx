@@ -194,24 +194,38 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
   }
 
   // ── Admin: filas de tabla ──
+  // Rediseño (2026-11-04, más limpio): una línea por dato, con elipsis; el nombre abre al
+  // alumno (botón de toda la celda); las acciones viven en el "⋯" y una flecha aparece al
+  // pasar por la fila.
   function row(u: UserRow, cols: Role) {
     const s = stats[u.id]
     const isStudent = u.role === 'alumno'
-    return (
-      <li key={u.id} data-testid="person" className={`${styles.row} ${styles['cols_' + cols]} ${isStudent && onOpenStudent ? styles.rowLink : ''}`}
-        onClick={isStudent && onOpenStudent ? () => open(u) : undefined}>
-        <span className={styles.cellWho}>
-          {avatar(u)}
-          <span className={styles.who}>
-            <span className={styles.name}>{display(u)}</span>
-            {subline(u) && <span className={styles.mail}>{subline(u)}</span>}
-            {!u.name && isStudent && <span className={styles.mail}>Sin nombre: agregalo desde su pantalla</span>}
-          </span>
+    const opens = isStudent && !!onOpenStudent
+    const teacher = u.teacherId ? users.find((x) => x.id === u.teacherId) : null
+    const who = (
+      <>
+        {avatar(u)}
+        <span className={styles.who}>
+          <span className={styles.name}>{display(u)}</span>
+          {u.name && u.email
+            ? <span className={styles.mail}>{u.email}</span>
+            : <span className={styles.mail}>{T.noName}</span>}
         </span>
+      </>
+    )
+    return (
+      <li key={u.id} data-testid="person" className={`${styles.row} ${styles['cols_' + cols]} ${opens ? styles.rowLink : ''}`}
+        onClick={opens ? () => open(u) : undefined}>
+        {opens
+          ? <button type="button" className={`${styles.cellWho} ${styles.whoBtn}`} aria-label={`${T.open} ${display(u)}`}
+              onClick={(e) => { e.stopPropagation(); open(u) }}>{who}</button>
+          : <span className={styles.cellWho}>{who}</span>}
         {cols === 'alumno' && (
           <>
             <span className={styles.cell} data-label={T.colTeacher}>
-              {u.teacherId ? labelById[u.teacherId] ?? '' : <span className={styles.warn}>{T.noTeacher}</span>}
+              {teacher
+                ? <span className={styles.teacher}><Avatar id={teacher.id} name={teacher.name} email={teacher.email} image={teacher.image} size={22} /><span className={styles.ellipsis}>{teacher.name || teacher.email}</span></span>
+                : u.teacherId ? <span className={styles.soft}>…</span> : <span className={styles.warn}>{T.noTeacher}</span>}
             </span>
             <span className={styles.cell} data-label={T.colMaterial}>
               {s ? <span className={s.materialCount === 0 ? styles.soft : undefined}>{videosLabel(s.materialCount)}{s.folderCount > 0 && <span className={styles.soft}>, {s.folderCount === 1 ? '1 carpeta' : `${s.folderCount} carpetas`}</span>}</span> : '…'}
@@ -225,8 +239,8 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
           </span>
         )}
         <span className={styles.cellActs} onClick={(e) => e.stopPropagation()}>
-          {isStudent && onOpenStudent && <button type="button" className={`${ms.btn} ${ms.btnSm}`} onClick={() => open(u)}>{T.open}</button>}
-          <ActionMenu label={T.more(display(u))} items={menuFor(u)} />
+          <ActionMenu label={T.more(display(u))} items={opens ? [{ label: T.open, onSelect: () => open(u) }, { kind: 'sep' }, ...menuFor(u)] : menuFor(u)} />
+          {opens && <svg className={styles.chev} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="m9 6 6 6-6 6" /></svg>}
         </span>
       </li>
     )
@@ -267,12 +281,14 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
 
       {isAdmin && (
         <div className={styles.filters} role="group" aria-label="Filtrar por rol">
+          <span className={styles.segment}>
           {(['all', 'profesor', 'alumno', 'admin'] as const).map((r) => (
             <button key={r} type="button" aria-pressed={filter === r}
               className={`${styles.filter} ${filter === r ? styles.filterOn : ''}`} onClick={() => setFilter(r)}>
               {FILTER_LABEL[r]}<span className={styles.count}>{counts[r]}</span>
             </button>
           ))}
+          </span>
           {counts.noTeacher > 0 && (
             <button type="button" aria-pressed={filter === 'noTeacher'}
               className={`${styles.filter} ${styles.filterWarn} ${filter === 'noTeacher' ? styles.filterOn : ''}`} onClick={() => setFilter(filter === 'noTeacher' ? 'all' : 'noTeacher')}>
