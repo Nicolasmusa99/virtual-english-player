@@ -1,13 +1,16 @@
 'use client'
-import { useEffect, useState } from 'react'
-import styles from './page.module.css'
+import { useEffect, useMemo, useState } from 'react'
+import ms from './material.module.css'
+import { Modal } from './ClassDialog'
+import Avatar from './Avatar'
 
-// Video-centric: dado un video, tildar/destildar a qué alumnos MÍOS está asignado.
-// Cruza GET /api/users (alumnos) con GET /api/assignments (para saber cuáles ya lo
-// tienen). Solo endpoints scopeados; el backend rechaza fuera de alcance. Cada
-// toggle persiste al instante (no hay "guardar"), así que cerrar no pierde nada.
-// Rediseño (fase 5): la ventana blanca del aula (exitOverlay/exitDialog) y filas.
-interface StudentRow { id: string; name?: string | null; email: string | null; role: string | null }
+// Video-centric: dado un video, a qué alumnos MÍOS está asignado. Cruza GET /api/users
+// (alumnos) con GET /api/assignments (para saber cuáles ya lo tienen). Solo endpoints
+// scopeados; el backend rechaza fuera de alcance. Cada toggle persiste al instante (no hay
+// "guardar"), así que cerrar no pierde nada.
+// Rediseño 2026-11: la ventana del aula, con buscador y cada alumno con su avatar. Va sin
+// carpeta: para ordenarlo, está la pantalla del alumno.
+interface StudentRow { id: string; name?: string | null; email: string | null; role: string | null; image?: string | null }
 
 export default function AssignToStudents({
   videoId,
@@ -23,13 +26,7 @@ export default function AssignToStudents({
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState<Record<string, boolean>>({})
-
-  // Cerrar con Escape (además del backdrop y "Cerrar").
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
+  const [q, setQ] = useState('')
 
   useEffect(() => {
     let alive = true
@@ -70,42 +67,51 @@ export default function AssignToStudents({
     finally { setBusy((b) => ({ ...b, [studentId]: false })) }
   }
 
+  const list = useMemo(() => {
+    const needle = q.trim().toLowerCase()
+    return students.filter((s) => !needle || `${s.name ?? ''} ${s.email ?? ''}`.toLowerCase().includes(needle))
+  }, [students, q])
+  const title = `Asignar “${videoName}”`
+
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label={`Asignar “${videoName}”`}
-      onClick={onClose}
-      className={styles.exitOverlay}
-    >
-      <div onClick={(e) => e.stopPropagation()} className={styles.exitDialog}>
-        <div className={styles.exitTitle}>Asignar “{videoName}” a…</div>
-        {error && <div className={styles.errorBox}>{error}</div>}
-        {loading ? (
-          <div className={styles.progSub}>Cargando alumnos…</div>
-        ) : students.length === 0 ? (
-          <div className={styles.progSub}>No tenés alumnos todavía.</div>
-        ) : (
-          <div className={styles.list}>
-            {students.map((s) => {
-              const isA = assignedTo.has(s.id)
-              return (
-                <div key={s.id} className={styles.row}>
-                  <span className={styles.rowText}>{s.name || s.email}</span>
-                  {isA && <span className={styles.rowOk}>Asignado</span>}
-                  <button
-                    className={isA ? styles.discardBtn : styles.restoreBtn}
-                    disabled={busy[s.id]}
-                    onClick={() => toggle(s.id)}>
-                    {busy[s.id] ? '…' : isA ? 'Quitar' : 'Asignar'}
-                  </button>
-                </div>
-              )
-            })}
-          </div>
-        )}
-        <button className={styles.tbBtn} style={{ alignSelf: 'flex-end', marginTop: 8 }} onClick={onClose}>Cerrar</button>
+    <Modal label={title} onClose={onClose}>
+      <div className={ms.pkHead}>
+        <h3 className={ms.pkTitle}>{title}</h3>
+        <button type="button" className={ms.pkX} onClick={onClose} aria-label="Cerrar">×</button>
       </div>
-    </div>
+      {students.length > 5 && (
+        <input data-autofocus className={ms.search} type="search" placeholder="Buscar alumno" aria-label="Buscar alumno"
+          value={q} onChange={(e) => setQ(e.target.value)} />
+      )}
+      {error && <div className={ms.err} role="alert">{error}</div>}
+      <div className={ms.pkList}>
+        {loading ? (
+          <p className={ms.muted}>Cargando alumnos…</p>
+        ) : students.length === 0 ? (
+          <p className={ms.muted}>No tenés alumnos todavía.</p>
+        ) : list.length === 0 ? (
+          <p className={ms.muted}>No hay alumnos con esa búsqueda.</p>
+        ) : list.map((s) => {
+          const isA = assignedTo.has(s.id)
+          return (
+            <div key={s.id} className={`${ms.pkRow} ${isA ? ms.pkRowOn : ''}`} style={{ cursor: 'default' }}>
+              <Avatar id={s.id} name={s.name} email={s.email} image={s.image} />
+              <span className={ms.vName}>
+                <b>{s.name || s.email}</b>
+                {s.name && s.email && <span className={ms.vMeta}>{s.email}</span>}
+              </span>
+              {isA && <span className={ms.inLabel}>Asignado</span>}
+              <button type="button" className={`${ms.btn} ${ms.btnSm} ${isA ? '' : ms.btnPri}`} disabled={busy[s.id]} onClick={() => toggle(s.id)}>
+                {busy[s.id] ? '…' : isA ? 'Quitar' : 'Asignar'}
+              </button>
+            </div>
+          )
+        })}
+      </div>
+      <div className={ms.pkFoot}>
+        <span className={ms.sp} />
+        <button type="button" className={ms.btn} onClick={onClose}>Cerrar</button>
+      </div>
+    </Modal>
   )
 }

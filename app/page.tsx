@@ -17,6 +17,8 @@ import ZoomRoomStatus from './ZoomRoomStatus'
 import aula from './aula.module.css'
 import MyAgenda from './MyAgenda'
 import StudentApp from './StudentApp'
+import ProfilePanel from './ProfilePanel'
+import WelcomeAuth from './WelcomeAuth'
 import VoiceBoostControl from './VoiceBoostControl'
 import PlayerDock, { type DockClock } from './PlayerDock'
 import { StageChannel } from '@/lib/stageChannel'
@@ -28,10 +30,8 @@ import { cleanVideoName, normalizeVideoName, VIDEO_NAME_MAX } from '@/lib/videoN
 import { MODE_HELP, PRACTICE_NEEDS_SELECTION, shouldIgnoreShortcut } from '@/lib/shortcuts'
 import Tooltip, { InfoMark } from './Tooltip'
 import ShortcutsHelp from './ShortcutsHelp'
-import CaptionEditor from './CaptionEditor'
-import type { CaptionDraft } from '@/lib/captionEdit'
 import type { SessionData } from '@/lib/session'
-import { useSession, signIn, signOut } from 'next-auth/react'
+import { useSession, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
@@ -70,7 +70,7 @@ export default function Player() {
   const exercisesChannelUnsubRef = useRef<(() => void) | null>(null)
 
   // ─── State ───────────────────────────────────────────────────────────────
-  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student' | 'agenda'>('load')
+  const [screen, setScreen]               = useState<'load' | 'player' | 'library' | 'exercises' | 'users' | 'shared' | 'student' | 'agenda' | 'profile'>('load')
   const [selectedStudent, setSelectedStudent] = useState<{ id: string; email: string; name: string | null } | null>(null)
   const [editingName, setEditingName] = useState(false)
   // A dónde vuelve la pantalla del alumno: a "Alumnos", a "Agenda" (G2) o a "Hoy" (rediseño).
@@ -95,8 +95,10 @@ export default function Player() {
   const subTextNodes = useMemo(() => hl(subText), [subText])
   const [subVisible, setSubVisible]       = useState(false)
   const [editingIdx, setEditingIdx]       = useState<number | null>(null)
-  // 2026-11: editar el subtítulo tocándolo en el video (texto arriba, lo fino en CaptionEditor).
-  const [capEdit, setCapEdit] = useState<{ idx: number; draft: CaptionDraft; caret: number; cut: number | null } | null>(null)
+  // 2026-11: tocar el subtítulo en el video edita SOLO su texto, ahí mismo.
+  const [capEdit, setCapEdit] = useState<{ idx: number; text: string } | null>(null)
+  const capEditRef = useRef(capEdit) // lo lee el guardado: Escape lo anula antes de que el blur guarde
+  capEditRef.current = capEdit
   const [editingText, setEditingText]     = useState('')
   const [editingStartTs, setEditingStartTs] = useState('')
   const [editingEndTs,   setEditingEndTs]   = useState('')
@@ -117,7 +119,7 @@ export default function Player() {
   const [sizeWarn, setSizeWarn]           = useState<{ file: File; durationMin: number } | null>(null)
   // Biblioteca (Bloque 13)
   const libraryVideoIdRef = useRef<string | null>(null)
-  const { data: sessionData, status: authStatus } = useSession()
+  const { data: sessionData, status: authStatus, update: refreshSession } = useSession()
   const userRole = sessionData?.user?.role ?? null
   // Fase 1 — allowlist: NextAuth redirige a /?error=AccessDenied cuando el email no está habilitado.
   const [accessDenied, setAccessDenied] = useState(false)
@@ -1009,42 +1011,32 @@ export default function Player() {
   }
 
   // ─── Editar el subtítulo tocándolo en el video (2026-11) ──────────────────
-  // Se edita la frase que está sonando: el video se pausa, el subtítulo se vuelve editable
-  // en su lugar y abajo aparece CaptionEditor (tiempos al milisegundo y dividir).
+  // Solo el texto: el video se pausa y el subtítulo se vuelve editable en su lugar.
+  // Enter (o salir del campo) guarda; Escape cancela. Los tiempos se tocan desde la lista.
   function startCaptionEdit() {
     const idx = curIdxRef.current
     const p = phrasesRef.current[idx]
     if (!p || stageOpenRef.current) return
     vidRef.current?.pause(); setIsPlaying(false)
     setEditingIdx(null)
-    setCapEdit({ idx, draft: { text: p.text, start: p.start, end: p.end }, caret: p.text.length, cut: null })
+    setCapEdit({ idx, text: p.text })
   }
-  function cancelCaptionEdit() { setCapEdit(null) }
+  function cancelCaptionEdit() { capEditRef.current = null; setCapEdit(null) }
   // Con la ventana para Zoom abierta el video del panel no suena: la edición se cierra.
   useEffect(() => { if (stageOpen || screen !== 'player') setCapEdit(null) }, [stageOpen, screen])
   function saveCaptionEdit() {
-    if (!capEdit) return
-    const { idx, draft } = capEdit
+    const ce = capEditRef.current
+    if (!ce) return
+    capEditRef.current = null
+    const { idx } = ce
     const orig = phrasesRef.current[idx]
-    if (!orig) { setCapEdit(null); return }
-    const text = draft.text.replace(/\s*\n\s*/g, ' ').trim()
+    const text = ce.text.replace(/\s*\n\s*/g, ' ').trim()
+    setCapEdit(null)
+    if (!orig || !text || text === orig.text) return
     setIsDirty(true)
-    setPhrases(prev => prev.map((p, i) => (i === idx ? { ...p, text, start: draft.start, end: draft.end } : p)))
-    capture('caption_edited_on_video', { phrase_index: idx, text_changed: text !== orig.text, start_delta_s: Math.round((draft.start - orig.start) * 1000) / 1000, end_delta_s: Math.round((draft.end - orig.end) * 1000) / 1000 })
+    setPhrases(prev => prev.map((p, i) => (i === idx ? { ...p, text } : p)))
+    capture('caption_edited_on_video', { phrase_index: idx, text_changed: true })
     setSubText(text)
-    setCapEdit(null)
-  }
-  function splitCaptionEdit([a, b]: [CaptionDraft, CaptionDraft]) {
-    if (!capEdit) return
-    const idx = capEdit.idx
-    const orig = phrasesRef.current[idx]
-    if (!orig) { setCapEdit(null); return }
-    setIsDirty(true)
-    setPhrases(prev => [...prev.slice(0, idx), { ...a, sel: orig.sel }, { ...b, sel: orig.sel }, ...prev.slice(idx + 1)])
-    capture('phrase_split', { phrase_index: idx, new_total: phrasesRef.current.length + 1, precise: true })
-    setCurIdx(prev => (prev > idx ? prev + 1 : prev))
-    setSubText(a.text)
-    setCapEdit(null)
   }
 
   function startEdit(idx: number) {
@@ -1185,7 +1177,8 @@ export default function Player() {
   // lo demás, así el alumno nunca ve una pantalla del profe (y las rutas del profe le
   // responden 403). Va después de todos los hooks, que quedan inertes para el alumno.
   if (authStatus === 'authenticated' && userRole === 'alumno') {
-    return <StudentApp name={sessionData?.user?.name ?? null} email={sessionData?.user?.email ?? null} />
+    return <StudentApp id={sessionData?.user?.id ?? ''} name={sessionData?.user?.name ?? null} email={sessionData?.user?.email ?? null}
+      image={sessionData?.user?.image ?? null} onProfileChanged={() => { refreshSession() }} />
   }
 
   // ─── La sala (rediseño fase 3): debajo del título del video ───────────────────
@@ -1196,7 +1189,7 @@ export default function Player() {
 
   // ─── El aula (rediseño fase 2): secciones de la barra lateral según el rol ─────
   type Screen = typeof screen
-  const AULA_SCREENS: Screen[] = ['load', 'library', 'exercises', 'users', 'shared', 'student', 'agenda']
+  const AULA_SCREENS: Screen[] = ['load', 'library', 'exercises', 'users', 'shared', 'student', 'agenda', 'profile']
   const aulaNav: AulaNavItem[] = userRole === 'profesor' ? [
     { id: 'load', label: 'Hoy', icon: AULA_ICONS.hoy },
     { id: 'agenda', label: 'Agenda', icon: AULA_ICONS.agenda },
@@ -1237,20 +1230,8 @@ export default function Player() {
           <div className={styles.wCenter}>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img className={styles.wLogo} src="/logo-ve.jpeg" alt="Virtual English" />
-            <button className={styles.wSignInBtn} onClick={() => signIn('google')}>
-              <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-                <path d="M17.64 9.2a10.34 10.34 0 0 0-.164-1.84H9v3.48h4.844a4.14 4.14 0 0 1-1.796 2.717v2.258h2.908C16.658 14.252 17.64 11.945 17.64 9.2z" fill="#4285F4"/>
-                <path d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.258a5.37 5.37 0 0 1-3.048.86c-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A9 9 0 0 0 9 18z" fill="#34A853"/>
-                <path d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A9 9 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z" fill="#FBBC05"/>
-                <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.892 11.426 0 9 0A9 9 0 0 0 .957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
-              </svg>
-              Iniciar sesión con Google
-            </button>
-            {accessDenied && (
-              <div className={styles.wAccessDenied}>
-                Tu cuenta no está habilitada. Pedí acceso a tu profesor o administrador.
-              </div>
-            )}
+            {/* 2026-11: entrar (Google o usuario y contraseña) o crear cuenta (entra como alumno). */}
+            <WelcomeAuth googleClassName={styles.wSignInBtn} accessDenied={accessDenied} />
           </div>
         </div>
       )}
@@ -1261,8 +1242,8 @@ export default function Player() {
       {authStatus === 'authenticated' && AULA_SCREENS.includes(screen) && (
         <div className={styles.lightScope}>
           <AulaShell items={aulaNav} current={aulaCurrent} onGo={goAula}
-            user={{ name: sessionData?.user?.name || sessionData?.user?.email || '', role: userRole === 'admin' ? 'Admin' : 'Profe' }}
-            onSignOut={() => signOut()}
+            user={{ id: sessionData?.user?.id, name: sessionData?.user?.name || sessionData?.user?.email || '', role: userRole === 'admin' ? 'Admin' : 'Profe', image: sessionData?.user?.image }}
+            onSignOut={() => signOut()} onProfile={() => setScreen('profile')}
             footer={userRole === 'profesor' ? <ZoomRoomStatus /> : undefined}>
 
             {screen === 'load' && userRole === 'profesor' && (
@@ -1408,7 +1389,7 @@ export default function Player() {
             {screen === 'users' && (
               <AulaPage title={userRole === 'admin' ? 'Usuarios' : 'Alumnos'}
                 lead={userRole === 'admin' ? 'Creá usuarios y asigná cada alumno a su profe.' : 'Sumá alumnos y abrí uno para ver sus clases y asignarle material.'}>
-                <div style={{ maxWidth: 900 }}>
+                <div style={{ maxWidth: 1080 }}>
                   {userRole && (
                     <UsersPanel role={userRole} onOpenStudent={(id, email, name) => openStudent(id, email, 'users', name)} />
                   )}
@@ -1424,8 +1405,9 @@ export default function Player() {
                     {selectedStudent.name ? 'Cambiar nombre' : 'Agregar nombre'}
                   </button>
                 </>}>
-                <div style={{ maxWidth: 760 }}>
-                  <StudentView studentId={selectedStudent.id} studentName={selectedStudent.name} onOpenVideo={openFromLibrary} />
+                <div style={{ maxWidth: 1080 }}>
+                  <StudentView key={selectedStudent.id} studentId={selectedStudent.id} studentName={selectedStudent.name}
+                    initialTab={studentFrom === 'users' ? 'material' : 'classes'} onOpenVideo={openFromLibrary} />
                 </div>
                 {editingName && (
                   <StudentNameDialog userId={selectedStudent.id} name={selectedStudent.name} onClose={() => setEditingName(false)}
@@ -1436,6 +1418,12 @@ export default function Player() {
 
             {screen === 'agenda' && (
               <MyAgenda onOpenStudent={(id, email, name) => openStudent(id, email, 'agenda', name)} />
+            )}
+
+            {screen === 'profile' && (
+              <AulaPage title="Mi perfil" lead="Tu foto, tu nombre y cómo entrás.">
+                <ProfilePanel onChanged={() => { refreshSession() }} />
+              </AulaPage>
             )}
           </AulaShell>
         </div>
@@ -1497,12 +1485,11 @@ export default function Player() {
                 {capEdit && !stageOpen ? (
                   <div className={styles.subOverlay}>
                     <textarea className={`${styles.subBox} ${styles.subEdit}`} aria-label="Texto del subtítulo" autoFocus
-                      rows={Math.min(3, Math.max(1, Math.ceil(capEdit.draft.text.length / 48)))}
-                      value={capEdit.draft.text}
-                      onChange={e => { const v = e.target.value; const c = e.target.selectionStart ?? v.length; setCapEdit(s => (s ? { ...s, draft: { ...s.draft, text: v }, caret: c } : s)) }}
-                      onSelect={e => { const c = (e.target as HTMLTextAreaElement).selectionStart ?? 0; setCapEdit(s => (s && s.caret !== c ? { ...s, caret: c } : s)) }}
-                      onKeyUp={e => { const c = e.currentTarget.selectionStart ?? 0; setCapEdit(s => (s && s.caret !== c ? { ...s, caret: c } : s)) }}
-                      onMouseUp={e => { const c = e.currentTarget.selectionStart ?? 0; setCapEdit(s => (s && s.caret !== c ? { ...s, caret: c } : s)) }}
+                      rows={Math.min(3, Math.max(1, Math.ceil(capEdit.text.length / 48)))}
+                      value={capEdit.text}
+                      onFocus={e => { const el = e.currentTarget; el.setSelectionRange(el.value.length, el.value.length) }}
+                      onChange={e => { const v = e.target.value; setCapEdit(s => (s ? { ...s, text: v } : s)) }}
+                      onBlur={saveCaptionEdit}
                       onKeyDown={e => {
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); saveCaptionEdit() }
                         if (e.key === 'Escape') { e.preventDefault(); cancelCaptionEdit() }
@@ -1519,13 +1506,6 @@ export default function Player() {
                 )}
               </div>
             </div>
-            {capEdit && !stageOpen && phrases[capEdit.idx] && (
-              <CaptionEditor index={capEdit.idx} total={phrases.length} draft={capEdit.draft} caret={capEdit.caret} cut={capEdit.cut}
-                delay={delay} video={() => vidRef.current}
-                onDraft={d => setCapEdit(s => (s ? { ...s, draft: d } : s))}
-                onCut={c => setCapEdit(s => (s ? { ...s, cut: c } : s))}
-                onSave={saveCaptionEdit} onCancel={cancelCaptionEdit} onSplit={splitCaptionEdit} />
-            )}
             <PlayerDock
               phrases={phrases} delay={delay} hideTexts={hideTexts} isPlaying={isPlaying} bufPct={bufPct}
               speeds={SPEEDS} speedIdx={speedIdx} vol={vol} ccOn={ccOn} curIdx={curIdx}

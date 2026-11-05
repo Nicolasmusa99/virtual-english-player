@@ -16,7 +16,11 @@
 .hTab:hover { color: var(--tinta); background: var(--p2); }
 .hTabOn, .hTabOn:hover { background: var(--tiza); color: var(--tinta); font-weight: 700; }
 .hSp { flex: 1; }
-.hMe { min-width: 0; max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 15px; color: var(--pizarra); }
+.hMe { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 32ch; height: 44px; padding: 0 12px 0 6px; border: 0; border-radius: 22px; background: transparent; font: 15px var(--font-sans); color: var(--tinta); cursor: pointer; }
+.hMe:hover { background: var(--p2); }
+.hMeOn, .hMeOn:hover { background: var(--tiza); font-weight: 700; }
+.hMe:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.hMeName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hOut { height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; flex-shrink: 0; }
 .hOut:hover { border-color: var(--pizarra); }
 .hBody { width: 100%; max-width: 1200px; margin: 0 auto; padding: 40px 40px 56px; }
@@ -207,7 +211,8 @@
   .home { padding-bottom: 62px; }
   .hBar { gap: 12px; padding: 8px 16px; }
   .hLogo { height: 40px; }
-  .hMe { display: none; }
+  .hMeName { display: none; }
+  .hMe { padding: 0 6px; }
   .hTabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: 62px; background: #fff; border-top: 1.5px solid var(--tiza); }
   .hTab { height: 100%; border-radius: 0; font-size: 14px; }
   .hTab:hover { background: transparent; }

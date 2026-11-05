@@ -30,6 +30,10 @@ const modules = import.meta.glob('/app/api/**/route.ts')
 const guarded = Object.keys(modules)
   .filter((p) => !p.includes('/api/auth/')) // Auth.js (login/logout) es público por diseño
   .filter((p) => !p.includes('/api/student/')) // las rutas del alumno: tests propios
+  // 2026-11: entrar con usuario y contraseña y crear cuenta son públicos (como Auth.js), y "Mi perfil"
+  // (/api/me, foto y contraseña) es de TODOS sobre su propia cuenta: tests propios en
+  // tests/api/login.test.ts, tests/api/signup.test.ts y tests/api/me-profile.test.ts. /api/me/zoom sigue acá.
+  .filter((p) => !/\/api\/(login|signup)\/|\/api\/me\/route\.ts$|\/api\/me\/(photo|password)\//.test(p))
   .sort()
 
 // Parámetros de ruta dinámicos ([id], [videoId]...) → un uuid cualquiera.

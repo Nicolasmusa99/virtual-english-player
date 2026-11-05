@@ -13,6 +13,8 @@
 // El calendario es la grilla semanal de StudentWeek (reemplaza al mes).
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { signOut } from 'next-auth/react'
+import Avatar from './Avatar'
+import ProfilePanel from './ProfilePanel'
 import pageStyles from './page.module.css'
 import styles from './student.module.css'
 import StudentPlayer, { type StudentVideoData } from './StudentPlayer'
@@ -55,6 +57,7 @@ export const STUDENT_TEXTS = {
   listErrorSub: 'Revisá tu conexión y probá de nuevo.',
   retry: 'Reintentar',
   signOut: 'Salir',
+  profile: 'Mi perfil',
   opening: 'Abriendo el video…',
   videoGone: 'Ese video ya no está disponible. Puede que tu profe lo haya quitado.',
   videoError: 'No pudimos abrir el video. Probá de nuevo en un momento.',
@@ -78,13 +81,17 @@ function toVideoData(body: unknown): StudentVideoData | null {
   }
 }
 
-export default function StudentApp({ name, email }: { name: string | null; email: string | null }) {
+export default function StudentApp({ id = '', name, email, image = null, onProfileChanged }: {
+  id?: string; name: string | null; email: string | null; image?: string | null
+  /** Cambió la foto o el nombre en "Mi perfil": refrescar la sesión. */
+  onProfileChanged?: () => void
+}) {
   const T = STUDENT_TEXTS
   const [list, setList] = useState<ListState>({ kind: 'loading' })
   const [openingId, setOpeningId] = useState<string | null>(null)
   const [playing, setPlaying] = useState<StudentVideoData | null>(null)
   const [notice, setNotice] = useState('')
-  const [tab, setTab] = useState<'inicio' | 'calendario'>('inicio')
+  const [tab, setTab] = useState<'inicio' | 'calendario' | 'perfil'>('inicio')
   const [now, setNow] = useState(() => new Date())
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t) }, [])
   const { state: classes, reload: reloadClasses } = useStudentClasses()
@@ -132,7 +139,7 @@ export default function StudentApp({ name, email }: { name: string | null; email
     }
   }
 
-  function goTab(t: 'inicio' | 'calendario') {
+  function goTab(t: 'inicio' | 'calendario' | 'perfil') {
     setTab(t)
     if (homeRef.current) homeRef.current.scrollTop = 0
   }
@@ -163,10 +170,28 @@ export default function StudentApp({ name, email }: { name: string | null; email
         ))}
       </nav>
       <span className={styles.hSp} />
-      {(name || email) && <span className={styles.hMe}>{name || email}</span>}
+      {(name || email) && (
+        <button type="button" className={`${styles.hMe} ${tab === 'perfil' ? styles.hMeOn : ''}`} onClick={() => goTab('perfil')}
+          aria-current={tab === 'perfil' ? 'page' : undefined} title={T.profile}>
+          <Avatar id={id || email || name || 'yo'} name={name} email={email} image={image} size={32} />
+          <span className={styles.hMeName}>{name || email}</span>
+        </button>
+      )}
       <button type="button" className={styles.hOut} onClick={() => signOut()}>{T.signOut}</button>
     </header>
   )
+
+  if (tab === 'perfil') {
+    return (
+      <div ref={homeRef} className={`${pageStyles.lightScope} ${styles.home}`}>
+        {header}
+        <main className={styles.wkBody}>
+          <h1 className={styles.hello} style={{ marginBottom: 24 }}>{T.profile}</h1>
+          <ProfilePanel onChanged={onProfileChanged} />
+        </main>
+      </div>
+    )
+  }
 
   if (tab === 'calendario') {
     return (

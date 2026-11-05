@@ -5,6 +5,11 @@ import { eq } from 'drizzle-orm'
 import { db } from '@/lib/db'
 import { accounts, sessions, users, verificationTokens } from '@/lib/db/schema'
 import { toPublicSession } from '@/lib/sessionPayload'
+import { googlePicture } from '@/lib/avatar'
+import { claimPasswordAccountByGoogle, insertUser, syncGoogleProfile } from '@/lib/users'
+import { cookies } from 'next/headers'
+import { canSignUpWithGoogle, SIGNUP_INTENT_COOKIE, SIGNUP_ROLE } from '@/lib/signup'
+import { normalizePersonName } from '@/lib/personName'
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   adapter: DrizzleAdapter(db, {
@@ -24,15 +29,40 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   // Errores (incl. AccessDenied del allowlist) vuelven a la bienvenida (no hay pantalla propia).
   pages: { signIn: '/', error: '/' },
   callbacks: {
-    // Allowlist: SOLO entran emails ya registrados CON rol asignado. Corre ANTES de que el
-    // adapter cree el usuario → un email desconocido NO crea fila y no cae en ningún rol.
-    async signIn({ user }) {
+    // Allowlist: entran los emails ya registrados CON rol asignado. Corre ANTES de que el
+    // adapter cree el usuario → un email desconocido NO crea fila y no cae en ningún rol,
+    // salvo "Crear cuenta con Google" (2026-11), que crea un alumno (ver lib/signup.ts).
+    async signIn({ user, account, profile }) {
       if (!user.email) return false
       const [row] = await db
         .select({ role: users.role })
         .from(users)
         .where(eq(users.email, user.email))
-      return !!row?.role // deny si no existe fila o si la fila no tiene rol (fail-closed)
+      if (!row) {
+        // 2026-11: "Crear cuenta con Google". Solo con la intención de registrarse (cookie
+        // que deja ese botón) y un mail verificado por Google: se crea un ALUMNO sin profe
+        // y el adapter engancha la cuenta de Google a esa fila (por mail).
+        let intent: string | undefined
+        try { intent = (await cookies()).get(SIGNUP_INTENT_COOKIE)?.value } catch { intent = undefined }
+        if (account?.provider !== 'google' || !canSignUpWithGoogle(profile, intent)) return false
+        try {
+          await insertUser({ name: normalizePersonName(profile?.name), email: user.email.trim().toLowerCase(), role: SIGNUP_ROLE, teacherId: null })
+        } catch (e) {
+          if (!/duplicate key|unique/i.test((e as Error).message)) { console.error('[auth] no se pudo crear la cuenta:', (e as Error).message); return false }
+        }
+        try { (await cookies()).delete(SIGNUP_INTENT_COOKIE) } catch { /* vence sola */ }
+      } else if (!row.role) return false // fila sin rol → sin acceso (fail-closed)
+      // 2026-11: la foto de Google (y el nombre, si estaba vacío) pasan a su perfil. Si la
+      // persona subió una foto propia, se respeta. Si falla, igual entra.
+      if (account?.provider === 'google') {
+        // Primera vez con Google en una cuenta que tenía contraseña: se la saca (el mail de
+        // las cuentas con contraseña no se verifica; Google sí). Ver lib/users.ts.
+        try { await claimPasswordAccountByGoogle(user.email) }
+        catch (e) { console.error('[auth] no se pudo revisar la contraseña:', (e as Error).message) }
+        try { await syncGoogleProfile(user.email, googlePicture(profile?.picture ?? user.image), typeof profile?.name === 'string' ? profile.name : null) }
+        catch (e) { console.error('[auth] no se pudo guardar la foto de Google:', (e as Error).message) }
+      }
+      return true
     },
     // Exponer el rol en la sesión (estrategia database → `user` es la fila del adapter).
     // Forma EXPLÍCITA (lista blanca): lo que devuelve este callback viaja al navegador

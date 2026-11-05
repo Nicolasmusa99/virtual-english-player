@@ -4,7 +4,7 @@
 // estado vacío. La seguridad vive en el backend (ya testeada en tests/api/assignments).
 import React from 'react'
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react'
 import StudentView from '@/app/StudentView'
 
 const ASSIGNED = {
@@ -58,22 +58,26 @@ describe('StudentView', () => {
     expect(await screen.findByText(/todavía no tiene material asignado/)).toBeInTheDocument()
   })
 
-  it('picker: video ya asignado muestra "Asignado" y "Quitar"; asignar uno nuevo → POST', async () => {
+  it('asignar: lo ya asignado se ve tildado; asignar uno nuevo → POST', async () => {
     setup(defaultRoutes)
     render(<StudentView studentId="al-1" onOpenVideo={() => {}} />)
     await screen.findByText('Matilda.mp4')
-    fireEvent.click(screen.getByText('+ Asignar material'))
-    await screen.findByText('New Movie.mp4')
-    expect(screen.getByText('Asignado')).toBeInTheDocument() // v1 ya asignado
-    fireEvent.click(screen.getByText('Asignar')) // v3 (no asignado)
+    fireEvent.click(screen.getAllByText('+ Asignar material')[0])
+    const dlg = await screen.findByRole('dialog')
+    await within(dlg).findByText('New Movie.mp4')
+    expect(within(dlg).getByRole('checkbox', { name: /Matilda/ })).toBeDisabled()
+    expect(within(dlg).getByText('Ya asignado')).toBeInTheDocument()
+    fireEvent.click(within(dlg).getByRole('checkbox', { name: /New Movie/ }))
+    fireEvent.click(within(dlg).getByRole('button', { name: 'Asignar 1 video' }))
     await waitFor(() => expect(bodyOf('POST')).toEqual({ studentId: 'al-1', videoId: 'v3' }))
   })
 
-  it('quitar un asignado → DELETE con {studentId, videoId}', async () => {
+  it('quitar un asignado (desde su menú) → DELETE con {studentId, videoId}', async () => {
     setup(defaultRoutes)
     render(<StudentView studentId="al-1" onOpenVideo={() => {}} />)
     await screen.findByText('Matilda.mp4')
-    fireEvent.click(screen.getAllByText('Quitar')[0]) // v1
+    fireEvent.click(screen.getByRole('button', { name: 'Más acciones de Matilda.mp4' }))
+    fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Quitar del alumno' }))
     await waitFor(() => expect(bodyOf('DELETE')).toEqual({ studentId: 'al-1', videoId: 'v1' }))
   })
 })
