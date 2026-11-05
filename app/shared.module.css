@@ -1,0 +1,36 @@
+/* Biblioteca compartida (rediseño 2026-11-04): tarjetas con selección múltiple. El resto
+   (carpetas a la izquierda, botones, menú, aviso) viene de material.module.css. */
+
+.tools { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 16px; }
+.search { flex: 1 1 240px; width: auto; height: 40px; font-size: 15px; background-color: var(--p2); border-color: transparent; }
+.search:hover { border-color: var(--tiza); }
+
+.bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 44px; padding: 4px 12px; margin-bottom: 16px; border-radius: 10px; background: var(--p2); }
+.barOn { background: rgba(31, 95, 191, 0.08); box-shadow: inset 0 0 0 1px rgba(31, 95, 191, 0.25); }
+
+.grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 22px 18px; }
+.card { position: relative; min-width: 0; display: flex; flex-direction: column; gap: 10px; border-radius: 12px; }
+.card[draggable='true'] { cursor: grab; }
+.thumb { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 10px; background: linear-gradient(150deg, var(--tinta), var(--azul)); color: #fff; display: grid; place-items: center; cursor: pointer; transition: transform 0.15s, box-shadow 0.15s; }
+.thumb svg { width: 26px; height: 26px; opacity: 0.85; transition: opacity 0.15s, transform 0.15s; }
+.card:hover .thumb { box-shadow: 0 10px 24px rgba(20, 40, 75, 0.18); }
+.card:hover .thumb svg { opacity: 1; transform: scale(1.1); }
+.cardOn .thumb { box-shadow: 0 0 0 3px var(--azul); }
+.thumb:focus-visible { outline: 2px solid var(--azul); outline-offset: 3px; }
+
+/* El tilde aparece al pasar o cuando ya hay algo tildado. */
+.check { position: absolute; top: 8px; left: 8px; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 8px; background: rgba(255, 255, 255, 0.92); box-shadow: 0 1px 4px rgba(20, 40, 75, 0.2); opacity: 0; transition: opacity 0.12s; cursor: pointer; }
+.card:hover .check, .cardOn .check, .picking .check, .check:focus-within { opacity: 1; }
+
+.body { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 0 2px; }
+.nameRow { display: flex; align-items: flex-start; gap: 4px; }
+.name { flex: 1; min-width: 0; font-size: 15px; font-weight: 600; color: var(--tinta); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; padding-top: 6px; }
+.meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--pizarra); }
+.folders { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--pizarra); min-width: 0; }
+.folders span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.note { margin: 28px 0 0; max-width: 70ch; font-size: 13px; line-height: 1.5; color: var(--pizarra); }
+
+@media (hover: none) { .check { opacity: 1; } }
+@media (max-width: 560px) { .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px 12px; } }
+@media (prefers-reduced-motion: reduce) { .thumb, .thumb svg { transition: none; } }

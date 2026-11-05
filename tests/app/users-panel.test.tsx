@@ -65,8 +65,10 @@ describe('UsersPanel — la lista del admin', () => {
     await flush()
     const martina = personOf('Martina Pérez')
     for (const t of ['MP', 'martina@x.com', 'Laura Sosa', '3 videos', '2 carpetas', 'Mañana, 18:00']) expect(martina).toHaveTextContent(t)
+    // el profe va con su avatar al lado del nombre
+    expect(within(martina).getAllByTestId('avatar')).toHaveLength(2)
     const lucia = personOf('lucia@x.com')
-    for (const t of ['Sin nombre: agregalo desde su pantalla', 'Sin profe', 'Sin material', 'Sin agendar']) expect(lucia).toHaveTextContent(t)
+    for (const t of ['Sin nombre', 'Sin profe', 'Sin material', 'Sin agendar']) expect(lucia).toHaveTextContent(t)
     expect(personOf('Laura Sosa')).toHaveTextContent('1 alumno')
   })
 
@@ -74,7 +76,7 @@ describe('UsersPanel — la lista del admin', () => {
     const onOpen = vi.fn()
     render(<UsersPanel role="admin" onOpenStudent={onOpen} />)
     await flush()
-    fireEvent.click(within(personOf('Martina Pérez')).getByRole('button', { name: 'Abrir' }))
+    fireEvent.click(within(personOf('Martina Pérez')).getByRole('button', { name: 'Abrir Martina Pérez' }))
     expect(onOpen).toHaveBeenCalledWith('al-1', 'martina@x.com', 'Martina Pérez')
     fireEvent.click(personOf('lucia@x.com'))
     expect(onOpen).toHaveBeenLastCalledWith('al-2', 'lucia@x.com', null)
@@ -243,7 +245,7 @@ describe('UsersPanel — cuentas con usuario y contraseña (2026-11)', () => {
     users[0] = { ...users[0], image: 'https://lh3.googleusercontent.com/a/martina' } as typeof users[0]
     render(<UsersPanel role="admin" />)
     await flush()
-    expect(within(personOf('Martina Pérez')).getByTestId('avatar').querySelector('img')).toHaveAttribute('src', 'https://lh3.googleusercontent.com/a/martina')
+    expect(within(personOf('Martina Pérez')).getAllByTestId('avatar')[0].querySelector('img')).toHaveAttribute('src', 'https://lh3.googleusercontent.com/a/martina')
     expect(within(personOf('Laura Sosa')).getByTestId('avatar')).toHaveTextContent('LS')
   })
 
