@@ -57,7 +57,9 @@ export default function ExercisesWindow() {
   }
 
   return (
-    <div className={styles.lightScope} style={{ minHeight: '100vh', background: 'var(--p1)' }}>
+    // El body de la app no scrollea (overflow hidden en globals.css, por el player): esta
+    // ventana scrollea sola (2026-11).
+    <div className={styles.lightScope} style={{ height: '100dvh', overflowY: 'auto', background: 'var(--p1)' }} data-testid="exercises-scroll">
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '24px 16px' }}>
         <ExercisesPanel
           phrases={state.phrases}

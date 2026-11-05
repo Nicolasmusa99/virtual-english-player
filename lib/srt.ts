@@ -43,12 +43,35 @@ export function splitPhrase(phrase: Phrase, charOffset: number): [Phrase, Phrase
     throw new RangeError(`charOffset ${charOffset} out of range for text of length ${phrase.text.length}`)
   const duration = phrase.end - phrase.start
   const splitAt  = phrase.start + duration * (charOffset / phrase.text.length)
-  const textA    = phrase.text.slice(0, charOffset)
+  const textA    = phrase.text.slice(0, charOffset).trimEnd()
   const textB    = phrase.text.slice(charOffset).trimStart()
   return [
     { start: phrase.start, end: splitAt,    text: textA, sel: phrase.sel },
     { start: splitAt,      end: phrase.end, text: textB, sel: phrase.sel },
   ]
+}
+
+// Dónde dividir una frase (2026-11): SIEMPRE entre palabras, nunca en la mitad de una.
+// Busca el espacio más cercano a la mitad del texto; prefiere cortar después de una coma o
+// un punto (queda más natural) y evita dejar una sola palabra suelta de un lado si la frase
+// da para más. Devuelve la posición del espacio, o null si no se puede (una sola palabra).
+export function wordSplitOffset(text: string): number | null {
+  const spaces: number[] = []
+  for (let i = 1; i < text.length - 1; i++) if (/\s/.test(text[i]) && !/\s/.test(text[i - 1])) spaces.push(i)
+  if (spaces.length === 0) return null
+  const words = text.trim().split(/\s+/).length
+  const mid = text.length / 2
+  let best: number | null = null
+  let bestScore = Infinity
+  for (const i of spaces) {
+    const left = text.slice(0, i).trim().split(/\s+/).length
+    const right = words - left
+    if (words >= 4 && (left < 2 || right < 2)) continue // sin palabras sueltas
+    let score = Math.abs(i - mid)
+    if (/[,;:.!?]/.test(text[i - 1])) score -= text.length * 0.15 // corte natural
+    if (score < bestScore) { bestScore = score; best = i }
+  }
+  return best ?? spaces.reduce((a, b) => (Math.abs(b - mid) < Math.abs(a - mid) ? b : a))
 }
 
 export function mergePhrase(a: Phrase, b: Phrase): Phrase {

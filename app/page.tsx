@@ -1,7 +1,7 @@
 'use client'
 import { useRef, useState, useEffect, useMemo } from 'react'
 import styles from './page.module.css'
-import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase } from '@/lib/srt'
+import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase, wordSplitOffset } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
@@ -1081,13 +1081,14 @@ export default function Player() {
     setEditingError('')
   }
 
-  // Split automático por punto medio; selección de posición de corte queda fuera
-  // de alcance de esta iteración.
+  // Dividir en dos (2026-11): siempre entre palabras, cerca de la mitad (wordSplitOffset).
+  // Una frase de una sola palabra no se divide.
   function splitPhraseAt(idx: number) {
     const p = phrasesRef.current[idx]
-    if (!p || p.text.length < 2) return
-    const mid = Math.floor(p.text.length / 2)
-    const [a, b] = splitPhrase(p, mid)
+    if (!p) return
+    const at = wordSplitOffset(p.text)
+    if (at === null) return
+    const [a, b] = splitPhrase(p, at)
     setIsDirty(true)
     setPhrases(prev => [...prev.slice(0, idx), a, b, ...prev.slice(idx + 1)])
     capture('phrase_split', { phrase_index: idx, new_total: phrasesRef.current.length + 1 })
