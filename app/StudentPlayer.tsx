@@ -15,7 +15,7 @@ import VoiceBoostControl from './VoiceBoostControl'
 import { fmtTime } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import {
-  displayVideoName, lastStartedIndex, phraseAt, phraseEndAt, phraseIndexAt, phraseStartAt, phraseTarget, progressPct,
+  displayVideoName, phraseAt, phraseEndAt, phraseIndexAt, phraseStartAt, phraseTarget, progressPct,
   SLOW_RATE, stepSeek, stepVolume, timeAtX, volumeBarsOn, VOLUME_BARS,
 } from '@/lib/studentView'
 import type { StudentPhrase } from '@/lib/assignments'
@@ -51,12 +51,7 @@ export const PLAYER_TEXTS = {
   cc: 'Subtítulos',
   ccOn: 'Subtítulos: sí',
   ccOff: 'Subtítulos: no',
-  script: 'Guion',
   sound: 'Sonido',
-  panel: 'Guion y sonido',
-  phraseOf: (i: number, n: number) => `Frase ${i} de ${n}`,
-  phrases: (n: number) => (n === 1 ? '1 frase' : `${n} frases`),
-  noScript: 'Este video no tiene guion.',
   keys: 'Con el teclado: ← y → cambian de frase, ↓ la repite y la barra espaciadora pausa.',
   videoError: 'No se pudo reproducir el video. Probá de nuevo más tarde.',
 } as const
@@ -73,7 +68,6 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
   const T = PLAYER_TEXTS
   const vidRef = useRef<HTMLVideoElement>(null)
   const seekRef = useRef<HTMLDivElement>(null)
-  const scriptRef = useRef<HTMLOListElement>(null)
   const draggingRef = useRef(false)
   const stopAtRef = useRef<number | null>(null) // "Repetir": dónde frenar (fin de la frase)
   const [playing, setPlaying] = useState(false)
@@ -84,7 +78,6 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
   const [error, setError] = useState(false)
   const [cc, setCc] = useState(true)
   const [slow, setSlow] = useState(false)
-  const [tab, setTab] = useState<'script' | 'sound'>('script')
   const phrases = data.phrases
 
   // Subtítulos y tiempo al ritmo del video: un loop de requestAnimationFrame mientras
@@ -230,15 +223,8 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
   }
 
   const cur = phraseIndexAt(phrases, time, data.delay)       // la que suena (amarillo)
-  const started = lastStartedIndex(phrases, time, data.delay) // para "Frase 3 de 6"
   const curPhrase = cur >= 0 ? phrases[cur] : null
 
-  // El guion acompaña: la frase que suena queda a la vista.
-  useEffect(() => {
-    if (cur < 0) return
-    const el = scriptRef.current?.querySelector<HTMLElement>(`[data-i="${cur}"]`)
-    el?.scrollIntoView?.({ block: 'nearest' })
-  }, [cur])
 
   const pct = progressPct(time, duration)
   const barsOn = volumeBarsOn(volume)
@@ -357,47 +343,13 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
           </div>
         </div>
 
-        <aside className={styles.script} aria-label={T.panel}>
-          {/* 2026-11: "Sonido" como en el player del profe (voces claras, filtro de voz, ajuste
-              manual; se recuerda). Queda montado aunque no se vea: si se desmonta, desconecta el
-              ecualizador del video. */}
-          <div className={styles.sTabs} role="tablist">
-            {(['script', 'sound'] as const).map((t) => (
-              <button key={t} type="button" role="tab" aria-selected={tab === t} data-testid={`tab-${t}`}
-                className={`${styles.sTab} ${tab === t ? styles.sTabOn : ''}`} onClick={() => setTab(t)}>
-                {t === 'script' ? T.script : T.sound}
-              </button>
-            ))}
-          </div>
-          <div className={styles.soundPane} hidden={tab !== 'sound'}>
+        <aside className={styles.script} aria-label={T.sound}>
+          {/* 2026-11-05: el alumno no ve el guion (decisión del dueño); el panel es solo "Sonido",
+              el mismo control que el del profe (voces claras, filtro de voz, ajuste manual). */}
+          <div className={styles.soundPane}>
             <VoiceBoostControl videoRef={vidRef} stageOpen={false} />
           </div>
-          <div className={styles.scriptPane} hidden={tab !== 'script'} role="region" aria-label={T.script}>
-          <div className={styles.scriptHead}>
-            {!noPhrases && (
-              <span className={styles.scriptCount}>
-                {started >= 0 ? T.phraseOf(started + 1, phrases.length) : T.phrases(phrases.length)}
-              </span>
-            )}
-          </div>
-          {noPhrases
-            ? <p className={styles.scriptEmpty}>{T.noScript}</p>
-            : (
-              <ol ref={scriptRef} className={styles.scriptList}>
-                {phrases.map((p, i) => (
-                  <li key={i}>
-                    <button type="button" data-i={i} data-testid="script-phrase"
-                      className={`${styles.phr} ${i === cur ? styles.phrNow : ''}`}
-                      aria-current={i === cur ? 'true' : undefined} onClick={() => goPhrase(i)}>
-                      <span className={styles.phrAt}>{fmtTime(phraseStartAt(p, data.delay))}</span>
-                      <span className={styles.phrText}>{p.text}</span>
-                    </button>
-                  </li>
-                ))}
-              </ol>
-            )}
           {!noPhrases && <p className={styles.scriptKeys}>{T.keys}</p>}
-          </div>
         </aside>
       </div>
     </div>
