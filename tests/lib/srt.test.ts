@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { parseSRT, timeToSec, fmtTime, splitPhrase, mergePhrase, cleanSrt, srtTime } from '@/lib/srt'
+import { parseSRT, timeToSec, fmtTime, splitPhrase, mergePhrase, cleanSrt, srtTime, wordSplitOffset } from '@/lib/srt'
 
 describe('parseSRT', () => {
   it('parses standard LF input', () => {
@@ -272,5 +272,30 @@ describe('cleanSrt', () => {
     for (const raw of ['', '   ', 'Sorry, I cannot transcribe this video.', '```\n```']) {
       expect(cleanSrt(raw)).toEqual({ srt: '', phrases: 0, dropped: 0 })
     }
+  })
+})
+
+// 2026-11: "Dividir" corta siempre entre palabras.
+describe('wordSplitOffset', () => {
+  const cut = (t: string) => { const i = wordSplitOffset(t); return i === null ? null : [t.slice(0, i).trim(), t.slice(i).trim()] }
+  it('nunca corta una palabra al medio (el caso que reportó el dueño)', () => {
+    expect(cut("I've sang the glory that was Rome and passed the hound of single song")).toEqual(["I've sang the glory that was Rome", 'and passed the hound of single song'])
+  })
+  it('prefiere cortar después de una coma cercana a la mitad', () => {
+    expect(cut('I know it, you know it too')).toEqual(['I know it,', 'you know it too'])
+  })
+  it('no deja una palabra suelta si la frase da para más', () => {
+    const [a, b] = cut('Go, run to the store now')!
+    expect(a.split(' ').length).toBeGreaterThanOrEqual(2)
+    expect(b.split(' ').length).toBeGreaterThanOrEqual(2)
+  })
+  it('dos palabras: una de cada lado; una sola palabra: no se divide', () => {
+    expect(cut('Phrase one')).toEqual(['Phrase', 'one'])
+    expect(cut('Hello')).toBeNull()
+  })
+  it('splitPhrase con ese corte no deja espacios en los bordes', () => {
+    const p: Phrase = { start: 0, end: 10, text: 'one two three four', sel: true }
+    const [a, b] = splitPhrase(p, wordSplitOffset(p.text)!)
+    expect([a.text, b.text]).toEqual(['one two', 'three four'])
   })
 })

@@ -97,7 +97,7 @@
 .subClick:hover, .subClick:focus-visible { outline: 2px dashed rgba(255,255,255,0.45); outline-offset: 4px; }
 .subEdit { pointer-events: auto; width: min(90%, 960px); resize: none; border: 0; outline: 2px solid var(--ac); outline-offset: 4px; overflow: hidden; }
 .subOverlay { position: absolute; bottom: 0; left: 0; right: 0; display: flex; justify-content: center; align-items: flex-end; padding: 0 6% 5%; pointer-events: none; z-index: 20; }
-.subBox { background: rgba(0,0,0,0.78); padding: 10px 28px 12px; border-radius: 4px; font-family: var(--font-sans); font-size: clamp(18px, 2.4vw, 34px); font-weight: 400; color: #ffffff; line-height: 1.4; text-align: center; max-width: 960px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); animation: subFadeIn 0.15s ease; }
+.subBox { text-wrap: balance; background: rgba(0,0,0,0.78); padding: 10px 28px 12px; border-radius: 4px; font-family: var(--font-sans); font-size: clamp(18px, 2.4vw, 34px); font-weight: 400; color: #ffffff; line-height: 1.4; text-align: center; max-width: 960px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); animation: subFadeIn 0.15s ease; }
 
 /* PANEL */
 .panel { background: var(--p2); border-left: 1px solid var(--ln2); display: flex; flex-direction: column; overflow: hidden; min-height: 0; font-family: var(--font-sans); }

@@ -155,3 +155,22 @@ describe('TC-140 — player exercises tab shows hint when window open', () => {
     expect(container.querySelector('[data-testid="btn-generate"]')).toBeNull()
   })
 })
+
+// 2026-11: el body de la app tiene overflow hidden (por el player); la ventana de
+// ejercicios tiene que scrollear sola, si no "se traba" y no deja bajar.
+describe('ventana de ejercicios — scroll', () => {
+  afterEach(() => vi.restoreAllMocks())
+  it('el contenedor ocupa la ventana y scrollea solo', async () => {
+    const { container } = render(<ExercisesWindow />)
+    await act(async () => { await tick(50) })
+    const sender = new ExercisesChannel()
+    await act(async () => {
+      sender.send({ type: 'load_phrases', phrases: ['Hello world'], level: 'intermediate', fileName: 'lesson.mp4', scope: 'all' })
+      await tick(50)
+    })
+    const box = container.querySelector('[data-testid="exercises-scroll"]') as HTMLElement
+    expect(box.style.overflowY).toBe('auto')
+    expect(box.style.height).toBe('100dvh')
+    sender.close()
+  })
+})

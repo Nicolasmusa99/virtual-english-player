@@ -162,7 +162,7 @@ describe('US-031 — split and merge phrase buttons', () => {
   })
 
   // TC-031a: Dividir aparece en ambas frases; split de frase 0 crea 3 frases.
-  // "Phrase one" (10 chars), mid=5 → A="Phras", B="e one"
+  // 2026-11: se corta entre palabras → "Phrase one" queda "Phrase" / "one"
   it('TC-031a: Dividir en frase 0 → lista crece de 2 a 3, textos A y B visibles', async () => {
     const { container } = render(<Player />)
     await loadIntoPlayer(container)
@@ -176,8 +176,8 @@ describe('US-031 — split and merge phrase buttons', () => {
     })
 
     expect(container.querySelectorAll('[title="Editar"]')).toHaveLength(3)
-    expect(container.textContent).toContain('Phras')
-    expect(container.textContent).toContain('e one')
+    const texts = Array.from(container.querySelectorAll('[class*="plTx"]')).filter((e) => /(^|\s)_?plTx_/.test(e.className)).map((e) => e.textContent)
+    expect(texts.slice(0, 2)).toEqual(['Phrase', 'one'])
   })
 
   // TC-031b: Unir solo aparece en frases que no son la última; merge crea 1 frase.
@@ -217,8 +217,8 @@ describe('US-031 — split and merge phrase buttons', () => {
       await tick(50)
     })
 
-    // "Phrase one" mid=5 → parte A = "Phras"
-    expect(panelCmds).toContainEqual({ type: 'subtitle', text: 'Phras', visible: true })
+    // "Phrase one" se corta entre palabras → parte A = "Phrase"
+    expect(panelCmds).toContainEqual({ type: 'subtitle', text: 'Phrase', visible: true })
   })
 
   // TC-031d: merge de frase activa con stage abierto → stage recibe subtitle del merge
