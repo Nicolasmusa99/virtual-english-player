@@ -10,7 +10,7 @@ import { render, screen, fireEvent, act, within } from '@testing-library/react'
 vi.mock('@vercel/blob/client', () => ({ upload: vi.fn(async () => ({ url: 'https://blob.example/videos/vid-1/x.mp4' })) }))
 
 import Player from '@/app/page'
-import LibraryList from '@/app/LibraryList'
+import LibraryBrowser from '@/app/LibraryBrowser'
 import { VIDEO_NAME_TEXTS } from '@/app/VideoNameDialog'
 import { VIDEO_NAME_ERROR } from '@/lib/videoName'
 
@@ -87,6 +87,12 @@ describe('al subir: "Nombre del video" mientras se transcribe', () => {
   })
 })
 
+// 2026-11-05: Mi biblioteca es LibraryBrowser (mode="mine"); "Cambiar nombre" vive en el "⋯".
+const openRename = async () => {
+  await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+  fireEvent.click(screen.getByRole('button', { name: 'Más acciones de Comercial del auto FINAL' }))
+  fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitem', { name: 'Cambiar nombre' }))
+}
 describe('Mi biblioteca: "Cambiar nombre"', () => {
   const VIDEO = { id: 'v1', originalName: 'Comercial del auto FINAL', status: 'ready', phraseCount: 6, sharedType: null, sharedLevel: null, publishedAt: null }
   beforeEach(() => {
@@ -98,8 +104,8 @@ describe('Mi biblioteca: "Cambiar nombre"', () => {
 
   it('el admin lo cambia: PATCH con el nombre limpio, cierra y avisa al padre', async () => {
     const onChanged = vi.fn()
-    render(<LibraryList videos={[VIDEO]} role="admin" onOpen={() => {}} onDelete={() => {}} onChanged={onChanged} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Cambiar nombre' }))
+    render(<LibraryBrowser mode="mine" videos={[VIDEO]} canManage onOpen={() => {}} onDelete={() => {}} onChanged={onChanged} />)
+    await openRename()
     const dlg = screen.getByRole('dialog', { name: VIDEO_NAME_TEXTS.title })
     const input = within(dlg).getByLabelText(VIDEO_NAME_TEXTS.label) as HTMLInputElement
     expect(input.value).toBe('Comercial del auto FINAL')
@@ -111,17 +117,19 @@ describe('Mi biblioteca: "Cambiar nombre"', () => {
   })
 
   it('vacío → aviso, sin pedir nada', async () => {
-    render(<LibraryList videos={[VIDEO]} role="admin" onOpen={() => {}} onDelete={() => {}} onChanged={() => {}} />)
-    fireEvent.click(screen.getByRole('button', { name: 'Cambiar nombre' }))
+    render(<LibraryBrowser mode="mine" videos={[VIDEO]} canManage onOpen={() => {}} onDelete={() => {}} onChanged={() => {}} />)
+    await openRename()
     const dlg = screen.getByRole('dialog')
     fireEvent.change(within(dlg).getByLabelText(VIDEO_NAME_TEXTS.label), { target: { value: '  ' } })
     await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: VIDEO_NAME_TEXTS.save })) })
     expect(within(dlg).getByRole('alert')).toHaveTextContent(VIDEO_NAME_ERROR)
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(fetchMock.mock.calls.filter(([, i]) => i?.method === 'PATCH')).toEqual([])
   })
 
-  it('un profe no ve "Cambiar nombre"', () => {
-    render(<LibraryList videos={[VIDEO]} role="profesor" onOpen={() => {}} onDelete={() => {}} onChanged={() => {}} />)
-    expect(screen.queryByRole('button', { name: 'Cambiar nombre' })).toBeNull()
+  it('un profe no ve "Cambiar nombre"', async () => {
+    render(<LibraryBrowser mode="mine" videos={[VIDEO]} onOpen={() => {}} onDelete={() => {}} onChanged={() => {}} />)
+    await act(async () => { await new Promise((r) => setTimeout(r, 0)) })
+    fireEvent.click(screen.getByRole('button', { name: 'Más acciones de Comercial del auto FINAL' }))
+    expect(within(screen.getByRole('menu')).queryByRole('menuitem', { name: 'Cambiar nombre' })).toBeNull()
   })
 })

@@ -34,3 +34,11 @@
 @media (hover: none) { .check { opacity: 1; } }
 @media (max-width: 560px) { .grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px 12px; } }
 @media (prefers-reduced-motion: reduce) { .thumb, .thumb svg { transition: none; } }
+
+/* Mi biblioteca (2026-11-05): estado en la miniatura y la ventana de publicar. */
+.thumbOff { filter: grayscale(1); opacity: 0.55; cursor: default; }
+.status { position: absolute; top: 8px; right: 8px; padding: 2px 9px; border-radius: 10px; background: rgba(20, 40, 75, 0.72); color: #fff; font-size: 12px; font-weight: 600; pointer-events: none; }
+.statusPub { background: #fff; color: var(--tinta); box-shadow: 0 1px 4px rgba(20, 40, 75, 0.2); }
+.statusPub::before { content: ''; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: #1F7A4F; vertical-align: 1px; }
+.pubField { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.pubLbl { font-size: 14px; color: var(--pizarra); }

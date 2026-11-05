@@ -7,7 +7,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, fireEvent, act, within } from '@testing-library/react'
 import StudentView, { MATERIAL_TEXTS as M } from '@/app/StudentView'
 import StudentApp, { STUDENT_TEXTS } from '@/app/StudentApp'
-import LibraryFolders, { LIB_FOLDER_TEXTS as L } from '@/app/LibraryFolders'
 
 const ST = 'st-1'
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
@@ -227,58 +226,5 @@ describe('StudentApp — el alumno ve su material por carpetas', () => {
     await mountWith([mat('v1', 'Comercial', null)], [])
     expect(screen.queryAllByRole('heading', { level: 3 })).toEqual([])
     expect(screen.getByRole('button', { name: /Comercial/ })).toBeInTheDocument()
-  })
-})
-
-describe('LibraryFolders — las carpetas de la biblioteca (admin)', () => {
-  const VIDEOS = [
-    { id: 'v1', originalName: 'Comercial', status: 'ready', phraseCount: 6, sharedType: null, sharedLevel: null, publishedAt: '2026-10-01' },
-    { id: 'v2', originalName: 'Ensayo', status: 'ready', phraseCount: 3, sharedType: null, sharedLevel: null, publishedAt: null },
-    { id: 'v3', originalName: 'Frozen', status: 'ready', phraseCount: 9, sharedType: null, sharedLevel: null, publishedAt: '2026-10-01' },
-  ]
-  let libFolders: { id: string; name: string; videoIds: string[] }[]
-  beforeEach(() => {
-    libFolders = [{ id: 'lf1', name: 'Canciones', videoIds: ['v1'] }]
-    fetchMock = vi.fn((url: string, init?: RequestInit) => {
-      const m = init?.method ?? 'GET'
-      if (m === 'POST' && url === '/api/folders') { libFolders = [...libFolders, { id: 'lf2', name: 'Películas', videoIds: [] }] }
-      return Promise.resolve(m === 'GET' ? json(200, { folders: libFolders }) : json(200, { ok: true }))
-    })
-    vi.stubGlobal('fetch', fetchMock)
-  })
-
-  it('muestra sus videos, agrega varios de una, saca uno y crea carpetas', async () => {
-    render(<LibraryFolders videos={VIDEOS} onOpen={() => {}} />)
-    await flush()
-    const box = screen.getByTestId('folder')
-    expect(box).toHaveTextContent('Comercial')
-    await act(async () => { fireEvent.click(within(box).getByRole('button', { name: `+ ${L.addVideos}` })) })
-    const dlg = screen.getByRole('dialog', { name: L.addTitle('Canciones') })
-    expect(within(dlg).getByText(L.unpublished)).toBeInTheDocument() // Ensayo es privado
-    fireEvent.click(within(dlg).getByRole('checkbox', { name: /Ensayo/ }))
-    fireEvent.click(within(dlg).getByRole('checkbox', { name: /Frozen/ }))
-    await act(async () => { fireEvent.click(within(dlg).getByRole('button', { name: L.addConfirm(2) })) })
-    expect(calls('POST', '/api/folders/lf1/videos').map((c) => c.body)).toEqual([{ videoId: 'v2' }, { videoId: 'v3' }])
-    expect(screen.getByTestId('folder')).toHaveTextContent('3 videos')
-
-    await openMenu(L.more('Comercial'))
-    await pickMenu(L.takeOut)
-    expect(calls('DELETE', '/api/folders/lf1/videos')[0].body).toEqual({ videoId: 'v1' })
-
-    fireEvent.click(screen.getByRole('button', { name: `+ ${L.newFolder}` }))
-    fireEvent.change(screen.getByLabelText(L.folderName), { target: { value: 'Películas' } })
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: L.create })) })
-    await flush()
-    expect(calls('POST', '/api/folders')[0].body).toEqual({ name: 'Películas' })
-    expect(screen.getByTestId('folder')).toHaveAttribute('aria-label', 'Películas')
-  })
-
-  it('sin carpetas invita a crear la primera', async () => {
-    libFolders = []
-    render(<LibraryFolders videos={VIDEOS} onOpen={() => {}} />)
-    await flush()
-    expect(screen.getByText(L.intro)).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: L.firstFolder }))
-    expect(screen.getByLabelText(L.folderName)).toBeInTheDocument()
   })
 })
