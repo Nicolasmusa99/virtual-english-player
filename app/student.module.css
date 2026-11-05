@@ -165,16 +165,8 @@
 /* La frase que suena, en la barra de tiempo: amarillo (el "ahora"). */
 .trackNow { position: absolute; top: -3px; bottom: -3px; border-radius: 2px; background: var(--amarillo); pointer-events: none; }
 
-/* Guion: las frases del video; la que suena en amarillo con texto tinta; tocar una va ahí. */
+/* Panel del costado: solo "Sonido" (el alumno no ve el guion, 2026-11-05). */
 .script { min-width: 0; min-height: 0; display: flex; flex-direction: column; background: var(--p2); border-left: 1px solid var(--ln2); }
-/* Pestañas Guion / Sonido (2026-11), como las del panel del profe. */
-.sTabs { display: flex; border-bottom: 1px solid var(--ln2); flex-shrink: 0; }
-.sTab { flex: 1; height: 48px; border: 0; background: transparent; color: var(--tx2); font: 16px var(--font-sans); cursor: pointer; }
-.sTab:hover { color: var(--tx); }
-.sTabOn { color: var(--tx); font-weight: 700; box-shadow: inset 0 -3px 0 var(--tx); }
-.sTab:focus-visible { outline: 2px solid var(--ac); outline-offset: -2px; }
-.scriptPane { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.scriptPane[hidden], .soundPane[hidden] { display: none; }
 .soundPane { flex: 1; min-height: 0; overflow-y: auto; }
 .scriptHead { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 16px 18px 10px; }
 .scriptCount { font-size: 14px; color: var(--tx2); font-variant-numeric: tabular-nums; }
@@ -200,10 +192,13 @@
   .clWide .clList { margin-top: 18px; }
 }
 @media (max-width: 900px) {
-  /* Player: el guion va debajo del video (y se desplaza solo él). */
-  .pMain { display: flex; flex-direction: column; }
+  /* Player: el panel de Sonido va debajo del video (y se desplaza solo él). */
+  /* celu: video y controles enteros arriba; el Sonido abajo, y la pantalla se desplaza entera. */
+  .pMain { display: flex; flex-direction: column; overflow-y: auto; }
+  .pLeft { flex: 0 0 auto; }
   .pStage { flex: 0 0 auto; aspect-ratio: 16 / 9; }
-  .script { flex: 1; min-height: 160px; border-left: 0; border-top: 1px solid var(--ln2); }
+  .script { flex: 0 0 auto; min-height: 0; border-left: 0; border-top: 1px solid var(--ln2); }
+  .soundPane { overflow: visible; }
   .scriptKeys { display: none; }
 }
 @media (max-width: 640px) {

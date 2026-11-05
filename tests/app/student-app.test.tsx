@@ -234,15 +234,14 @@ describe('StudentPlayer — play/pausa, stop, volumen, barra de tiempo y CC', ()
     return { ...r, video, st, onBack }
   }
 
-  it('los ÚNICOS botones son los de practicar (sin herramientas del profe) y las frases del guion', () => {
+  it('los ÚNICOS botones son los de practicar (sin herramientas del profe) (más los de Sonido)', () => {
     mountPlayer()
     const buttons = screen.getAllByRole('button')
-    const names = buttons.filter((b) => !b.dataset.testid).map((b) => b.getAttribute('aria-label') ?? b.textContent)
+    const names = buttons.filter((b) => !b.dataset.testid && !b.closest('aside')).map((b) => b.getAttribute('aria-label') ?? b.textContent)
     expect(names).toEqual([
       PLAYER_TEXTS.back, PLAYER_TEXTS.prev, PLAYER_TEXTS.repeat, PLAYER_TEXTS.play, PLAYER_TEXTS.next, PLAYER_TEXTS.stop,
       PLAYER_TEXTS.volDown, PLAYER_TEXTS.volUp, PLAYER_TEXTS.slow, PLAYER_TEXTS.cc,
     ])
-    expect(buttons.filter((b) => b.dataset.testid === 'script-phrase')).toHaveLength(2)
     expect(document.querySelector('input')).toBeNull() // ni sliders ni campos editables
   })
 
@@ -488,26 +487,16 @@ describe('StudentPlayer — para practicar', () => {
     expect(st.t).toBe(2)
   })
 
-  it('el guion: la frase que suena va marcada (y en la barra); tocar una frase va ahí', async () => {
+  it('sin guion: el alumno no ve las frases; la que suena va marcada en la barra', async () => {
     const { st, video } = mountPlayer()
-    const script = screen.getByRole('region', { name: PLAYER_TEXTS.script })
-    expect(script).toHaveTextContent('2 frases')
-    const [first, second] = within(script).getAllByTestId('script-phrase')
-    expect(first).toHaveTextContent('0:01Hello there')
+    expect(screen.queryByRole('region', { name: 'Guion' })).toBeNull()
+    expect(screen.queryByText('Hello there')).toBeNull()
+    expect(screen.queryAllByTestId('script-phrase')).toHaveLength(0)
     st.t = 2
     await act(async () => { video.dispatchEvent(new Event('seeked')) })
-    expect(first).toHaveAttribute('aria-current', 'true')
-    expect(second).not.toHaveAttribute('aria-current')
-    expect(script).toHaveTextContent(PLAYER_TEXTS.phraseOf(1, 2))
     expect(screen.getByTestId('track-now')).toBeInTheDocument()
-    await act(async () => { fireEvent.click(second) })
-    expect(st.t).toBe(4)
-    expect(video.play).toHaveBeenCalled()
-    expect(second).toHaveAttribute('aria-current', 'true')
-    expect(script).toHaveTextContent(PLAYER_TEXTS.phraseOf(2, 2))
-    st.t = 3.5 // un silencio: ninguna marcada, ni en la barra
+    st.t = 3.5 // un silencio: nada marcado
     await act(async () => { video.dispatchEvent(new Event('seeked')) })
-    expect(within(script).getAllByTestId('script-phrase').some((b) => b.hasAttribute('aria-current'))).toBe(false)
     expect(screen.queryByTestId('track-now')).toBeNull()
   })
 
@@ -542,10 +531,9 @@ describe('StudentPlayer — para practicar', () => {
     expect(video.playbackRate).toBe(1)
   })
 
-  it('sin frases: Anterior / Repetir / Siguiente desactivados y "Este video no tiene guion."', () => {
+  it('sin frases: Anterior / Repetir / Siguiente desactivados', () => {
     mountPlayer({ ...DATA, phrases: [] })
     for (const n of [PLAYER_TEXTS.prev, PLAYER_TEXTS.repeat, PLAYER_TEXTS.next]) expect(screen.getByRole('button', { name: n })).toBeDisabled()
-    expect(screen.getByText(PLAYER_TEXTS.noScript)).toBeInTheDocument()
   })
 })
 // ─────────────────────────────────────────────────────────────────
@@ -555,15 +543,13 @@ describe('StudentPlayer — Sonido', () => {
     id: VID_A, originalName: 'Frozen (demo).mp4', storageUrl: 'https://blob.example/frozen.mp4',
     durationSec: 185, phrases: DETAIL.captions.phrases, delay: 0,
   }
-  it('pestañas Guion y Sonido: Sonido muestra los ajustes; el video pide el audio con crossOrigin', () => {
+  it('el panel es solo Sonido (sin pestañas ni guion); el video pide el audio con crossOrigin', () => {
     const { container } = render(<StudentPlayer data={DATA} onBack={() => {}} />)
     expect(container.querySelector('video')).toHaveAttribute('crossorigin', 'anonymous')
-    expect(screen.getByRole('tab', { name: PLAYER_TEXTS.script })).toHaveAttribute('aria-selected', 'true')
-    expect(screen.queryByRole('button', { name: /Voces claras/ })).toBeNull() // oculto mientras se ve el guion
-    fireEvent.click(screen.getByRole('tab', { name: PLAYER_TEXTS.sound }))
-    expect(screen.getByRole('tab', { name: PLAYER_TEXTS.sound })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.queryByRole('tab')).toBeNull()
+    expect(screen.getByRole('complementary', { name: PLAYER_TEXTS.sound })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Voces claras/ })).toBeInTheDocument()
     expect(screen.getByText(/Filtro de voz/)).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: PLAYER_TEXTS.script })).toBeNull()
+    expect(screen.queryAllByTestId('script-phrase')).toHaveLength(0)
   })
 })
