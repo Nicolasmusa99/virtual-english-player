@@ -85,8 +85,8 @@ describe('Tu próxima clase', () => {
 
   it('las 3 siguientes: la cancelada tachada con etiqueta, "Cambió de día" en la movida', async () => {
     await renderHome()
-    const rows = within(classesRegion()).getAllByRole('listitem')
-    expect(rows.map((r) => r.textContent)).toEqual([
+    const rows = within(screen.getByTestId('upcoming')).getAllByRole('listitem')
+    expect(rows.map((r) => r.textContent).slice(0, 3)).toEqual([
       'Viernes 2 de octubre10:30',
       `Martes 6 de octubre18:00${CLASSES_TEXTS.cancelled}`,
       `Jueves 15 de octubre17:00${CLASSES_TEXTS.moved}`,
@@ -150,7 +150,8 @@ describe('el armado del inicio según lo que tenga el alumno', () => {
     ]
     await renderHome()
     expect(screen.getByText(STUDENT_TEXTS.intro)).toBeInTheDocument()
-    expect(headings()).toEqual(['Hola, Martina', STUDENT_TEXTS.material, CLASSES_TEXTS.next])
+    // Rediseño 2026-11: primero las clases (cuándo y cómo), después el material.
+    expect(headings()).toEqual(['Hola, Martina', CLASSES_TEXTS.next, CLASSES_TEXTS.upcoming, STUDENT_TEXTS.material])
     const cards = within(screen.getByRole('region', { name: STUDENT_TEXTS.material })).getAllByRole('button')
     expect(cards.map((c) => c.textContent)).toEqual([
       `${STUDENT_TEXTS.isNew}Comercial del auto, ${STUDENT_TEXTS.isNew}Asignado ayer`,
@@ -162,7 +163,7 @@ describe('el armado del inicio según lo que tenga el alumno', () => {
     material = []
     await renderHome()
     expect(screen.getByText(STUDENT_TEXTS.introEmpty)).toBeInTheDocument()
-    expect(headings()).toEqual(['Hola, Martina', CLASSES_TEXTS.next, STUDENT_TEXTS.material])
+    expect(headings()).toEqual(['Hola, Martina', CLASSES_TEXTS.next, CLASSES_TEXTS.upcoming, STUDENT_TEXTS.material])
     expect(screen.getByTestId('next-class')).toBeInTheDocument()
     expect(screen.getByText(STUDENT_TEXTS.emptyTitle)).toBeInTheDocument()
     expect(screen.getByText(STUDENT_TEXTS.emptySub)).toBeInTheDocument()

@@ -109,8 +109,22 @@ describe('StudentApp — inicio', () => {
     listResponse = () => json(200, { material: [] })
     render(<StudentApp name="Martina" email={null} />)
     await flush()
-    expect(screen.getByText(STUDENT_TEXTS.welcomeTitle)).toBeInTheDocument()
+    // Rediseño 2026-11: sin profe todavía (recién registrado) → se le dice qué falta.
+    expect(screen.getByTestId('no-teacher')).toHaveTextContent(STUDENT_TEXTS.noTeacherTitle)
+    expect(screen.getByText(STUDENT_TEXTS.afterTitle)).toBeInTheDocument()
     expect(screen.getByText(STUDENT_TEXTS.welcome)).toBeInTheDocument()
+  })
+
+  it('recién registrado con mail: puede copiarlo para pasárselo al profe', async () => {
+    listResponse = () => json(200, { material: [] })
+    const writeText = vi.fn(() => Promise.resolve())
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    render(<StudentApp name="Diego" email="diego@x.com" />)
+    await flush()
+    expect(screen.getByTestId('no-teacher')).toHaveTextContent('diego@x.com')
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: STUDENT_TEXTS.copyMail })) })
+    expect(writeText).toHaveBeenCalledWith('diego@x.com')
+    expect(screen.getByRole('button', { name: STUDENT_TEXTS.copied })).toBeInTheDocument()
   })
 
   it('error al cargar → mensaje + Reintentar (que vuelve a pedir)', async () => {

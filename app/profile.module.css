@@ -2,7 +2,7 @@
    pizarra y tiza; sin amarillo. Botones y campos de material.module.css. */
 
 .wrap { display: flex; flex-direction: column; gap: 16px; max-width: 720px; color: var(--tinta); font-family: var(--font-sans); }
-.card { padding: 22px 24px; border: 1.5px solid var(--tiza); border-radius: 12px; background: #fff; }
+.card { padding: 22px 24px; border: 1.5px solid var(--tiza); border-radius: 24px; background: #fff; }
 .h3 { margin: 0 0 14px; font-size: 18px; font-weight: 700; }
 
 .photoRow { display: flex; align-items: center; gap: 24px; }

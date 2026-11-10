@@ -218,8 +218,28 @@ describe('StudentApp — el alumno ve su material por carpetas', () => {
       [mat('v1', 'Comercial', 'f1'), mat('v2', 'Let It Be', null), mat('v3', 'Frozen', 'f2')],
       [{ id: 'f2', name: 'Canciones' }, { id: 'f1', name: 'Unidad 1' }, { id: 'f9', name: 'Vacía' }],
     )
-    const titles = screen.getAllByRole('heading', { level: 3 }).map((h) => h.textContent)
-    expect(titles).toEqual(['Canciones1 video', 'Unidad 11 video', `${STUDENT_TEXTS.otherVideos}1 video`])
+    // Rediseño 2026-11: las carpetas van a la izquierda; al entrar se ve todo.
+    const nav = screen.getByRole('navigation', { name: STUDENT_TEXTS.folders })
+    expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual([`${STUDENT_TEXTS.all}3`, 'Canciones1', 'Unidad 11', `${STUDENT_TEXTS.otherVideos}1`])
+    expect(within(nav).getByRole('button', { name: /Todo/ })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent(`${STUDENT_TEXTS.all}3 videos`)
+    expect(screen.getByRole('button', { name: /Comercial/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Frozen/ })).toBeInTheDocument()
+  })
+
+  it('al elegir una carpeta se ve solo lo de esa carpeta', async () => {
+    await mountWith(
+      [mat('v1', 'Comercial', 'f1'), mat('v2', 'Let It Be', null), mat('v3', 'Frozen', 'f2')],
+      [{ id: 'f2', name: 'Canciones' }, { id: 'f1', name: 'Unidad 1' }],
+    )
+    const nav = screen.getByRole('navigation', { name: STUDENT_TEXTS.folders })
+    await act(async () => { fireEvent.click(within(nav).getByRole('button', { name: /Canciones/ })) })
+    expect(screen.getByRole('heading', { level: 3 })).toHaveTextContent('Canciones1 video')
+    expect(screen.getByRole('button', { name: /Frozen/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Comercial/ })).toBeNull()
+    await act(async () => { fireEvent.click(within(nav).getByRole('button', { name: new RegExp(STUDENT_TEXTS.otherVideos) })) })
+    expect(screen.getByRole('button', { name: /Let It Be/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Frozen/ })).toBeNull()
   })
 
   it('sin carpetas, como siempre (sin títulos de grupo)', async () => {

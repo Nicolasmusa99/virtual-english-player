@@ -85,9 +85,42 @@ describe('TeacherToday — el día', () => {
     const next = rows()[1]
     expect(next).toHaveTextContent('Martina Pérez')
     expect(next).toHaveTextContent('En 3 h 20 min')
-    expect(within(next).getByRole('link', { name: T.enterZoom })).toHaveAttribute('href', ZOOM)
-    await click(within(next).getByRole('button', { name: T.openStudent }))
+    // Rediseño 2026-11: entrar y ver al alumno van arriba, en el panel de la próxima clase.
+    const hero = screen.getByTestId('next-hero')
+    expect(hero).toHaveTextContent('18:00')
+    expect(hero).toHaveTextContent('Martina Pérez')
+    expect(within(hero).getByRole('link', { name: T.enterZoom })).toHaveAttribute('href', ZOOM)
+    await click(within(hero).getByRole('button', { name: T.openStudent }))
     expect(onOpenStudent).toHaveBeenCalledWith('st-m', 'martina@x.com', 'Martina Pérez')
+  })
+
+  it('el día como línea de horas: un bloque por clase', async () => {
+    await mount()
+    const tl = screen.getByTestId('day-timeline')
+    expect(tl).toHaveAttribute('aria-hidden', 'true')
+    expect(tl).toHaveTextContent('18:00')
+    expect(tl).toHaveTextContent('19:30')
+  })
+
+  it('con todo cargado no aparecen los primeros pasos', async () => {
+    await mount()
+    expect(screen.queryByTestId('first-steps')).toBeNull()
+  })
+
+  it('profe nuevo: primeros pasos con el avance y el que toca ahora', async () => {
+    window.localStorage.clear()
+    data = { students: [], series: [], classes: [], zoomUrl: ZOOM }
+    const onOpenStudents = vi.fn()
+    render(<TeacherToday onOpenStudent={onOpenStudent} onOpenAgenda={onOpenAgenda} onOpenStudents={onOpenStudents} />); await flush()
+    const hero = screen.getByTestId('first-steps')
+    expect(hero).toHaveTextContent(T.stepsLeft(2))
+    expect(hero).toHaveTextContent(T.stepsOf(1))
+    await click(screen.getByRole('button', { name: T.stepList[1].action }))
+    expect(onOpenStudents).toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: T.stepList[2].action })).toBeDisabled() // sin alumnos no se agenda
+    await click(within(hero).getByRole('button', { name: T.stepsHide }))
+    expect(screen.queryByTestId('first-steps')).toBeNull()
+    window.localStorage.clear()
   })
 
   it('las demás se editan con la ventana de siempre', async () => {

@@ -38,6 +38,10 @@ export const CLASSES_TEXTS = {
   error: 'No pudimos cargar tus clases.',
   retry: 'Reintentar',
   localTime: 'Horarios en tu hora local',
+  // Rediseño 2026-11
+  upcoming: 'Tus próximas clases',
+  howTitle: 'Cómo entrar',
+  how: ['Tocá el botón para entrar unos minutos antes.', 'Se abre Zoom en tu compu o en tu celu.', 'Tu profe comparte el video y practican juntos.'],
 } as const
 
 // Lo que llega de la API, validado: lo que no tenga la forma esperada se descarta.
@@ -118,7 +122,7 @@ export default function StudentClasses({ state, now, wide, onRetry, onOpenCalend
     )
   }
 
-  const { next, rest } = splitUpcoming(state.classes, now, 3)
+  const { next, rest } = splitUpcoming(state.classes, now, 6)
   if (!next && rest.length === 0) {
     return (
       <section className={styles.cl} aria-label={T.title}>
@@ -138,24 +142,42 @@ export default function StudentClasses({ state, now, wide, onRetry, onOpenCalend
 
   return (
     <section className={`${styles.cl} ${wide ? styles.clWide : ''}`} aria-label={T.title}>
-      <h2 className={styles.sTitle}>{next ? T.next : T.title}</h2>
+      <h2 className={`${styles.sTitle} ${next ? styles.srOnly : ''}`}>{next ? T.next : T.title}</h2>
       <div className={styles.clGrid}>
         {next && t && when && (
           <div className={styles.clNext} data-testid="next-class">
-            <div className={styles.clDay}>
-              {when.rel === 'Hoy' ? <mark className={styles.now}>{when.rel}</mark> : when.rel && <b>{when.rel}</b>} {when.day}
+            <svg className={styles.clRings} viewBox="0 0 420 420" fill="none" aria-hidden="true">
+              <circle cx="210" cy="210" r="209" stroke="rgba(143,180,236,0.14)" /><circle cx="210" cy="210" r="150" stroke="rgba(143,180,236,0.18)" /><circle cx="210" cy="210" r="92" stroke="rgba(143,180,236,0.24)" />
+            </svg>
+            <div className={styles.clInfo}>
+              <div className={styles.clKicker} aria-hidden="true">{T.next}</div>
+              <div className={styles.clDay}>
+                {when.rel === 'Hoy' ? <mark className={styles.now}>{when.rel}</mark> : when.rel && <b>{when.rel}</b>} {when.day}
+              </div>
+              <div className={styles.clTime}>{hhmm(t, tz)}</div>
+              {withLine && <div className={styles.clWith}>{withLine}</div>}
+              {count && <div className={styles.clCount}>{count}</div>}
+              {next.moved && <div className={styles.clMoved}>{T.moved}</div>}
+              {differsFromClassTz(t, tz) && <div className={styles.clTz}>{T.localTime}</div>}
+              <EnterButton url={next.meetUrl} block />
             </div>
-            <div className={styles.clTime}>{hhmm(t, tz)}</div>
-            {withLine && <div className={styles.clWith}>{withLine}</div>}
-            {count && <div className={styles.clCount}>{count}</div>}
-            {next.moved && <div className={styles.clMoved}>{T.moved}</div>}
-            {differsFromClassTz(t, tz) && <div className={styles.clTz}>{T.localTime}</div>}
-            <EnterButton url={next.meetUrl} block />
+            {next.meetUrl && (
+              <div className={styles.clHow}>
+                <div className={styles.clHowTitle}>{T.howTitle}</div>
+                <ol className={styles.clHowList}>
+                  {T.how.map((h, i) => <li key={h}><span aria-hidden="true">{i + 1}</span>{h}</li>)}
+                </ol>
+              </div>
+            )}
           </div>
         )}
         <div className={styles.clMore}>
+          <div className={styles.clMoreHead}>
+            <h3 className={styles.clMoreTitle}>{T.upcoming}</h3>
+            <button type="button" className={styles.clCalBtn} onClick={onOpenCalendar}>{T.seeCalendar}</button>
+          </div>
           {rest.length > 0 && (
-            <ul className={styles.clList}>
+            <ul className={styles.clList} data-testid="upcoming">
               {rest.map((c) => {
                 const ct = new Date(c.startsAt)
                 const canc = c.status === 'cancelled'
@@ -170,7 +192,6 @@ export default function StudentClasses({ state, now, wide, onRetry, onOpenCalend
               })}
             </ul>
           )}
-          <button type="button" className={styles.clCalBtn} onClick={onOpenCalendar}>{T.seeCalendar}</button>
         </div>
       </div>
     </section>

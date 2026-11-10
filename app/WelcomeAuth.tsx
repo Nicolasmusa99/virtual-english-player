@@ -14,6 +14,7 @@ import { EMAIL_ERROR, PASSWORD_MIN, normalizeEmail, passwordProblem } from '@/li
 import { SIGNUP_INTENT_COOKIE, SIGNUP_INTENT_MAX_AGE_S } from '@/lib/signup'
 
 export const WELCOME_TEXTS = {
+  enter: 'Entrá a tu aula',
   googleIn: 'Iniciar sesión con Google',
   googleUp: 'Crear cuenta con Google',
   noAccount: '¿No tenés cuenta?', create: 'Crear cuenta',
@@ -71,6 +72,7 @@ export default function WelcomeAuth({ googleClassName, accessDenied = false, onS
 
   return (
     <div className={styles.panel}>
+      <h1 className={styles.title}>{T.enter}</h1>
       <button type="button" className={googleClassName} onClick={googleSignIn}><GoogleLogo />{T.googleIn}</button>
       {accessDenied && (
         <div className={styles.err} role="alert">
