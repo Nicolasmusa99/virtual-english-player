@@ -7,27 +7,27 @@
    de classes.module.css; acá solo lo propio del alumno: colores, sin crear, el aviso). */
 
 /* ═════ Inicio ═════ */
-.home { position: fixed; inset: 0; overflow-y: auto; background: var(--p1); color: var(--tinta); font: 15px/1.45 var(--font-sans); display: flex; flex-direction: column; }
+.home { position: fixed; inset: 0; overflow-y: auto; background: var(--fondo); color: var(--tinta); font: 15px/1.45 var(--font-sans); display: flex; flex-direction: column; }
 /* Barra: logo, Inicio / Calendario, el nombre y Salir. */
-.hBar { display: flex; align-items: center; gap: 12px 28px; padding: 12px 40px; border-bottom: 1.5px solid var(--tiza); flex-shrink: 0; }
-.hLogo { height: 48px; width: auto; display: block; }
-.hTabs { display: flex; gap: 4px; }
-.hTab { height: 40px; padding: 0 14px; border: 0; border-radius: 4px; background: transparent; color: var(--pizarra); font: 500 15px var(--font-sans); cursor: pointer; }
-.hTab:hover { color: var(--tinta); background: var(--p2); }
-.hTabOn, .hTabOn:hover { background: var(--tiza); color: var(--tinta); font-weight: 700; }
+.hBar { display: flex; align-items: center; gap: 12px 20px; margin: 16px 24px 0; padding: 10px 14px 10px 20px; border-radius: 999px; background: #fff; box-shadow: var(--sombra); flex-shrink: 0; }
+.hLogo { height: 44px; width: auto; display: block; }
+.hTabs { display: flex; gap: 4px; padding: 4px; border-radius: 999px; background: var(--fondo); }
+.hTab { height: 40px; padding: 0 18px; border: 0; border-radius: 999px; background: transparent; color: var(--pizarra); font: 15px var(--font-sans); cursor: pointer; }
+.hTab:hover { color: var(--tinta); }
+.hTabOn, .hTabOn:hover { background: var(--tinta); color: #fff; font-weight: 700; }
 .hSp { flex: 1; }
 .hMe { display: inline-flex; align-items: center; gap: 10px; min-width: 0; max-width: 32ch; height: 44px; padding: 0 12px 0 6px; border: 0; border-radius: 22px; background: transparent; font: 15px var(--font-sans); color: var(--tinta); cursor: pointer; }
 .hMe:hover { background: var(--p2); }
 .hMeOn, .hMeOn:hover { background: var(--tiza); font-weight: 700; }
 .hMe:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
 .hMeName { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.hOut { height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; flex-shrink: 0; }
+.hOut { height: 44px; padding: 0 20px; border-radius: 999px; border: 2px solid var(--tiza); background: #fff; color: var(--tinta); font: 700 15px var(--font-sans); cursor: pointer; flex-shrink: 0; }
 .hOut:hover { border-color: var(--pizarra); }
-.hBody { width: 100%; max-width: 1200px; margin: 0 auto; padding: 40px 40px 56px; }
+.hBody { width: 100%; max-width: 1240px; margin: 0 auto; padding: 22px 24px 48px; }
 .wkBody { width: 100%; max-width: 1320px; margin: 0 auto; }
-.hello { margin: 0; font-size: 40px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--tinta); }
-.helloSub { max-width: 64ch; margin: 8px 0 32px; font-size: 17px; color: var(--pizarra); }
-.sTitle { margin: 0 0 14px; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; color: var(--tinta); }
+.hello { margin: 0 0 0 8px; font-size: 30px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--tinta); }
+.helloSub { max-width: 64ch; margin: 6px 0 18px 8px; font-size: 16px; color: var(--pizarra); }
+.sTitle { margin: 0 0 14px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; color: var(--tinta); }
 .srOnly { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* Dos columnas: el material a la izquierda, las clases a la derecha. */
@@ -35,71 +35,106 @@
 .mat, .aside { min-width: 0; }
 
 /* Material: tarjetas con la miniatura grande (16:9), el nombre y una línea de datos. */
-.list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 20px; list-style: none; margin: 0; padding: 0; }
+.list { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 22px 18px; list-style: none; margin: 0; padding: 0; }
 .card { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 0; padding: 0; border: 0; background: transparent; cursor: pointer; text-align: left; font: inherit; color: inherit; }
 .card:disabled { opacity: 0.6; cursor: wait; }
-.thumb { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 4px; background: linear-gradient(150deg, var(--tinta), var(--azul)); display: grid; place-items: center; color: #fff; margin-bottom: 10px; transition: filter 0.15s; }
+.thumb { position: relative; width: 100%; aspect-ratio: 16 / 9; border-radius: 18px; border: 1px solid rgba(143,180,236,0.35); background: var(--tinta); display: grid; place-items: center; color: #fff; margin-bottom: 10px; transition: filter 0.15s; }
 .card:hover .thumb { filter: brightness(1.12); }
 .card:focus-visible { outline: 2px solid var(--azul); outline-offset: 4px; border-radius: 4px; }
 /* Carpetas (2026-11): un grupo por carpeta que armó el profe. */
-.fGroup + .fGroup { margin-top: 28px; }
-.fTitle { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 18px; font-weight: 700; color: var(--tinta); }
-.fIcon { width: 22px; height: 22px; color: var(--azul); flex-shrink: 0; }
+.fGroup { min-width: 0; }
+.fTitle { display: flex; align-items: baseline; gap: 10px; margin: 0 0 14px; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; color: var(--tinta); }
+.fIcon { width: 18px; height: 18px; flex-shrink: 0; }
 .fCount { font-size: 14px; font-weight: 400; color: var(--pizarra); }
 /* "Nuevo": asignado en los últimos 7 días. Etiqueta blanca (el amarillo es solo "ahora"). */
-.newTag { position: absolute; top: 10px; left: 10px; padding: 3px 8px; border-radius: 3px; background: #fff; color: var(--azul); font: 700 13px var(--font-sans); }
-.cTitle { display: block; font-size: 17px; font-weight: 700; color: var(--tinta); line-height: 1.3; overflow-wrap: anywhere; }
+.newTag { position: absolute; top: 10px; left: 10px; padding: 4px 10px; border-radius: 999px; background: #fff; color: var(--azul); font: 700 13px var(--font-sans); }
+.cTitle { display: block; font-size: 16px; font-weight: 700; color: var(--tinta); line-height: 1.3; overflow-wrap: anywhere; }
 .card:hover .cTitle { text-decoration: underline; }
 .cMeta { display: block; margin-top: 3px; font-size: 14px; color: var(--pizarra); }
 .cWhen { display: block; margin-top: 1px; font-size: 14px; color: var(--pizarra); }
 
 /* Vacíos y errores: un aviso entre dos líneas, sin cajas vacías. */
-.empty { max-width: 560px; padding: 18px 0; border-top: 1.5px solid var(--tiza); border-bottom: 1.5px solid var(--tiza); }
+.empty { max-width: 640px; }
 .emTitle { font-size: 18px; font-weight: 700; color: var(--tinta); }
 .emSub { margin-top: 4px; font-size: 15px; color: var(--pizarra); line-height: 1.45; }
-.stateBtn { margin-top: 14px; height: 40px; padding: 0 16px; border-radius: 4px; border: 0; background: var(--azul); color: #fff; font: 500 15px var(--font-sans); cursor: pointer; }
+.stateBtn { margin-top: 14px; height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--azul); color: #fff; font: 700 15px var(--font-sans); cursor: pointer; box-shadow: var(--sombraAzul); }
 .stateBtn:hover { background: var(--azulHover); }
 .notice { display: flex; gap: 12px; align-items: center; justify-content: space-between; border: 1.5px solid rgba(185, 58, 51, 0.3); background: rgba(185, 58, 51, 0.06); color: var(--tinta); border-radius: 8px; padding: 12px 16px; margin-bottom: 20px; font-size: 15px; }
 .noticeClose { border: 0; background: transparent; color: var(--azul); font: 500 14px var(--font-sans); cursor: pointer; flex-shrink: 0; }
 .opening { margin: 0 0 12px; font-size: 15px; color: var(--pizarra); }
 
 /* ═════ Tu próxima clase ═════ */
-.cl { margin-bottom: 40px; }
-.aside .cl { margin-bottom: 0; }
+.cl { margin: 0; }
 .clMsg { margin: 0 0 12px; font-size: 15px; color: var(--pizarra); }
 .clLinkBtn { border: 0; background: transparent; color: var(--azul); font: inherit; cursor: pointer; padding: 0; }
 .clLinkBtn:hover { text-decoration: underline; }
-.clGrid { display: flex; flex-direction: column; }
+.clGrid { display: flex; flex-direction: column; gap: 16px; }
 /* Sin material: la tarjeta y las siguientes, una al lado de la otra. */
-.clWide .clGrid { display: grid; grid-template-columns: 420px minmax(0, 1fr); gap: 0 48px; align-items: start; }
-.clWide .clList { margin-top: 0; }
+.clWide .clGrid { display: flex; }
 /* La próxima clase: el único recuadro de la página (es lo que importa). */
-.clNext { padding: 20px 22px; border: 1.5px solid var(--tinta); border-radius: 6px; }
-.clDay { font-size: 16px; color: var(--pizarra); }
-.clDay b { font-weight: 700; color: var(--tinta); }
-.now { background: var(--amarillo); color: var(--tinta); padding: 1px 6px; border-radius: 2px; font-weight: 700; }
-.clTime { margin: 6px 0 8px; font-size: 48px; font-weight: 800; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; color: var(--tinta); }
-.clWith { font-size: 16px; color: var(--tinta); }
-.clCount { margin-top: 4px; font-size: 15px; font-weight: 700; color: var(--tinta); }
-.clMoved { margin-top: 4px; font-size: 15px; color: var(--tinta); }
-.clTz { margin-top: 4px; font-size: 14px; color: var(--pizarra); }
-.clEnter { height: 52px; padding: 0 24px; border-radius: 4px; background: var(--azul); color: #fff; font: 700 17px var(--font-sans); display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; text-decoration: none; }
+.clNext { position: relative; overflow: hidden; display: flex; align-items: stretch; gap: 32px; padding: 28px 32px; border-radius: var(--r-panel); border: 1px solid rgba(143,180,236,0.35); background: var(--tinta); color: #F3F6FA; box-shadow: 0 18px 40px rgba(20,40,75,0.28); }
+.clDay { font-size: 16px; color: #B4C1D6; }
+.clDay b { font-weight: 700; color: #F3F6FA; }
+.now { background: var(--amarillo); color: var(--tinta); padding: 2px 10px; border-radius: 999px; font-weight: 700; }
+.clTime { margin: 4px 0 6px; font-size: 72px; font-weight: 800; line-height: 1; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; color: #F3F6FA; }
+.clWith { font-size: 17px; color: #F3F6FA; }
+.clCount { margin-top: 2px; font-size: 15px; font-weight: 700; color: #8FB4EC; }
+.clMoved { margin-top: 2px; font-size: 15px; color: #F3F6FA; }
+.clTz { margin-top: 2px; font-size: 14px; color: #B4C1D6; }
+.clEnter { height: 54px; padding: 0 28px; border: 0; border-radius: 999px; background: var(--azul); color: #fff; font: 700 17px var(--font-sans); display: inline-flex; align-items: center; justify-content: center; white-space: nowrap; text-decoration: none; cursor: pointer; box-shadow: var(--sombraAzul); }
 .clEnter:hover { background: var(--azulHover); }
 .clEnter:focus-visible { outline: 2px solid var(--azul); outline-offset: 3px; }
 .clEnterSm { height: 44px; padding: 0 20px; font-size: 15px; }
-.clBlock { display: flex; width: 100%; margin-top: 16px; }
-.clNoLink { font-size: 15px; color: var(--pizarra); }
+.clBlock { display: inline-flex; align-self: flex-start; min-width: 220px; margin-top: 14px; }
+.clNoLink { font-size: 15px; color: #B4C1D6; }
 /* Las que siguen: filas con línea, sin recuadro. */
-.clList { list-style: none; margin: 18px 0 0; padding: 0; border-top: 1.5px solid var(--tiza); }
-.clRow { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 2px 12px; padding: 11px 0; border-bottom: 1.5px solid var(--tiza); font-size: 15px; }
-.clRowDate { color: var(--tinta); }
-.clRowTime { color: var(--pizarra); font-variant-numeric: tabular-nums; }
+.clList { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 10px; }
+.clRow { display: flex; flex-direction: column; gap: 6px; min-height: 96px; padding: 14px; border-radius: 18px; background: var(--fondo); font-size: 14px; }
+.clRowDate { color: var(--pizarra); }
+.clRowTime { font-size: 24px; font-weight: 800; color: var(--tinta); font-variant-numeric: tabular-nums; }
 .clRowCanc .clRowDate, .clRowCanc .clRowTime { text-decoration: line-through; color: var(--pizarra); }
-.clNote { grid-column: 1 / -1; font-size: 14px; color: var(--pizarra); }
-.clNoteCanc { grid-column: 1 / -1; font-size: 14px; color: var(--rojo); }
-.clCalBtn { margin-top: 10px; border: 0; background: transparent; padding: 6px 2px; color: var(--azul); font: 500 15px var(--font-sans); cursor: pointer; }
+.clNote { font-size: 13px; color: var(--pizarra); }
+.clNoteCanc { font-size: 13px; color: var(--rojo); }
+.clCalBtn { border: 0; background: transparent; padding: 6px 2px; color: var(--azul); font: 700 14px var(--font-sans); cursor: pointer; }
 .clCalBtn:hover { text-decoration: underline; }
 .clLinkBtn:focus-visible, .clCalBtn:focus-visible, .hOut:focus-visible, .hTab:focus-visible, .stateBtn:focus-visible, .noticeClose:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+
+/* ═════ Rediseño 2026-11: tarjetas, panel de la próxima clase, carpetas ═════ */
+.stack { display: flex; flex-direction: column; gap: 16px; }
+.panel { padding: 22px 24px; border-radius: var(--r-tarjeta); background: #fff; box-shadow: var(--sombra); }
+.clMore { padding: 22px 24px; border-radius: var(--r-tarjeta); background: #fff; box-shadow: var(--sombra); }
+.clMoreHead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.clMoreHead + .clList { margin-top: 14px; }
+.clMoreTitle { margin: 0; font-size: 19px; font-weight: 800; letter-spacing: -0.01em; color: var(--tinta); }
+.clRings { position: absolute; right: -150px; top: -150px; width: 420px; height: 420px; pointer-events: none; }
+.clInfo { position: relative; flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.clKicker { font-size: 15px; color: #B4C1D6; }
+.clHow { position: relative; width: 320px; flex-shrink: 0; align-self: center; padding: 18px 20px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.14); background: #1A3157; }
+.clHowTitle { margin-bottom: 12px; font-size: 15px; font-weight: 700; }
+.clHowList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.clHowList li { display: flex; align-items: center; gap: 12px; font-size: 14px; line-height: 1.4; }
+.clHowList li span { flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; border: 1.5px solid #8FB4EC; color: #8FB4EC; display: grid; place-items: center; font-size: 13px; font-weight: 700; }
+/* Recién registrado, sin profe */
+.ntTitle { font-size: 32px; font-weight: 800; line-height: 1.15; letter-spacing: -0.02em; }
+.ntSub { max-width: 560px; margin-top: 6px; font-size: 16px; line-height: 1.5; color: #B4C1D6; }
+.ntMail { display: flex; align-items: center; gap: 12px; max-width: 520px; margin-top: 14px; padding: 8px 8px 8px 20px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.14); background: #1A3157; }
+.ntMailTxt { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 16px; font-weight: 700; }
+.after { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.after li { display: flex; flex-direction: column; gap: 8px; padding: 18px; border-radius: 20px; background: var(--fondo); }
+.after li b { font-size: 16px; }
+.after li > span:last-child { font-size: 14px; line-height: 1.45; color: var(--pizarra); }
+.afterNum { width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--azul); color: var(--azul); display: grid; place-items: center; font-size: 14px; font-weight: 800; }
+/* Material: carpetas a la izquierda, lo de la elegida a la derecha */
+.matCols { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: 28px; align-items: start; }
+.fNav { display: flex; flex-direction: column; gap: 4px; }
+.fBtn { display: flex; align-items: center; gap: 10px; width: 100%; height: 46px; padding: 0 14px; border: 0; border-radius: var(--r-item); background: transparent; color: var(--tinta); font: 15px var(--font-sans); text-align: left; cursor: pointer; }
+.fBtn:hover { background: var(--fondo); }
+.fBtn[aria-pressed='true'], .fBtn[aria-pressed='true']:hover { background: var(--tinta); color: #fff; font-weight: 700; }
+.fBtn[aria-pressed='true'] .fCount { color: #B4C1D6; }
+.fBtn:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
+.fBtnName { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.thumbPlay { width: 50px; height: 50px; border-radius: 50%; background: var(--azul); box-shadow: 0 0 0 8px rgba(143,180,236,0.16); display: grid; place-items: center; }
+.thumbDur { position: absolute; bottom: 10px; right: 10px; padding: 3px 9px; border-radius: 999px; background: rgba(0,0,0,0.55); font-size: 13px; font-variant-numeric: tabular-nums; }
 
 /* ═════ Calendario (la grilla de "Mi agenda"; lo propio del alumno) ═════ */
 .wk .wkCol { cursor: default; }
@@ -183,13 +218,16 @@
 
 /* ═════ Celular ═════ */
 @media (max-width: 760px) {
-  .hBody { padding: 28px 24px 48px; }
-  /* Una columna: la próxima clase primero (sin clases, el material primero). */
-  .cols { display: flex; flex-direction: column; align-items: stretch; }
-  .aside { order: -1; margin-bottom: 36px; }
-  .colsMatFirst .aside { order: 0; margin: 36px 0 0; }
-  .clWide .clGrid { display: flex; flex-direction: column; }
-  .clWide .clList { margin-top: 18px; }
+  /* El panel de la próxima clase en una columna; las carpetas, en una fila que se desliza. */
+  .clNext { flex-direction: column; gap: 18px; padding: 22px 20px; border-radius: 22px; }
+  .clHow { width: auto; align-self: stretch; }
+  .clBlock { align-self: stretch; }
+  .matCols { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .fNav { flex-direction: row; overflow-x: auto; padding-bottom: 4px; }
+  .fBtn { width: auto; flex-shrink: 0; height: 40px; border-radius: 999px; background: var(--fondo); }
+  .fBtnName { flex: 0 1 auto; }
+  .after { grid-template-columns: minmax(0, 1fr); }
+  .ntMail { flex-direction: column; align-items: stretch; padding: 14px; border-radius: 20px; }
 }
 @media (max-width: 900px) {
   /* Player: el panel de Sonido va debajo del video (y se desplaza solo él). */
@@ -204,21 +242,21 @@
 @media (max-width: 640px) {
   /* Las pestañas Inicio y Calendario van abajo, como en la app del profe. */
   .home { padding-bottom: 62px; }
-  .hBar { gap: 12px; padding: 8px 16px; }
-  .hLogo { height: 40px; }
+  .hBar { gap: 12px; margin: 10px 10px 0; padding: 8px 10px 8px 16px; }
+  .hLogo { height: 36px; }
   .hMeName { display: none; }
   .hMe { padding: 0 6px; }
-  .hTabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: 62px; background: #fff; border-top: 1.5px solid var(--tiza); }
+  .hTabs { position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; display: grid; grid-template-columns: 1fr 1fr; gap: 0; height: 62px; padding: 0; border-radius: 0; background: #fff; box-shadow: 0 -6px 20px rgba(20,40,75,0.08); }
   .hTab { height: 100%; border-radius: 0; font-size: 14px; }
   .hTab:hover { background: transparent; }
-  .hTabOn, .hTabOn:hover { background: transparent; box-shadow: inset 0 3px 0 var(--azul); }
-  .hBody { padding: 22px 16px 36px; }
-  .hello { font-size: 30px; }
-  .helloSub { font-size: 16px; margin-bottom: 24px; }
-  .sTitle { font-size: 19px; }
+  .hTabOn, .hTabOn:hover { background: transparent; color: var(--tinta); box-shadow: inset 0 3px 0 var(--azul); }
+  .hBody { padding: 16px 10px 36px; }
+  .hello { font-size: 26px; }
+  .helloSub { font-size: 15px; margin-bottom: 16px; }
+  .panel, .clMore { padding: 18px 16px; border-radius: 20px; }
   .list { grid-template-columns: minmax(0, 1fr); }
-  .clNext { padding: 16px; }
-  .clTime { font-size: 44px; }
+  .clTime { font-size: 56px; }
+  .ntTitle { font-size: 26px; }
   .wk .wkNote { top: 24px; }
   .subBox { font-size: 16px; padding: 6px 12px 8px; }
   .timeRow { padding: 8px 16px 0; }

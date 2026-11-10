@@ -1,10 +1,10 @@
 /* Player del profe (P1; rediseño fase 3) — franja de abajo del video. Es "la sala":
    tokens oscuros de app/globals.css. El amarillo marca solo la frase que suena. */
-.dock { flex-shrink: 0; background: var(--p1); border-top: 1px solid var(--ln2); padding: 8px 22px 14px; font-family: var(--font-sans); container-type: inline-size; }
+.dock { flex-shrink: 0; background: var(--p2); border: 1px solid var(--ln2); border-radius: 22px; padding: 12px 22px 12px; font-family: var(--font-sans); container-type: inline-size; }
 
 /* Barra de tiempo: 28px de alto para agarrarla fácil; la pista visible es de 8px (11px con el mouse encima). */
 .tl { position: relative; height: 28px; display: flex; align-items: center; cursor: pointer; touch-action: none; user-select: none; }
-.track { position: relative; width: 100%; height: 8px; border-radius: 2px; background: var(--p4); transition: height 0.12s; }
+.track { position: relative; width: 100%; height: 8px; border-radius: 999px; background: var(--p4); transition: height 0.12s; }
 .tlHover .track, .tlDrag .track { height: 11px; }
 .buf { position: absolute; left: 0; top: 0; height: 100%; background: var(--p5); border-radius: 2px; }
 /* Cada frase es un tramo; las elegidas (práctica) se ven un poco más claras. */
@@ -36,11 +36,11 @@
 .ctrls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 18px; margin-top: 8px; }
 .grp { display: grid; grid-template-rows: 60px auto; justify-items: center; align-items: center; }
 .lbl { margin-top: 4px; font-size: 13px; color: var(--tx2); white-space: nowrap; }
-.cb { width: 48px; height: 48px; border-radius: 50%; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); cursor: pointer; display: grid; place-items: center; padding: 0; transition: background 0.12s, transform 0.08s; font: 700 14px var(--font-sans); font-variant-numeric: tabular-nums; }
+.cb { width: 50px; height: 50px; border-radius: 50%; border: 1.5px solid var(--ln2); background: rgba(255,255,255,0.05); color: var(--tx); cursor: pointer; display: grid; place-items: center; padding: 0; transition: background 0.12s, transform 0.08s; font: 700 14px var(--font-sans); font-variant-numeric: tabular-nums; }
 .cb:hover { background: var(--p3); color: var(--tx); }
 .cb:active { transform: scale(0.96); }
 .cb svg { width: 20px; height: 20px; pointer-events: none; flex-shrink: 0; }
-.play { width: 60px; height: 60px; border: 0; background: var(--acDeep); color: #fff; }
+.play { width: 62px; height: 62px; border: 0; background: var(--acDeep); color: #fff; box-shadow: 0 0 0 8px rgba(143,180,236,0.16); }
 .play:hover { background: var(--acDeepHover); color: #fff; }
 .play svg { width: 24px; height: 24px; }
 /* Velocidad y subtítulos: el valor adentro del círculo; prendido = Azul VE aclarado. */

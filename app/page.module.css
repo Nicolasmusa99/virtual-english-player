@@ -58,38 +58,41 @@
 @keyframes pulse { 0%,100%{opacity:1}50%{opacity:0.2} }
 
 /* ── PLAYER ── */
-.playerWrap { display: flex; flex-direction: column; height: 100vh; }
-.topbar { min-height: 64px; background: var(--p1); border-bottom: 1px solid var(--ln2); display: flex; align-items: center; padding: 10px 20px; gap: 16px; flex-shrink: 0; }
-.tbBack { height: 40px; padding: 0 14px 0 8px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 15px var(--font-sans); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; flex-shrink: 0; }
+.playerWrap { display: flex; flex-direction: column; height: 100vh; background: var(--p1); }
+.topbar { min-height: 68px; background: var(--p1); display: flex; align-items: center; padding: 12px 18px; gap: 14px; flex-shrink: 0; }
+.tbBack { height: 44px; padding: 0 16px 0 10px; border-radius: 999px; border: 1.5px solid var(--ln2); background: rgba(255,255,255,0.05); color: var(--tx); font: 15px var(--font-sans); display: inline-flex; align-items: center; gap: 4px; cursor: pointer; flex-shrink: 0; }
 .tbBack:hover { background: var(--p3); }
 .tbBack svg { width: 18px; height: 18px; }
 .tbTitle { flex: 1; min-width: 0; }
 .tbMeta { margin-top: 1px; font-size: 14px; color: var(--tx2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tbAct { height: 40px; padding: 0 12px; border-radius: 4px; border: 1.5px solid transparent; background: transparent; color: var(--tx2); font: 14px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.tbAct { height: 44px; padding: 0 18px; border-radius: 999px; border: 1.5px solid var(--ln2); background: rgba(255,255,255,0.05); color: var(--tx); font: 700 14px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .tbAct:hover { background: var(--p3); color: var(--tx); }
 .tbAct:disabled { opacity: 0.45; cursor: not-allowed; }
 /* La acción principal de la sala: abrir la ventana que se comparte en Zoom. */
-.tbStage { height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid #fff; background: #fff; color: var(--tinta); font: 700 15px var(--font-sans); display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; }
-.tbStage:hover { background: var(--tiza); border-color: var(--tiza); }
+.tbStage { height: 44px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--azul); color: #fff; font: 700 15px var(--font-sans); display: inline-flex; align-items: center; gap: 8px; cursor: pointer; white-space: nowrap; box-shadow: var(--sombraAzul); }
+.tbStage:hover { background: var(--azulHover); }
 .tbStage:disabled { opacity: 0.5; cursor: not-allowed; }
 .tbStage svg { width: 18px; height: 18px; }
-.tbStageOn { background: transparent; border-color: var(--ln2); color: var(--tx); }
-.tbStageOn:hover { background: var(--p3); border-color: var(--ln2); }
+.tbStageOn { background: rgba(255,255,255,0.05); border: 1.5px solid var(--ln2); color: var(--tx); box-shadow: none; }
+.tbStageOn:hover { background: var(--p3); }
 .tbBack:focus-visible, .tbAct:focus-visible, .tbStage:focus-visible, .tab:focus-visible, .modeBtn:focus-visible, .plFilter:focus-visible, .plTool:focus-visible, .delayBtn:focus-visible, .delayReset:focus-visible, .plEditBtn:focus-visible { outline: 2px solid var(--ac); outline-offset: 2px; }
 .tbFile { font-size: 18px; font-weight: 700; color: var(--tx); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tbRight { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.tbRight { margin-left: auto; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+/* "Más": el menú es claro (lightScope); el botón, como los demás de la barra. */
+.tbMore > div > button { height: 44px; padding: 0 18px; border-radius: 999px; border: 1.5px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.05); color: #F3F6FA; font: 700 14px var(--font-sans); }
+.tbMore > div > button:hover, .tbMore > div > button[aria-expanded='true'] { background: #1F3863; }
 /* Etiqueta corta (rol, tipo, nivel, publicado): texto de 14px, sin mayúsculas. */
 .chip { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px; background: var(--p3); color: var(--tx2); font-size: 14px; white-space: nowrap; }
 .chipSrt { max-width: 160px; overflow: hidden; text-overflow: ellipsis; }
 .tbBtn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 500 15px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .tbBtn:hover { border-color: var(--tx3); }
 
-.layout { display: grid; grid-template-columns: 1fr 360px; flex: 1; overflow: hidden; min-height: 0; }
+.layout { display: grid; grid-template-columns: 1fr 380px; gap: 12px; padding: 0 18px 18px; flex: 1; overflow: hidden; min-height: 0; }
 
 /* VIDEO STAGE */
-.leftCol { display: flex; flex-direction: column; min-width: 0; min-height: 0; overflow: hidden; }
-.stage { flex: 1; min-height: 0; background: #000; display: flex; flex-direction: column; position: relative; overflow: hidden; }
-.shareHint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; font-size: 12px; color: rgba(255,255,255,0.45); display: flex; align-items: center; gap: 6px; pointer-events: none; white-space: nowrap; background: rgba(0,0,0,0.45); padding: 4px 12px; border-radius: 4px; }
+.leftCol { display: flex; flex-direction: column; gap: 12px; min-width: 0; min-height: 0; overflow: hidden; }
+.stage { flex: 1; min-height: 0; background: #000; display: flex; flex-direction: column; position: relative; overflow: hidden; border-radius: 22px; border: 1px solid rgba(143,180,236,0.35); }
+.shareHint { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 5; font-size: 13px; color: var(--tx2); display: flex; align-items: center; gap: 6px; pointer-events: none; white-space: nowrap; background: rgba(20,40,75,0.85); padding: 5px 12px; border-radius: 999px; }
 .shareHintDot { width: 4px; height: 4px; border-radius: 50%; background: var(--ac); flex-shrink: 0; }
 .videoWrap { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; min-height: 0; }
 /* 2026-11: el subtítulo se toca para editarlo; editándolo, es un campo con el mismo aspecto. */
@@ -100,11 +103,11 @@
 .subBox { text-wrap: balance; background: rgba(0,0,0,0.78); padding: 10px 28px 12px; border-radius: 4px; font-family: var(--font-sans); font-size: clamp(18px, 2.4vw, 34px); font-weight: 400; color: #ffffff; line-height: 1.4; text-align: center; max-width: 960px; text-shadow: 0 1px 4px rgba(0,0,0,0.8); animation: subFadeIn 0.15s ease; }
 
 /* PANEL */
-.panel { background: var(--p2); border-left: 1px solid var(--ln2); display: flex; flex-direction: column; overflow: hidden; min-height: 0; font-family: var(--font-sans); }
-.tabs { display: flex; border-bottom: 1px solid var(--ln2); flex-shrink: 0; }
-.tab { flex: 1; height: 50px; border: 0; background: transparent; color: var(--tx2); font: 16px var(--font-sans); cursor: pointer; }
+.panel { background: var(--p2); border: 1px solid var(--ln2); border-radius: 22px; display: flex; flex-direction: column; overflow: hidden; min-height: 0; font-family: var(--font-sans); }
+.tabs { display: flex; gap: 4px; margin: 12px; padding: 4px; border-radius: 999px; background: var(--p1); flex-shrink: 0; }
+.tab { flex: 1; height: 40px; border: 0; border-radius: 999px; background: transparent; color: var(--tx2); font: 14px var(--font-sans); cursor: pointer; }
 .tab:hover { color: var(--tx); }
-.tabOn { color: var(--tx); font-weight: 700; box-shadow: inset 0 -3px 0 var(--tx); }
+.tabOn, .tabOn:hover { background: var(--ac); color: var(--tinta); font-weight: 700; }
 .panelBody { flex: 1; overflow-y: auto; display: flex; flex-direction: column; }
 .panelBody[hidden] { display: none; }
 .section { padding: 14px 18px; border-bottom: 1px solid var(--ln2); flex-shrink: 0; }
@@ -125,7 +128,7 @@
 .plCount { font-size: 14px; color: var(--tx2); }
 .plHd2 { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 14px; padding: 0 18px 10px; flex-shrink: 0; }
 .plHd2 > :last-child { margin-left: auto; }
-.plFilter { height: 32px; padding: 0 10px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx2); font: 14px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.plFilter { height: 32px; padding: 0 12px; border-radius: 999px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx2); font: 14px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .plTool { border: 0; background: transparent; padding: 4px 0; color: var(--ac); font: 14px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .plAdd { margin: 6px 18px 0 42px; }
 .plTool:hover { text-decoration: underline; }
@@ -140,7 +143,7 @@
 .plItem { position: relative; display: grid; grid-template-columns: 20px minmax(0, 1fr) 20px; align-items: start; gap: 10px; padding: 11px 18px 11px 12px; border-top: 1px solid var(--ln); cursor: pointer; transition: background 0.08s; }
 .plItem:hover { background: rgba(255,255,255,0.04); }
 /* La frase que suena: amarillo con texto tinta (el "ahora" de la sala). */
-.plAct, .plAct:hover { background: var(--amarillo) !important; }
+.plAct, .plAct:hover { background: var(--amarillo) !important; border-radius: 14px; border-top-color: transparent; }
 .plN { font-size: 13px; color: var(--ac); padding-top: 2px; text-align: right; font-variant-numeric: tabular-nums; }
 .plAct .plN, .plAct .plT, .plAct .plTx, .plAct .plEditBtn { color: var(--tinta); }
 .plB { min-width: 0; display: flex; align-items: baseline; gap: 12px; }
@@ -185,7 +188,7 @@
 /* RESTORE BANNER (US-024) */
 .restoreBanner { display: flex; align-items: center; gap: 12px; padding: 10px 20px; background: var(--bl2); border-bottom: 1px solid var(--bl3); font-size: 14px; color: var(--tx); flex-shrink: 0; }
 .restoreBannerText { flex: 1; }
-.restoreBtn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 4px; border: 0; background: var(--acDeep); color: #fff; font: 500 15px var(--font-sans); cursor: pointer; white-space: nowrap; }
+.restoreBtn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 18px; border-radius: 999px; border: 0; background: var(--acDeep); color: #fff; font: 700 15px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .restoreBtn:hover { background: var(--acDeepHover); }
 .discardBtn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 14px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx2); font: 500 15px var(--font-sans); cursor: pointer; white-space: nowrap; }
 .discardBtn:hover { border-color: var(--tx3); color: var(--tx); }
@@ -207,7 +210,7 @@
 
 /* MODE TOGGLES (US-026/027/028/029). Paso 5: de a dos, para que entre la "i" de cada uno. */
 .modeBtns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
-.modeBtn { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; height: 38px; padding: 0 8px; border-radius: 4px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 14px var(--font-sans); white-space: nowrap; cursor: pointer; }
+.modeBtn { flex: 1 1 auto; display: inline-flex; align-items: center; justify-content: center; height: 42px; padding: 0 10px; border-radius: 999px; border: 1.5px solid var(--ln2); background: transparent; color: var(--tx); font: 14px var(--font-sans); white-space: nowrap; cursor: pointer; }
 .modeBtn:hover { background: var(--p3); color: var(--tx); }
 .modeBtn:active { transform: scale(0.97); }
 .modeBtn:disabled { opacity: 0.35; cursor: not-allowed; }
@@ -222,15 +225,15 @@
   display: flex;
 }
 /* margin: auto centra y, si "Crear cuenta" no entra en la pantalla, deja scrollear sin cortar arriba. */
-.wCenter { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 32px; padding: 24px; }
+.wCenter { margin: auto; display: flex; flex-direction: column; align-items: center; gap: 24px; padding: 24px; }
 .wLogo {
   width: min(340px, 74vw); height: auto; display: block; user-select: none;
   -webkit-user-drag: none;
 }
 .wSignInBtn {
-  display: flex; align-items: center; gap: 10px;
-  padding: 14px 30px; border-radius: 12px; border: none;
-  background: var(--azul); color: #fff;
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: min(340px, 86vw); height: 54px; padding: 0 24px; border-radius: 999px; border: none;
+  background: var(--azul); color: #fff; box-shadow: var(--sombraAzul);
   font-family: var(--font-sans);
   font-size: 15px; font-weight: 700; cursor: pointer;
   transition: background 0.15s, transform 0.1s;
@@ -303,3 +306,17 @@
 .thumbIco { width: 28px; height: 28px; }
 .sharedName { font-size: 17px; font-weight: 700; color: var(--tx); line-height: 1.3; overflow-wrap: anywhere; }
 .sharedMeta { font-size: 15px; color: var(--tx3); }
+
+/* ── La sala en pantallas angostas (rediseño 2026-11): una columna; el video arriba, el
+   guion abajo, y la pantalla se desplaza entera. La barra de arriba se acomoda en dos filas. */
+@media (max-width: 900px) {
+  .playerWrap { height: 100vh; height: 100dvh; overflow-y: auto; }
+  .leftCol, .panel { flex-shrink: 0; }
+  .topbar { flex-wrap: wrap; padding: 10px 12px; gap: 10px; }
+  .tbTitle { flex: 1 1 60%; }
+  .tbRight { margin-left: 0; flex-wrap: wrap; flex: 1 1 100%; }
+  .layout { display: flex; flex-direction: column; flex: 0 0 auto; padding: 0 12px 16px; overflow: visible; }
+  .leftCol { overflow: visible; }
+  .stage { flex: 0 0 auto; aspect-ratio: 16 / 9; border-radius: 18px; }
+  .panel { border-radius: 18px; }
+}

@@ -13,6 +13,7 @@ import StudentView from './StudentView'
 import StudentNameDialog from './StudentNameDialog'
 import AulaShell, { AULA_ICONS, AulaPage, type AulaNavItem } from './AulaShell'
 import TeacherToday from './TeacherToday'
+import ActionMenu from './ActionMenu'
 import ZoomRoomStatus from './ZoomRoomStatus'
 import aula from './aula.module.css'
 import MyAgenda from './MyAgenda'
@@ -1248,7 +1249,7 @@ export default function Player() {
             footer={userRole === 'profesor' ? <ZoomRoomStatus /> : undefined}>
 
             {screen === 'load' && userRole === 'profesor' && (
-              <TeacherToday onOpenStudent={(id, email, name) => openStudent(id, email, 'load', name)} onOpenAgenda={() => setScreen('agenda')} />
+              <TeacherToday onOpenStudent={(id, email, name) => openStudent(id, email, 'load', name)} onOpenAgenda={() => setScreen('agenda')} onOpenStudents={() => setScreen('users')} />
             )}
 
             {screen === 'load' && userRole === 'admin' && (
@@ -1433,13 +1434,16 @@ export default function Player() {
               {playerMeta && <div className={styles.tbMeta}>{playerMeta}</div>}
             </div>
             <div className={styles.tbRight}>
-              <button className={styles.tbAct} onClick={downloadSRT}>Descargar SRT</button>
-              <button className={styles.tbAct} onClick={() => srtReloadRef.current?.click()}>Cargar SRT</button>
-              {userRole === 'admin' && !libraryVideoIdRef.current && videoFileRef.current && (
-                <button className={styles.tbAct} disabled={librarySaving} onClick={saveToLibrary}>
-                  {librarySaving ? 'Guardando…' : 'Guardar en biblioteca'}
-                </button>
-              )}
+              {/* Rediseño 2026-11: lo que no es la acción principal va en "Más". */}
+              <span className={`${styles.lightScope} ${styles.tbMore}`}>
+                <ActionMenu label="Más acciones del video" trigger="Más" items={[
+                  { label: 'Descargar SRT', onSelect: downloadSRT },
+                  { label: 'Cargar SRT', onSelect: () => srtReloadRef.current?.click() },
+                  ...(userRole === 'admin' && !libraryVideoIdRef.current && videoFileRef.current
+                    ? [{ label: librarySaving ? 'Guardando…' : 'Guardar en biblioteca', onSelect: saveToLibrary, disabled: librarySaving }]
+                    : []),
+                ]} />
+              </span>
               <button className={styles.tbAct} data-testid="btn-open-exercises"
                 disabled={phrases.length === 0}
                 onClick={exercisesOpen ? () => closeExercisesWindow(true) : openExercisesWindow}>

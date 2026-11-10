@@ -1,19 +1,22 @@
 /* Entrar con usuario y contraseña (2026-11), en la bienvenida (fondo blanco). */
-.wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(320px, 86vw); margin-top: -12px; }
-.form { display: flex; flex-direction: column; gap: 12px; width: min(320px, 86vw); margin-top: -12px; font-family: var(--font-sans); color: var(--tinta); }
+.wrap { display: flex; flex-direction: column; align-items: center; gap: 14px; width: min(340px, 86vw); margin-top: -12px; }
+.form { display: flex; flex-direction: column; gap: 12px; width: min(340px, 86vw); margin-top: -12px; font-family: var(--font-sans); color: var(--tinta); }
 .or { display: flex; align-items: center; gap: 12px; width: 100%; color: var(--pizarra); font: 13px var(--font-sans); }
 .or::before, .or::after { content: ''; flex: 1; height: 1.5px; background: var(--tiza); }
 .link { border: 0; background: transparent; padding: 6px 8px; border-radius: 6px; color: var(--azul); font: 700 15px var(--font-sans); cursor: pointer; }
+/* "Entrar con mail y contraseña": la segunda opción, a la vista (rediseño 2026-11). */
+.wrap > .link { width: 100%; height: 54px; border: 2px solid var(--tiza); border-radius: 999px; background: #fff; color: var(--tinta); }
+.wrap > .link:hover { border-color: var(--pizarra); text-decoration: none; }
 .link:hover { text-decoration: underline; }
 .field { display: flex; flex-direction: column; gap: 5px; }
 .lbl { font-size: 14px; color: var(--pizarra); }
-.input { width: 100%; min-width: 0; height: 46px; padding: 0 14px; border-radius: 10px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 16px var(--font-sans); }
+.input { width: 100%; min-width: 0; height: 50px; padding: 0 16px; border-radius: 14px; border: 2px solid var(--tiza); background: #fff; color: var(--tinta); font: 16px var(--font-sans); }
 .input:focus { outline: 0; border-color: var(--azul); box-shadow: 0 0 0 3px rgba(31, 95, 191, 0.18); }
 .pwRow { position: relative; display: block; }
 .pwRow .input { padding-right: 76px; }
 .show { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; padding: 6px 10px; border-radius: 6px; color: var(--azul); font: 500 14px var(--font-sans); cursor: pointer; }
 .err { padding: 10px 12px; border-radius: 8px; background: rgba(185, 58, 51, 0.08); color: var(--rojo); font-size: 14px; line-height: 1.4; }
-.submit { height: 48px; border: 0; border-radius: 12px; background: var(--tinta); color: #fff; font: 700 15px var(--font-sans); cursor: pointer; }
+.submit { height: 54px; border: 0; border-radius: 999px; background: var(--tinta); color: #fff; font: 700 15px var(--font-sans); cursor: pointer; }
 .submit:hover { filter: brightness(1.15); }
 .submit:disabled { opacity: 0.6; cursor: wait; }
 .note { margin: 0; font-size: 13px; line-height: 1.4; color: var(--pizarra); text-align: center; }
@@ -22,7 +25,7 @@
 /* Entrar / crear cuenta (WelcomeAuth) */
 .panel { display: flex; flex-direction: column; align-items: center; gap: 18px; width: min(340px, 88vw); font-family: var(--font-sans); color: var(--tinta); }
 .panel > .wrap, .panel > .form { margin-top: 0; }
-.title { margin: 0; font-size: 24px; font-weight: 800; letter-spacing: -0.01em; text-align: center; }
+.title { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: -0.01em; text-align: center; }
 .lead { margin: -8px 0 0; font-size: 14px; line-height: 1.45; color: var(--pizarra); text-align: center; }
 .switch { margin: 0; font-size: 14px; color: var(--pizarra); text-align: center; }
 .switch .link { padding: 4px; font-size: 14px; }

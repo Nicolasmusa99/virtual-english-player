@@ -44,6 +44,19 @@ export const STUDENT_TEXTS = {
   welcome: 'Te damos la bienvenida a Virtual English.',
   welcomeTitle: 'Todavía no tenés clases ni material',
   welcomeSub: 'Cuando tu profe te agende una clase o te asigne un video, lo vas a ver acá.',
+  // Rediseño 2026-11: cuenta recién creada, todavía sin profe.
+  noTeacherKicker: 'Tu cuenta ya está creada',
+  noTeacherTitle: 'Falta que te sumen a un profe',
+  noTeacherSub: 'Pasale tu mail a tu profe o al equipo de Virtual English. Cuando te sumen, acá vas a ver cuándo tenés clase y tu material.',
+  copyMail: 'Copiar mi mail', copied: 'Copiado',
+  afterTitle: 'Qué pasa después',
+  after: [
+    { t: 'Te suman a un profe', s: 'Vas a ver su nombre acá mismo.' },
+    { t: 'Te agenda las clases', s: 'Con el día, la hora y el botón para entrar a Zoom.' },
+    { t: 'Te asigna material', s: 'Para practicar frase por frase antes y después de clase.' },
+  ],
+  folders: 'Carpetas', all: 'Todo',
+  countVideos: (n: number) => (n === 1 ? '1 video' : `${n} videos`),
   nav: 'Secciones',
   home: 'Inicio',
   calendar: 'Calendario',
@@ -92,6 +105,8 @@ export default function StudentApp({ id = '', name, email, image = null, onProfi
   const [playing, setPlaying] = useState<StudentVideoData | null>(null)
   const [notice, setNotice] = useState('')
   const [tab, setTab] = useState<'inicio' | 'calendario' | 'perfil'>('inicio')
+  const [folderSel, setFolderSel] = useState<string>('all')
+  const [copied, setCopied] = useState(false)
   const [now, setNow] = useState(() => new Date())
   useEffect(() => { const t = setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(t) }, [])
   const { state: classes, reload: reloadClasses } = useStudentClasses()
@@ -155,6 +170,13 @@ export default function StudentApp({ id = '', name, email, image = null, onProfi
   // Armado del inicio: con material, dos columnas; sin material, la clase es lo principal;
   // sin clases ni material, una bienvenida.
   const layout = noMaterial && noClasses ? 'welcome' : noMaterial ? 'classFirst' : 'cols'
+  // Recién registrado: sin profe todavía (el admin se lo asigna). Se le dice qué falta.
+  const noTeacher = layout === 'welcome' && classes.kind === 'ok' && classes.teacherName === null
+  // Carpetas (rediseño 2026-11): a la izquierda, y a la derecha lo de la elegida ("Todo" al entrar).
+  const withFolders = folders.length > 0 && groups.some((g) => g.folder)
+  const picked = withFolders ? groups.find((g) => (g.folder?.id ?? 'loose') === folderSel) ?? null : null
+  const shown = picked ? picked.items : items.map((m) => ({ ...m, folderId: m.folderId ?? null }))
+  const pickedName = picked ? picked.folder?.name ?? T.otherVideos : T.all
   const lead = layout === 'welcome' ? T.welcome : items.length > 0 ? T.intro : T.introEmpty
 
   const header = (
@@ -209,7 +231,7 @@ export default function StudentApp({ id = '', name, email, image = null, onProfi
   )
 
   const materialBlock = (
-    <section className={styles.mat} aria-label={T.material}>
+    <section className={`${styles.mat} ${styles.panel}`} aria-label={T.material}>
       <h2 className={styles.sTitle}>{T.material}</h2>
 
       {list.kind === 'loading' && <p role="status" className={styles.opening}>{T.loading}</p>}
@@ -229,27 +251,42 @@ export default function StudentApp({ id = '', name, email, image = null, onProfi
         </div>
       )}
 
-      {/* Carpetas (2026-11): si su profe armó carpetas, el material va agrupado en ellas (las
-          vacías no se muestran); lo que no está en ninguna va al final, en "Otros videos". */}
-      {items.length > 0 && groups.map(({ folder, items: group }) => (
-        <div key={folder?.id ?? 'loose'} className={styles.fGroup}>
-          {folders.length > 0 && (
-            <h3 className={styles.fTitle}>
-              <svg className={styles.fIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
-              {folder ? folder.name : T.otherVideos}
-              <span className={styles.fCount}>{group.length === 1 ? '1 video' : `${group.length} videos`}</span>
-            </h3>
+      {/* Carpetas (rediseño 2026-11): las que armó su profe van a la izquierda (las vacías no
+          se muestran) y a la derecha, lo de la elegida. Al entrar se ve todo. */}
+      {items.length > 0 && (
+        <div className={withFolders ? styles.matCols : undefined}>
+          {withFolders && (
+            <nav className={styles.fNav} aria-label={T.folders}>
+              <button type="button" className={styles.fBtn} aria-pressed={folderSel === 'all' || !picked} onClick={() => setFolderSel('all')}>
+                <span className={styles.fBtnName}>{T.all}</span><span className={styles.fCount}>{items.length}</span>
+              </button>
+              {groups.map(({ folder, items: group }) => {
+                const id = folder?.id ?? 'loose'
+                return (
+                  <button key={id} type="button" className={styles.fBtn} aria-pressed={!!picked && folderSel === id} onClick={() => setFolderSel(id)}>
+                    <svg className={styles.fIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden="true"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /></svg>
+                    <span className={styles.fBtnName}>{folder ? folder.name : T.otherVideos}</span><span className={styles.fCount}>{group.length}</span>
+                  </button>
+                )
+              })}
+            </nav>
           )}
-          <ul className={styles.list}>
-            {group.map((m) => {
-              const meta = [typeLabel(m.sharedType), levelLabel(m.sharedLevel), durationLabel(m.durationSec)].filter(Boolean).join(', ')
-              const fresh = isNewAssignment(m.assignedAt, now)
-              return (
+          <div className={styles.fGroup}>
+            {withFolders && (
+              <h3 className={styles.fTitle}>{pickedName}<span className={styles.fCount}>{T.countVideos(shown.length)}</span></h3>
+            )}
+            <ul className={styles.list}>
+              {shown.map((m) => {
+                const meta = [typeLabel(m.sharedType), levelLabel(m.sharedLevel)].filter(Boolean).join(', ')
+                const dur = durationLabel(m.durationSec)
+                const fresh = isNewAssignment(m.assignedAt, now)
+                return (
                 <li key={m.videoId}>
                   <button type="button" className={styles.card} onClick={() => open(m.videoId)} disabled={!!openingId}>
                     <span className={styles.thumb} aria-hidden="true">
                       {fresh && <span className={styles.newTag}>{T.isNew}</span>}
-                      <svg width="28" height="28" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg>
+                      <span className={styles.thumbPlay}><svg width="22" height="22" viewBox="0 0 24 24"><polygon points="8 5 19 12 8 19 8 5" fill="currentColor" /></svg></span>
+                      {dur && <span className={styles.thumbDur}>{dur}</span>}
                     </span>
                     <span className={styles.cTitle}>{displayVideoName(m.originalName)}</span>
                     {fresh && <span className={styles.srOnly}>, {T.isNew}</span>}
@@ -257,11 +294,12 @@ export default function StudentApp({ id = '', name, email, image = null, onProfi
                     <span className={styles.cWhen}>{assignedAgo(m.assignedAt, now)}</span>
                   </button>
                 </li>
-              )
-            })}
-          </ul>
+                )
+              })}
+            </ul>
+          </div>
         </div>
-      ))}
+      )}
     </section>
   )
 
@@ -281,19 +319,45 @@ export default function StudentApp({ id = '', name, email, image = null, onProfi
         )}
         {openingId && <p role="status" className={styles.opening}>{T.opening}</p>}
 
-        {layout === 'welcome' && (
-          <div className={styles.empty}>
+        {layout === 'welcome' && !noTeacher && (
+          <div className={`${styles.panel} ${styles.empty}`}>
             <div className={styles.emTitle}>{T.welcomeTitle}</div>
             <div className={styles.emSub}>{T.welcomeSub}</div>
           </div>
         )}
 
-        {layout === 'classFirst' && <>{classesBlock}{materialBlock}</>}
+        {noTeacher && <div className={styles.stack}>
+          <section className={styles.clNext} aria-label={T.noTeacherTitle} data-testid="no-teacher">
+            <div className={styles.clInfo}>
+              <div className={styles.clKicker}>{T.noTeacherKicker}</div>
+              <div className={styles.ntTitle}>{T.noTeacherTitle}</div>
+              <div className={styles.ntSub}>{T.noTeacherSub}</div>
+              {email && (
+                <div className={styles.ntMail}>
+                  <span className={styles.ntMailTxt}>{email}</span>
+                  <button type="button" className={styles.clEnter + ' ' + styles.clEnterSm}
+                    onClick={async () => { try { await navigator.clipboard.writeText(email); setCopied(true) } catch { setCopied(false) } }}>
+                    {copied ? T.copied : T.copyMail}
+                  </button>
+                </div>
+              )}
+            </div>
+          </section>
+          <section className={styles.panel} aria-label={T.afterTitle}>
+            <h2 className={styles.sTitle}>{T.afterTitle}</h2>
+            <ol className={styles.after}>
+              {T.after.map((x, i) => (
+                <li key={x.t}><span className={styles.afterNum} aria-hidden="true">{i + 1}</span><b>{x.t}</b><span>{x.s}</span></li>
+              ))}
+            </ol>
+          </section>
+        </div>}
 
-        {layout === 'cols' && (
-          <div className={`${styles.cols} ${noClasses ? styles.colsMatFirst : ''}`}>
-            {materialBlock}
-            <div className={styles.aside}>{classesBlock}</div>
+        {/* Rediseño 2026-11: primero cuándo y cómo son las clases; después el material.
+            Sin clases agendadas, el material va primero. */}
+        {layout !== 'welcome' && (
+          <div className={styles.stack}>
+            {noClasses ? <>{materialBlock}{classesBlock}</> : <>{classesBlock}{materialBlock}</>}
           </div>
         )}
       </main>

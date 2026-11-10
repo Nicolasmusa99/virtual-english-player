@@ -12,6 +12,12 @@
   --pizarra:#5A6B85; /* texto secundario del aula */
   --tiza:#E3E9F2;    /* líneas y fondos de campos del aula */
   --rojo:#B93A33;    /* cancelado / error (aula) */
+  /* Rediseño 2026-11 ("moderno"): el aula va sobre un fondo apenas azulado y todo lo
+     demás son tarjetas blancas redondeadas; los paneles importantes, en tinta. */
+  --fondo:#F3F6FB;   /* fondo del aula, detrás de las tarjetas */
+  --sombra:0 10px 30px rgba(20,40,75,0.08);
+  --sombraAzul:0 8px 22px rgba(31,95,191,0.35);
+  --r-tarjeta:24px; --r-panel:28px; --r-item:14px;
 
   /* LA SALA (player, oscuro): superficies desde la tinta (p1 más oscura → p5) */
   --p1:#14284B; --p2:#1A3157; --p3:#1F3863; --p4:#284572; --p5:#335283;

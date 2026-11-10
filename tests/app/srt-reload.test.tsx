@@ -74,10 +74,14 @@ describe('US-034 — cargar SRT sobre video abierto', () => {
 
     expect(container.querySelectorAll('[title="Editar"]')).toHaveLength(2)
 
-    // ROJO: el botón "Cargar SRT" no existe todavía en app/page.tsx
-    const loadSrtBtn = Array.from(container.querySelectorAll('button'))
+    // Rediseño 2026-11: "Cargar SRT" está dentro del menú "Más" de la barra de arriba.
+    const more = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Más')
+    expect(more).toBeDefined()
+    await act(async () => { fireEvent.click(more!) })
+    const loadSrtBtn = Array.from(container.querySelectorAll('[role="menuitem"]'))
       .find(b => /cargar srt/i.test(b.textContent ?? ''))
     expect(loadSrtBtn).toBeDefined()
+    await act(async () => { fireEvent.keyDown(document, { key: 'Escape' }) })
 
     // ROJO: el input data-testid="srt-reload-input" no existe todavía
     const srtInput = getSrtReloadInput(container)

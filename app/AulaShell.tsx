@@ -90,15 +90,17 @@ export default function AulaShell({ items, current, onGo, user, onSignOut, onPro
 }
 
 // Una página del aula: título grande, una línea que dice qué hay, y el contenido.
-export function AulaPage({ title, lead, back, children }: {
+export function AulaPage({ title, lead, back, bare, children }: {
   title: string
   lead?: ReactNode
   /** Sub-pantalla: botón para volver ("Alumnos", "Agenda"…). */
   back?: { label: string; onClick: () => void }
+  /** Sin la tarjeta blanca de página: la pantalla arma sus propias tarjetas ("Hoy"). */
+  bare?: boolean
   children: ReactNode
 }) {
   return (
-    <div className={styles.page}>
+    <div className={`${styles.page} ${bare ? styles.pageBare : ''}`}>
       {back && <button type="button" className={styles.back} onClick={back.onClick}>← {back.label}</button>}
       <h1 className={styles.h1}>{title}</h1>
       {lead && <p className={styles.lead}>{lead}</p>}
