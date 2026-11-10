@@ -24,7 +24,7 @@
 .loadScroll { justify-content: safe center; overflow-y: auto; padding-top: 64px; }
 @media (max-width: 640px) { .loadScroll { justify-content: flex-start; padding-top: 72px; } }
 
-.dropzone { width: 520px; max-width: 94vw; border: 1px dashed var(--ln2); border-radius: 14px; padding: 40px 36px; text-align: center; cursor: pointer; transition: all 0.18s; background: var(--p1); display: block; }
+.dropzone { width: 520px; max-width: 94vw; border: 2px dashed var(--ln2); border-radius: 24px; padding: 40px 36px; text-align: center; cursor: pointer; transition: all 0.18s; background: var(--p1); display: block; }
 .dropzone:hover, .dropzone[data-drag] { border-color: var(--ac3); background: var(--ac2); }
 .dzIcon { width: 48px; height: 48px; border-radius: 12px; background: var(--p3); border: 1px solid var(--ln2); display: flex; align-items: center; justify-content: center; margin: 0 auto 16px; }
 .dzIcon svg { width: 22px; height: 22px; color: var(--tx2); }

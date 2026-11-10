@@ -2,7 +2,7 @@
    Vive dentro de .lightScope (page.module.css): tinta, Azul VE, pizarra y tiza salen de
    app/globals.css. El amarillo solo marca "ahora". Una sola familia (--font-sans). */
 
-.shell { position: fixed; inset: 0; display: grid; grid-template-columns: 252px minmax(0, 1fr); background: var(--fondo); color: var(--tinta); font: 15px/1.45 var(--font-sans); }
+.shell { position: fixed; inset: 0; display: grid; grid-template-columns: 276px minmax(0, 1fr); background: var(--fondo); color: var(--tinta); font: 15px/1.45 var(--font-sans); }
 
 /* ── Barra lateral ── */
 .rail { display: flex; flex-direction: column; gap: 6px; margin: 16px 0 16px 16px; padding: 20px 14px 16px; border-radius: var(--r-tarjeta); background: #fff; box-shadow: var(--sombra); overflow-y: auto; }

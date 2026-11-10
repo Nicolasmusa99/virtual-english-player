@@ -18,11 +18,11 @@
 .tcMeta { font-size: 15px; color: var(--pizarra); }
 
 /* Botones del aula (mismos que aula.module.css: 4px, texto de 15px) */
-.tcBtn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; }
+.tcBtn { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; font-weight: 700; padding-left: 18px; padding-right: 18px; }
 .tcBtn:hover { border-color: var(--pizarra); }
-.tcDanger { display: inline-flex; align-items: center; height: 40px; padding: 0 8px; border-radius: 4px; border: 0; background: transparent; color: var(--rojo); font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; }
+.tcDanger { display: inline-flex; align-items: center; height: 40px; padding: 0 8px; border-radius: 999px; border: 0; background: transparent; color: var(--rojo); font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; }
 .tcDanger:hover { text-decoration: underline; }
-.tcPrimary { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 4px; border: 0; background: var(--azul); color: #fff; font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; }
+.tcPrimary { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 16px; border-radius: 999px; border: 0; background: var(--azul); color: #fff; font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; font-weight: 700; padding-left: 18px; padding-right: 18px; box-shadow: var(--sombraAzul); }
 .tcPrimary:hover { background: var(--azulHover); }
 .tcBtn:disabled, .tcDanger:disabled { opacity: 0.5; cursor: default; }
 .tcPrimary:disabled { opacity: 0.6; cursor: wait; }
@@ -34,7 +34,7 @@
 .tcD { font-weight: 700; }
 .tcH { font-variant-numeric: tabular-nums; }
 /* "Hoy": resaltador amarillo con texto tinta (el único uso del amarillo) */
-.tcNow { background: var(--amarillo); color: var(--tinta); padding: 1px 6px; border-radius: 2px; font-weight: 700; }
+.tcNow { background: var(--amarillo); color: var(--tinta); padding: 1px 6px; border-radius: 999px; font-weight: 700; }
 .tcKind { font-size: 15px; color: var(--pizarra); }
 .k_fija { color: var(--pizarra); }
 .k_suelta { color: var(--pizarra); }
@@ -44,7 +44,7 @@
 .tcActs { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
 
 /* Campo de texto (lo usa "Mi sala de Zoom", ZoomRoomCard). */
-.tcInput { height: 44px; border: 1.5px solid var(--tiza); border-radius: 4px; background: #fff; color: var(--tinta); font: 16px var(--font-sans); padding: 0 12px; min-width: 110px; }
+.tcInput { height: 44px; border: 1.5px solid var(--tiza); border-radius: 14px; background: #fff; color: var(--tinta); font: 16px var(--font-sans); padding: 0 12px; min-width: 110px; }
 .tcInput:focus { outline: 2px solid var(--azul); outline-offset: 0; border-color: var(--azul); }
 .tcHint { font-size: 15px; color: var(--pizarra); line-height: 1.45; }
 .tcError { font-size: 15px; color: var(--rojo); line-height: 1.45; }
@@ -52,11 +52,11 @@
 /* ── Ventanas "Nueva / Editar clase", "¿Solo esta…?" y el detalle de la agenda ──
    Cada fila con su nombre a la izquierda ("Cuándo", "Repetición", "Zoom"). */
 .cdBackdrop { position: fixed; inset: 0; z-index: 100; background: rgba(20, 40, 75, 0.45); display: flex; align-items: flex-start; justify-content: center; padding: 8vh 16px 16px; overflow-y: auto; }
-.cdBox { width: 100%; max-width: 720px; background: #fff; border-radius: 6px; box-shadow: 0 18px 50px rgba(20, 40, 75, 0.28); padding: 26px 30px 24px; outline: none; font-family: var(--font-sans); color: var(--tinta); }
+.cdBox { width: 100%; max-width: 720px; background: #fff; border-radius: 24px; box-shadow: 0 18px 50px rgba(20, 40, 75, 0.28); padding: 26px 30px 24px; outline: none; font-family: var(--font-sans); color: var(--tinta); }
 .cdWide { max-width: 800px; }
 .cdHead { display: flex; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
 .cdTitle { flex: 1; display: flex; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 26px; font-weight: 800; line-height: 1.15; letter-spacing: -0.01em; color: var(--tinta); }
-.cdX { margin: -4px -8px 0 0; border: 0; background: transparent; font-size: 28px; line-height: 1; color: var(--pizarra); cursor: pointer; padding: 4px 10px; border-radius: 4px; }
+.cdX { margin: -4px -8px 0 0; border: 0; background: transparent; font-size: 28px; line-height: 1; color: var(--pizarra); cursor: pointer; padding: 4px 10px; border-radius: 999px; }
 .cdX:hover { background: var(--p2); color: var(--tinta); }
 .cdLine { display: grid; grid-template-columns: 96px minmax(0, 1fr); align-items: center; gap: 6px 16px; padding: 12px 0; border-top: 1.5px solid var(--tiza); }
 .cdKey { font-size: 15px; color: var(--pizarra); }
@@ -64,13 +64,13 @@
 .cdField { display: flex; flex-direction: column; gap: 4px; }
 .cdSr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .cdLbl { font-size: 14px; color: var(--pizarra); }
-.cdInput { height: 44px; border: 1.5px solid var(--tiza); border-radius: 4px; background: #fff; color: var(--tinta); font: 16px var(--font-sans); font-variant-numeric: tabular-nums; padding: 0 12px; }
+.cdInput { height: 44px; border: 1.5px solid var(--tiza); border-radius: 14px; background: #fff; color: var(--tinta); font: 16px var(--font-sans); font-variant-numeric: tabular-nums; padding: 0 12px; }
 .cdInput:hover { border-color: var(--pizarra); }
 .cdInput:focus { outline: 2px solid var(--azul); outline-offset: 0; border-color: var(--azul); }
 .cdDash { color: var(--pizarra); }
 .cdDur { font-size: 15px; color: var(--pizarra); font-variant-numeric: tabular-nums; }
 .cdChips { display: flex; gap: 6px; flex-wrap: wrap; }
-.cdChip { width: 44px; height: 44px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; }
+.cdChip { width: 44px; height: 44px; border-radius: 14px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; }
 .cdChip:hover { border-color: var(--pizarra); }
 .cdChipOn { background: var(--azul); border-color: var(--azul); color: #fff; font-weight: 700; }
 .cdChipOn:hover { background: var(--azulHover); border-color: var(--azulHover); }
@@ -88,7 +88,7 @@
 .cdRadio { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 0; border-bottom: 1.5px solid var(--tiza); font-size: 17px; color: var(--tinta); cursor: pointer; }
 .cdRadio input { width: 20px; height: 20px; accent-color: var(--azul); margin: 0; }
 .cdRadioOff { opacity: 0.45; cursor: default; }
-.cdDangerBtn { display: inline-flex; align-items: center; border-radius: 4px; border: 0; background: var(--rojo); color: #fff; font: 500 15px var(--font-sans); cursor: pointer; }
+.cdDangerBtn { display: inline-flex; align-items: center; border-radius: 999px; border: 0; background: var(--rojo); color: #fff; font: 500 15px var(--font-sans); cursor: pointer; }
 .cdDangerBtn:hover { filter: brightness(0.92); }
 .cdDangerBtn:disabled { opacity: 0.6; cursor: wait; }
 
@@ -102,21 +102,21 @@
 /* ── "Mi agenda" (G2): grilla semanal (MyAgenda.tsx) ──
    Colores por alumno: tonos oscuros con texto blanco en AA (≥ 5:1), ninguno rojo ni
    amarillo (el rojo es "cancelada" y el amarillo es "ahora"). */
-.ag { width: 100%; max-width: 1320px; padding: 30px 48px 40px; display: flex; flex-direction: column; color: var(--tinta); font-family: var(--font-sans); --agGutter: 60px; }
+.ag { width: calc(100% - 32px); max-width: 1320px; margin: 16px; padding: 24px 28px 28px; border-radius: var(--r-tarjeta); background: #fff; box-shadow: var(--sombra); display: flex; flex-direction: column; color: var(--tinta); font-family: var(--font-sans); --agGutter: 60px; }
 .agSticky { position: sticky; top: 0; z-index: 3; background: #fff; }
 .agTop { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; padding: 0 0 18px; }
 .agTitle { margin: 0 10px 0 0; font-size: 32px; font-weight: 800; line-height: 1.1; letter-spacing: -0.02em; color: var(--tinta); white-space: nowrap; }
 .agTz { margin-left: 6px; font-size: 15px; color: var(--pizarra); }
-.agCreate { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 4px; border: 0; background: var(--azul); color: #fff; font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; }
+.agCreate { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 16px; border-radius: 999px; border: 0; background: var(--azul); color: #fff; font: 500 15px var(--font-sans); white-space: nowrap; cursor: pointer; font-weight: 700; padding-left: 18px; padding-right: 18px; box-shadow: var(--sombraAzul); }
 .agCreate:hover { background: var(--azulHover); }
 .agCreate:disabled { opacity: 0.5; cursor: default; }
-.agToday { height: 40px; padding: 0 16px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; }
-.agRound { width: 40px; height: 40px; border-radius: 4px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font-size: 20px; line-height: 1; cursor: pointer; }
+.agToday { height: 40px; padding: 0 16px; border-radius: 999px; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font: 500 15px var(--font-sans); cursor: pointer; font-weight: 700; padding-left: 18px; padding-right: 18px; }
+.agRound { width: 40px; height: 40px; border-radius: 50%; border: 1.5px solid var(--tiza); background: #fff; color: var(--tinta); font-size: 20px; line-height: 1; cursor: pointer; }
 .agToday:hover, .agRound:hover { border-color: var(--pizarra); }
 .agCreate:focus-visible, .agToday:focus-visible, .agRound:focus-visible, .agStripDay:focus-visible, .agFab:focus-visible { outline: 2px solid var(--azul); outline-offset: 2px; }
 .agHead { display: grid; grid-template-columns: var(--agGutter) repeat(var(--agCols), minmax(0, 1fr)); border-bottom: 1.5px solid var(--tiza); }
 .agDay { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0 0 10px; font-size: 14px; color: var(--pizarra); }
-.agNum { display: grid; place-items: center; min-width: 40px; height: 38px; padding: 0 6px; border-radius: 4px; font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--tinta); }
+.agNum { display: grid; place-items: center; min-width: 40px; height: 38px; padding: 0 6px; border-radius: 12px; font-size: 24px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--tinta); }
 /* Hoy: el número resaltado en amarillo (el "ahora") */
 .agIsToday { color: var(--tinta); font-weight: 700; }
 .agIsToday .agNum { background: var(--amarillo); color: var(--tinta); font-weight: 800; }
@@ -124,7 +124,7 @@
 .agHours { position: relative; }
 .agHour { position: absolute; right: 10px; transform: translateY(-50%); font-size: 13px; color: var(--pizarra); font-variant-numeric: tabular-nums; }
 .agCol { position: relative; border-left: 1.5px solid var(--tiza); background-image: linear-gradient(to bottom, var(--tiza) 1px, transparent 1px); background-size: 100% 48px; cursor: pointer; }
-.agEv { position: absolute; border: 0; border-radius: 4px; padding: 4px 8px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; overflow: hidden; color: #fff; font: 13px var(--font-sans); line-height: 1.3; font-variant-numeric: tabular-nums; cursor: pointer; box-shadow: 0 0 0 1px #fff; }
+.agEv { position: absolute; border: 0; border-radius: 12px; padding: 4px 8px; display: flex; flex-direction: column; align-items: flex-start; text-align: left; overflow: hidden; color: #fff; font: 13px var(--font-sans); line-height: 1.3; font-variant-numeric: tabular-nums; cursor: pointer; box-shadow: 0 0 0 1px #fff; }
 .agEv b { max-width: 100%; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .agEv:hover { filter: brightness(1.1); }
 .agEv:focus-visible { outline: 2px solid var(--tinta); outline-offset: 1px; z-index: 2; }
@@ -147,7 +147,7 @@
 .agHint { color: var(--pizarra); }
 .agMsg { margin: 12px 0 0; font-size: 15px; color: var(--pizarra); }
 .agStrip { display: flex; justify-content: space-between; border-bottom: 1.5px solid var(--tiza); padding: 2px 0 8px; }
-.agStripDay { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: transparent; color: var(--pizarra); font: 13px var(--font-sans); cursor: pointer; padding: 2px 0; border-radius: 4px; }
+.agStripDay { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; border: 0; background: transparent; color: var(--pizarra); font: 13px var(--font-sans); cursor: pointer; padding: 2px 0; border-radius: 14px; }
 .agStripDay .agNum { min-width: 34px; height: 32px; font-size: 16px; font-weight: 700; }
 .agPicked .agNum { box-shadow: inset 0 0 0 2px var(--tinta); }
 .agFab { position: fixed; right: 18px; bottom: calc(22px + var(--tabbar, 0px)); z-index: 5; width: 56px; height: 56px; border-radius: 50%; border: 0; background: var(--azul); color: #fff; font-size: 30px; line-height: 1; box-shadow: 0 4px 14px rgba(20, 40, 75, 0.3); cursor: pointer; }
