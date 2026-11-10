@@ -124,7 +124,7 @@ describe('POST /api/exercises', () => {
     const res  = await POST(makeReq({ phrases: SAMPLE_PHRASES, level: 'intermediate', scope: 'all' }))
     const data = await res.json()
     expect(res.status).toBe(500)
-    expect(data.error).toBe('overloaded')
+    expect(data.error).not.toContain('overloaded') // el detalle interno no viaja al navegador
   })
 
   it('(i) response contains ONLY tool_use input — no extra parsing or JSON.parse on text', async () => {

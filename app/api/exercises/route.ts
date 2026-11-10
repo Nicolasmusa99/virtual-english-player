@@ -6,6 +6,14 @@ import { requireRole } from '@/lib/authz'
 
 export const maxDuration = 60
 
+// Límites de entrada: lo que llega se manda a Claude y se paga por token. Sin tope, un
+// pedido enorme (o un nivel/tema armado a mano) gasta de más o cambia las instrucciones.
+const LEVELS = ['beginner', 'intermediate', 'advanced']
+const MODES = ['video', 'topic', 'both']
+const MAX_PHRASES = 2000
+const MAX_TRANSCRIPT_CHARS = 60_000
+const MAX_TOPIC_CHARS = 300
+
 function validateSet(data: unknown): string | null {
   if (!data || typeof data !== 'object') return 'not an object'
   const d = data as Record<string, unknown>
@@ -73,8 +81,19 @@ export async function POST(req: NextRequest) {
   if (!apiKey) return NextResponse.json({ error: 'API key not configured' }, { status: 500 })
 
   try {
-    const body = await req.json()
-    const { phrases, level, mode = 'video' as ExerciseMode, topic } = body
+    const body = await req.json().catch(() => null)
+    if (!body || typeof body !== 'object') return NextResponse.json({ error: 'Invalid body' }, { status: 400 })
+    const { phrases: phrasesIn, level, mode = 'video' as ExerciseMode, topic: topicIn } = body
+
+    if (!MODES.includes(mode)) return NextResponse.json({ error: 'Invalid mode' }, { status: 400 })
+    if (!LEVELS.includes(level)) return NextResponse.json({ error: 'Invalid level' }, { status: 400 })
+    if (phrasesIn != null && !Array.isArray(phrasesIn)) return NextResponse.json({ error: 'Invalid phrases' }, { status: 400 })
+    if (topicIn != null && typeof topicIn !== 'string') return NextResponse.json({ error: 'Invalid topic' }, { status: 400 })
+    // Solo el texto de cada frase, con tope de cantidad y de largo total.
+    const phrases: { text: string }[] = ((phrasesIn ?? []) as unknown[])
+      .filter((p): p is { text: string } => !!p && typeof (p as { text?: unknown }).text === 'string')
+      .slice(0, MAX_PHRASES)
+    const topic: string | undefined = typeof topicIn === 'string' ? topicIn.slice(0, MAX_TOPIC_CHARS) : undefined
 
     // Mode-specific input validation
     if (mode === 'video') {
@@ -86,8 +105,8 @@ export async function POST(req: NextRequest) {
     }
 
     const client     = new Anthropic({ apiKey })
-    const transcript = phrases?.length
-      ? (phrases as { text: string }[]).map(p => p.text).join('\n')
+    const transcript = phrases.length
+      ? phrases.map(p => p.text).join('\n').slice(0, MAX_TRANSCRIPT_CHARS)
       : undefined
 
     const response = await client.messages.create({
@@ -159,6 +178,7 @@ export async function POST(req: NextRequest) {
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Unknown error'
     console.error('[exercises]', msg)
-    return NextResponse.json({ error: msg }, { status: 500 })
+    // El detalle queda en el log del servidor: al navegador no viajan mensajes internos del proveedor.
+    return NextResponse.json({ error: 'No se pudieron generar los ejercicios. Probá de nuevo.' }, { status: 500 })
   }
 }
