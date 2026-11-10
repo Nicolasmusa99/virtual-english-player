@@ -6,6 +6,7 @@ import { db } from '@/lib/db'
 import { videos, videoSessions } from '@/lib/db/schema'
 import { getAccessibleVideo, getOwnedVideo } from '@/lib/library'
 import { normalizeVideoName, VIDEO_NAME_ERROR } from '@/lib/videoName'
+import { isVercelBlobUrl } from '@/lib/blobUrl'
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const gate = await requireRole('admin', 'profesor')
@@ -77,7 +78,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!storageUrl || typeof storageUrl !== 'string') {
     return NextResponse.json({ error: 'storageUrl requerido' }, { status: 400 })
   }
+  // Solo una URL de nuestro almacenamiento: es el `src` del video que ven profes y alumnos.
+  if (!isVercelBlobUrl(storageUrl)) {
+    return NextResponse.json({ error: 'storageUrl inválido' }, { status: 400 })
+  }
 
-  await db.update(videos).set({ storageUrl, status: 'ready', updatedAt: new Date() }).where(eq(videos.id, id))
+  await db.update(videos).set({ storageUrl, status: 'ready', updatedAt: new Date() })
+    .where(and(eq(videos.id, id), eq(videos.userId, session.user.id)))
   return NextResponse.json({ ok: true })
 }

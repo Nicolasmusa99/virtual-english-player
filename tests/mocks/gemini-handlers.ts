@@ -3,7 +3,7 @@ import { http, HttpResponse } from 'msw'
 export const FAKE_UPLOAD_URL = 'https://gemini-upload.test/upload/session'
 export const FAKE_FILE_URI = 'https://generativelanguage.googleapis.com/v1beta/files/test-file-id'
 export const FAKE_SRT = '1\n00:00:01,000 --> 00:00:03,000\nHello world\n'
-export const FAKE_BLOB_URL = 'https://blob.test/videos/vid-1/test.mp4'
+export const FAKE_BLOB_URL = 'https://teststore.public.blob.vercel-storage.com/videos/vid-1/test.mp4'
 
 const BASE = 'https://generativelanguage.googleapis.com'
 

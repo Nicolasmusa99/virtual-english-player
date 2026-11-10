@@ -50,6 +50,16 @@ describe('POST /api/transcribe', () => {
     expect(data.error).toBe('API key not configured')
   })
 
+  it('(b0) blobUrl que no es de nuestro almacenamiento → 400 (el servidor no baja cualquier URL)', async () => {
+    for (const blobUrl of ['https://evil.com/v.mp4', 'http://169.254.169.254/latest', 'http://localhost:3000/api/users']) {
+      const res = await POST(new NextRequest('http://localhost/api/transcribe', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blobUrl, mimeType: 'video/mp4' }),
+      }))
+      expect(res.status).toBe(400)
+      expect((await res.json()).error).toBe('blobUrl inválido')
+    }
+  })
+
   it('(b) sin blobUrl en el body → 400', async () => {
     const res = await POST(makeRequest(false))
     expect(res.status).toBe(400)

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
 import { cleanSrt, TRANSCRIPT_EMPTY_ERROR } from '@/lib/srt'
+import { isVercelBlobUrl } from '@/lib/blobUrl'
 
 // Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
@@ -105,6 +106,10 @@ export async function POST(req: NextRequest) {
     const { blobUrl, mimeType: mimeIn } = await req.json()
     if (!blobUrl || typeof blobUrl !== 'string') {
       return NextResponse.json({ error: 'blobUrl requerido' }, { status: 400 })
+    }
+    // Solo se baja de NUESTRO almacenamiento: el servidor no le pega a cualquier dirección.
+    if (!isVercelBlobUrl(blobUrl)) {
+      return NextResponse.json({ error: 'blobUrl inválido' }, { status: 400 })
     }
 
     // El video vive en Vercel Blob (subido directo por el browser). Lo bajamos acá y se lo

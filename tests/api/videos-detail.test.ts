@@ -92,14 +92,14 @@ describe('DELETE /api/videos/[id]', () => {
 describe('PATCH /api/videos/[id]', () => {
   it('(a) 401 sin sesión', async () => {
     authMock.mockResolvedValue(null)
-    const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/x' }), ctx())
+    const res = await PATCH(req('PATCH', { storageUrl: 'https://teststore.public.blob.vercel-storage.com/x.mp4' }), ctx())
     expect(res.status).toBe(401)
   })
 
   it('(b) 404 si no es dueño del video', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     ;(db as any).__rows = []
-    const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/x' }), ctx())
+    const res = await PATCH(req('PATCH', { storageUrl: 'https://teststore.public.blob.vercel-storage.com/x.mp4' }), ctx())
     expect(res.status).toBe(404)
   })
 
@@ -113,14 +113,23 @@ describe('PATCH /api/videos/[id]', () => {
   it('(d) 200 y confirma el storageUrl cuando es dueño', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
     ;(db as any).__rows = [OWNED_VIDEO]
-    const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/final.mp4' }), ctx())
+    const res = await PATCH(req('PATCH', { storageUrl: 'https://teststore.public.blob.vercel-storage.com/final.mp4' }), ctx())
     expect(res.status).toBe(200)
+  })
+
+  it('(d2) 400 si el storageUrl no es de nuestro almacenamiento', async () => {
+    authMock.mockResolvedValue({ user: { id: 'user-1', role: 'admin' } })
+    ;(db as any).__rows = [OWNED_VIDEO]
+    for (const storageUrl of ['https://evil.com/x.mp4', 'http://localhost/x', 'javascript:alert(1)']) {
+      const res = await PATCH(req('PATCH', { storageUrl }), ctx())
+      expect(res.status).toBe(400)
+    }
   })
 
   it('(e) 403 si es profesor — confirmar storageUrl es parte de subir (solo admin)', async () => {
     authMock.mockResolvedValue({ user: { id: 'user-1', role: 'profesor' } })
     ;(db as any).__rows = [OWNED_VIDEO]
-    const res = await PATCH(req('PATCH', { storageUrl: 'https://blob/x' }), ctx())
+    const res = await PATCH(req('PATCH', { storageUrl: 'https://teststore.public.blob.vercel-storage.com/x.mp4' }), ctx())
     expect(res.status).toBe(403)
   })
 })

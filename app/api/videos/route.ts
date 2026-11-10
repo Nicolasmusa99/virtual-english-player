@@ -36,8 +36,10 @@ export async function POST(req: NextRequest) {
   if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
   const session = gate.session
 
-  const { originalName, sizeBytes, mimeType } = await req.json()
-  if (!originalName || typeof sizeBytes !== 'number' || sizeBytes <= 0 || !mimeType) {
+  const { originalName, sizeBytes, mimeType } = ((await req.json().catch(() => null)) ?? {}) as Record<string, unknown>
+  if (typeof originalName !== 'string' || !originalName.trim() || originalName.length > 300 ||
+      typeof sizeBytes !== 'number' || !Number.isFinite(sizeBytes) || sizeBytes <= 0 ||
+      typeof mimeType !== 'string' || !/^video\/[\w.+-]{1,60}$/.test(mimeType)) {
     return NextResponse.json({ error: 'Datos de video inválidos' }, { status: 400 })
   }
 
