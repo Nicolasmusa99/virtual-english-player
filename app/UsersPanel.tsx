@@ -22,6 +22,9 @@ import Avatar from './Avatar'
 import { PASSWORD_MIN, makePassword, passwordProblem } from '@/lib/passwordRules'
 import { byNextClass, isSameDayInTz } from '@/lib/materialView'
 import StudentNameDialog from './StudentNameDialog'
+import type { LastWatched } from '@/lib/people'
+import { lastSeenText, progressText } from '@/lib/progressView'
+import { displayVideoName } from '@/lib/studentView'
 
 interface UserRow {
   id: string
@@ -32,7 +35,7 @@ interface UserRow {
   image?: string | null
   hasPassword?: boolean
 }
-type Stats = { materialCount: number; folderCount: number; nextClassAt: string | null }
+type Stats = { materialCount: number; folderCount: number; nextClassAt: string | null; lastWatched?: LastWatched | null }
 type Filter = 'all' | Role | 'noTeacher'
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
@@ -66,6 +69,7 @@ export const PEOPLE_TEXTS = {
   sort: 'Ordenar', sortName: 'Nombre', sortNext: 'Próxima clase',
   colName: 'Nombre', colTeacher: 'Profe', colMaterial: 'Material', colNext: 'Próxima clase', colStudents: 'Alumnos',
   statMaterial: 'Material', statFolders: 'Carpetas', statNext: 'Próxima clase',
+  statLast: 'Lo último que vio', notWatched: 'Todavía no abrió ningún video',
   noFolders: 'Ninguna', notScheduled: 'Sin agendar',
   noName: 'Sin nombre',
 } as const
@@ -157,6 +161,18 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
     const today = isSameDayInTz(s.nextClassAt, now, CLASS_TZ)
     return <span className={today ? styles.today : undefined}>{withLabel ? T.nextClass(text) : text}</span>
   }
+  // 2026-11: el último video que abrió el alumno y dónde lo dejó.
+  const lastNode = (s: Stats | undefined) => {
+    if (!s) return <span className={styles.soft}>…</span>
+    const w = s.lastWatched
+    if (!w) return <span className={styles.soft}>{T.notWatched}</span>
+    return (
+      <>
+        <span className={styles.lastName}>{displayVideoName(w.videoName)}</span>
+        <span className={styles.soft}>{progressText(w.positionSec, w.durationSec)}, {lastSeenText(w.seenAt, now)}</span>
+      </>
+    )
+  }
   const menuFor = (u: UserRow): MenuItem[] => {
     const items: MenuItem[] = [{ label: u.name ? T.rename : T.addName, onSelect: () => setEditing(u) }]
     if (u.role === 'alumno') items.push({ label: T.changeTeacher, onSelect: () => setReassigning(u) })
@@ -186,6 +202,7 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
             <span className={styles.stat}><span className={styles.statLbl}>{T.statFolders}</span>
               <span className={s && s.folderCount === 0 ? styles.soft : undefined}>{s ? (s.folderCount || T.noFolders) : '…'}</span></span>
             <span className={`${styles.stat} ${styles.statWide}`}><span className={styles.statLbl}>{T.statNext}</span>{nextNode(s, false)}</span>
+            <span className={`${styles.stat} ${styles.statWide}`} data-testid="last-watched"><span className={styles.statLbl}>{T.statLast}</span>{lastNode(s)}</span>
           </span>
           <span className={styles.cardCta}>{T.open}</span>
         </button>

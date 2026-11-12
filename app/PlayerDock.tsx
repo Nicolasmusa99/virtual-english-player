@@ -7,11 +7,16 @@
 // "Repetir frase", "Anterior" y "Siguiente" llevan texto, no solo ícono.
 // 2026-11: mismo estilo que el player del alumno: la hora a los dos lados de la barra y
 // botones redondos con su nombre debajo (el nombre completo sigue en aria-label).
+// 2026-11: al costado de la barra, la línea en la que se está y el total ("161 / 1620").
+// Arriba de la barra, una marca por alumno con dónde dejó este video (cian, no amarillo:
+// el amarillo es solo "acá y ahora"); si se abrió desde la ficha de un alumno, su marca se
+// destaca y arriba se avisa dónde quedó, con "Ir ahí".
 import { useEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react'
 import styles from './PlayerDock.module.css'
 import { fmtTime, type Phrase } from '@/lib/srt'
 import { timeAtX } from '@/lib/studentView'
 import { phraseIndexAt, phraseSegments, selNumber, SEEK_THROTTLE_MS } from '@/lib/playerTimeline'
+import { markText, type StudentMark } from '@/lib/progressView'
 
 export const DOCK_TEXTS = {
   timeline: 'Tiempo del video',
@@ -30,6 +35,10 @@ export const DOCK_TEXTS = {
   back10Short: '−10 s', fwd10Short: '+10 s', playShort: 'Play', pauseShort: 'Pausa', speedShort: 'Velocidad',
   ccOn: 'Subtítulos: sí', ccOff: 'Subtítulos: no',
   sel: (n: number) => `elegida ${n}`,
+  lineOf: (cur: number | string, tot: number) => `Línea ${cur} de ${tot}`,
+  goThere: 'Ir ahí',
+  notOpened: (n: string) => `${n} todavía no abrió este video.`,
+  markHint: 'Tocá la marca para ir ahí',
 } as const
 
 export type DockClock = { t: number; d: number; playing: boolean }
@@ -57,6 +66,12 @@ type Props = {
   onVol: (v: number) => void
   onToggleCc: () => void
   onRepeat?: () => void
+  /** Dónde dejó este video cada alumno (marcas arriba de la barra). */
+  studentMarks?: StudentMark[]
+  /** El alumno desde cuya ficha se abrió el video: su marca se destaca. */
+  focusStudentId?: string | null
+  focusStudentName?: string | null
+  onMarkJump?: (m: StudentMark) => void
 }
 
 export default function PlayerDock(p: Props) {
@@ -75,6 +90,7 @@ export default function PlayerDock(p: Props) {
   const [dragging, setDragging] = useState(false)
   const [speedOpen, setSpeedOpen] = useState(false)
   const speedRef = useRef<HTMLDivElement>(null)
+  const [now] = useState(() => new Date())
 
   // Pintar la barra en cada cuadro.
   useEffect(() => {
@@ -158,12 +174,25 @@ export default function PlayerDock(p: Props) {
     <div className={`${styles.grp} ${extra}`}>{btn}<span className={styles.lbl} aria-hidden="true">{label}</span></div>
   )
 
+  const marks = p.studentMarks ?? []
+  const focusMark = p.focusStudentId ? marks.find(m => m.studentId === p.focusStudentId) ?? null : null
+  const lineCur = p.curIdx != null && p.curIdx >= 0 ? p.curIdx + 1 : '–'
+
   return (
     <div className={styles.dock}>
+      {focusMark ? (
+        <div className={styles.focusBar} data-testid="dock-focus-mark">
+          <span className={styles.focusDot} aria-hidden="true" />
+          <span>{markText(focusMark, now)}</span>
+          <button type="button" className={styles.focusGo} onClick={() => p.onMarkJump?.(focusMark)}>{DOCK_TEXTS.goThere}</button>
+        </div>
+      ) : p.focusStudentId && p.focusStudentName ? (
+        <div className={`${styles.focusBar} ${styles.focusNone}`} data-testid="dock-focus-mark">{DOCK_TEXTS.notOpened(p.focusStudentName)}</div>
+      ) : null}
       <div className={styles.timeRow}>
       <span ref={curRef} className={styles.time}>0:00</span>
       <div ref={trackRef} data-testid="prog-track"
-        className={`${styles.tl} ${hover != null ? styles.tlHover : ''} ${dragging ? styles.tlDrag : ''}`}
+        className={`${styles.tl} ${hover != null ? styles.tlHover : ''} ${dragging ? styles.tlDrag : ''} ${marks.length > 0 ? styles.tlMarks : ''}`}
         role="slider" aria-label={DOCK_TEXTS.timeline} aria-valuemin={0} aria-valuemax={Math.round(dur)}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
         onPointerLeave={() => { if (dragRef.current == null) setHover(null) }}>
@@ -183,6 +212,21 @@ export default function PlayerDock(p: Props) {
           {hover != null && !dragging && <div className={styles.ghost} style={{ left: hPct + '%' }} />}
           <div ref={thumbRef} className={styles.thumb} />
         </div>
+        {dur > 0 && marks.map(m => {
+          const isFocus = m.studentId === p.focusStudentId
+          const label = `${markText(m, now)}. ${DOCK_TEXTS.markHint}`
+          return (
+            <button type="button" key={m.studentId} data-testid="student-mark"
+              className={`${styles.mark} ${isFocus ? styles.markFocus : ''}`}
+              style={{ left: Math.min(100, Math.max(0, (m.positionSec / dur) * 100)) + '%' }}
+              aria-label={label} title={label}
+              onPointerDown={e => e.stopPropagation()}
+              onPointerMove={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); p.onMarkJump?.(m) }}>
+              <span className={styles.markName}>{m.name}</span>
+            </button>
+          )
+        })}
         {hover != null && (
           <div className={styles.tip} style={{ left: `clamp(90px, ${hPct}%, calc(100% - 90px))` }} data-testid="dock-tip">
             <b>{fmtTime(hover)}</b>
@@ -193,6 +237,11 @@ export default function PlayerDock(p: Props) {
       </div>
 
       <span ref={totRef} className={`${styles.time} ${styles.tot}`}>0:00</span>
+      {p.phrases.length > 0 && (
+        <span className={styles.lines} data-testid="dock-line-counter" title={DOCK_TEXTS.lineOf(lineCur, p.phrases.length)}>
+          <b>{lineCur}</b> / {p.phrases.length}
+        </span>
+      )}
       </div>
 
       <div className={styles.ctrls}>

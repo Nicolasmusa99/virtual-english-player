@@ -222,3 +222,56 @@ describe('PlayerDock — rediseño (fase 3)', () => {
     expect(screen.getByRole('button', { name: DOCK_TEXTS.speed }).parentElement!.parentElement!.textContent).toBe('1×' + DOCK_TEXTS.speedShort)
   })
 })
+
+// 2026-11: contador de líneas y marcas de dónde quedó cada alumno.
+describe('PlayerDock — contador de líneas y marcas de alumnos', () => {
+  const MARKS = [
+    { studentId: 's1', name: 'Juan', positionSec: 25, seenAt: new Date().toISOString() },
+    { studentId: 's2', name: 'Ana', positionSec: 75, seenAt: new Date().toISOString() },
+  ]
+
+  it('muestra la línea actual y el total', () => {
+    mount({ curIdx: 1 })
+    const c = screen.getByTestId('dock-line-counter')
+    expect(c.textContent).toBe('2 / 3')
+    expect(c.getAttribute('title')).toBe(DOCK_TEXTS.lineOf(2, 3))
+  })
+
+  it('entre frases muestra un guion', () => {
+    mount({ curIdx: -1 })
+    expect(screen.getByTestId('dock-line-counter').textContent).toBe('– / 3')
+  })
+
+  it('sin frases no hay contador', () => {
+    mount({ phrases: [] })
+    expect(screen.queryByTestId('dock-line-counter')).toBeNull()
+  })
+
+  it('dibuja una marca por alumno en su lugar y al tocarla salta ahí sin mover la barra', async () => {
+    const onMarkJump = vi.fn()
+    mount({ studentMarks: MARKS, onMarkJump })
+    await frame()
+    const marks = screen.getAllByTestId('student-mark')
+    expect(marks.map(m => m.textContent)).toEqual(['Juan', 'Ana'])
+    expect(marks[0].style.left).toBe('25%')
+    fireEvent.pointerDown(marks[1], { clientX: 400, button: 0 })
+    fireEvent.click(marks[1])
+    expect(onMarkJump).toHaveBeenCalledWith(MARKS[1])
+    expect(h.onSeek).not.toHaveBeenCalled()
+  })
+
+  it('abierto desde la ficha de un alumno: avisa dónde quedó y "Ir ahí" salta', async () => {
+    const onMarkJump = vi.fn()
+    mount({ studentMarks: MARKS, focusStudentId: 's1', focusStudentName: 'Juan Pérez', onMarkJump })
+    await frame()
+    const bar = screen.getByTestId('dock-focus-mark')
+    expect(bar.textContent).toContain('Juan quedó en 0:25, hoy')
+    fireEvent.click(screen.getByRole('button', { name: DOCK_TEXTS.goThere }))
+    expect(onMarkJump).toHaveBeenCalledWith(MARKS[0])
+  })
+
+  it('si ese alumno nunca lo abrió, lo dice', () => {
+    mount({ studentMarks: [], focusStudentId: 's9', focusStudentName: 'Pedro' })
+    expect(screen.getByTestId('dock-focus-mark').textContent).toBe(DOCK_TEXTS.notOpened('Pedro'))
+  })
+})

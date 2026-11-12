@@ -21,6 +21,7 @@ import { FOLDER_NAME_ERROR, FOLDER_NAME_MAX, normalizeFolderName, UNFILED_LABEL 
 import {
   ALL, NIVEL_LABEL, TIPO_LABEL, countLabel, destFor, itemsIn, sameSel, validSel, type FolderSel,
 } from '@/lib/materialView'
+import { lastSeenText, progressPctOf, progressText } from '@/lib/progressView'
 
 interface AssignedRow {
   videoId: string
@@ -29,6 +30,9 @@ interface AssignedRow {
   sharedLevel: 'beginner' | 'medium' | 'advance' | null
   active: boolean // false = el admin despublicó el video → "no disponible"
   folderId: string | null
+  durationSec?: number | null
+  lastPositionSec?: number | null // avance (2026-11): dónde lo dejó el alumno; null = nunca lo abrió
+  lastSeenAt?: string | null
 }
 interface SharedRow {
   id: string
@@ -47,6 +51,7 @@ export const MATERIAL_TEXTS = {
   create: 'Crear', cancel: 'Cancelar', save: 'Guardar',
   assign: 'Asignar material',
   open: 'Abrir',
+  notOpened: 'Todavía no lo abrió',
   moveTo: 'Mover a',
   moveMany: 'Mover a…',
   removeOne: 'Quitar del alumno',
@@ -120,6 +125,7 @@ export default function StudentView({
   const [confirmFolder, setConfirmFolder] = useState<FolderRow | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<string[] | null>(null)
   const [busy, setBusy] = useState(false)
+  const [now] = useState(() => new Date())
 
   // asignar material
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -455,6 +461,17 @@ export default function StudentView({
                             <span className={styles.inFolder}><FolderGlyph className={styles.inFolderIco} />{nameOfFolder(a.folderId)}</span>
                           )}
                         </span>
+                        {/* 2026-11: dónde lo dejó el alumno. */}
+                        {a.lastPositionSec != null && a.lastSeenAt ? (
+                          <span className={styles.vProg} data-testid="material-progress">
+                            {progressPctOf(a.lastPositionSec, a.durationSec) != null && (
+                              <span className={styles.vProgBar} aria-hidden="true"><span style={{ width: progressPctOf(a.lastPositionSec, a.durationSec) + '%' }} /></span>
+                            )}
+                            <span>{progressText(a.lastPositionSec, a.durationSec)}, {lastSeenText(a.lastSeenAt, now)}</span>
+                          </span>
+                        ) : (
+                          <span className={`${styles.vProg} ${styles.vProgNone}`} data-testid="material-progress">{T.notOpened}</span>
+                        )}
                       </span>
                       <button type="button" className={`${styles.btn} ${styles.btnSm}`} disabled={!a.active} onClick={() => onOpenVideo(a.videoId)}>{T.open}</button>
                       <ActionMenu label={T.more(a.originalName)} items={[
