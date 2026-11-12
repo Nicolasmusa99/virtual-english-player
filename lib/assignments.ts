@@ -20,6 +20,8 @@ export type AssignmentVideo = {
   assignedAt: Date
   assignedBy: string | null
   folderId: string | null // carpeta del alumno donde está (2026-11); null = sin carpeta
+  lastPositionSec: number | null // avance (2026-11): dónde lo dejó el alumno; null = nunca lo abrió
+  lastSeenAt: Date | null
 }
 
 // Alta idempotente. El caller (ruta) ya validó que el alumno es del profe y que el
@@ -64,6 +66,8 @@ export async function listAssignmentsForStudent(studentId: string): Promise<Assi
       assignedAt: assignments.assignedAt,
       assignedBy: assignments.assignedBy,
       folderId: assignments.folderId,
+      lastPositionSec: assignments.lastPositionSec,
+      lastSeenAt: assignments.lastSeenAt,
       originalName: videos.originalName,
       sharedType: videos.sharedType,
       sharedLevel: videos.sharedLevel,
@@ -83,6 +87,8 @@ const teacherAssignmentCols = {
   assignedAt: assignments.assignedAt,
   assignedBy: assignments.assignedBy,
   folderId: assignments.folderId,
+  lastPositionSec: assignments.lastPositionSec,
+  lastSeenAt: assignments.lastSeenAt,
   originalName: videos.originalName,
   sharedType: videos.sharedType,
   sharedLevel: videos.sharedLevel,
@@ -103,6 +109,33 @@ export async function listAssignmentsForTeacher(
     .where(eq(users.teacherId, teacherId))
     .orderBy(desc(assignments.assignedAt))
   return rows.map((r) => ({ ...r, active: r.publishedAt !== null }))
+}
+
+// ─── Avance del alumno (2026-11) ─────────────────────────────────────────────
+// Guarda dónde dejó el video. Solo actualiza una asignación que EXISTE (el alumno no
+// puede crear filas): devuelve false si ese video no es suyo. No toca nada más.
+export async function saveProgress(studentId: string, videoId: string, positionSec: number, now: Date = new Date()): Promise<boolean> {
+  const rows = await db.update(assignments)
+    .set({ lastPositionSec: positionSec, lastSeenAt: now })
+    .where(and(eq(assignments.studentId, studentId), eq(assignments.videoId, videoId)))
+    .returning({ studentId: assignments.studentId })
+  return rows.length > 0
+}
+
+export type VideoProgressRow = { studentId: string; name: string | null; email: string | null; positionSec: number; seenAt: Date }
+
+// Dónde dejó ESTE video cada alumno que lo abrió. `teacherId` = solo los alumnos de ese
+// profe (server-side); null = todos (admin). Más reciente primero.
+export async function listProgressForVideo(videoId: string, teacherId: string | null): Promise<VideoProgressRow[]> {
+  const cond = [eq(assignments.videoId, videoId), isNotNull(assignments.lastPositionSec), isNotNull(assignments.lastSeenAt)]
+  if (teacherId) cond.push(eq(users.teacherId, teacherId))
+  const rows = await db
+    .select({ studentId: assignments.studentId, name: users.name, email: users.email, positionSec: assignments.lastPositionSec, seenAt: assignments.lastSeenAt })
+    .from(assignments)
+    .innerJoin(users, eq(users.id, assignments.studentId))
+    .where(and(...cond))
+    .orderBy(desc(assignments.lastSeenAt))
+  return rows.map((r) => ({ ...r, positionSec: r.positionSec ?? 0, seenAt: r.seenAt ?? new Date(0) }))
 }
 
 // Todas las asignaciones (solo admin).

@@ -12,6 +12,7 @@
 import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react'
 import styles from './student.module.css'
 import VoiceBoostControl from './VoiceBoostControl'
+import { useSaveProgress } from './useSaveProgress'
 import { fmtTime } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import {
@@ -79,6 +80,8 @@ export default function StudentPlayer({ data, onBack }: { data: StudentVideoData
   const [cc, setCc] = useState(true)
   const [slow, setSlow] = useState(false)
   const phrases = data.phrases
+  // 2026-11: se guarda dónde va (lo ve el profe). Al alumno no se le muestra nada.
+  useSaveProgress(vidRef, data.id)
 
   // Subtítulos y tiempo al ritmo del video: un loop de requestAnimationFrame mientras
   // reproduce (timeupdate solo es demasiado grueso para los subtítulos) + una

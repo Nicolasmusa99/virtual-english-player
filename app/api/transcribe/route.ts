@@ -31,11 +31,22 @@ Text of what was said.
 00:00:05,000 --> 00:00:09,000
 More text here.
 
+TIMING (the most important part, the subtitles are used to practice listening):
+- The start time of each block is the exact moment its FIRST word starts to be heard.
+- The end time is the moment its LAST word ends. Do not keep a block on screen during silence, music or pauses: end it when the voice stops.
+- Keep timing accurate all the way to the end of the video. Do not let it drift later or earlier as the video goes on.
+- Blocks never overlap: each block ends before or exactly when the next one starts.
+
+SEGMENTATION (short blocks that are easy to read):
+- Each block is ONE short phrase: at most 2 lines and about 80 characters in total, and at most 6 seconds long.
+- Split long sentences into several blocks at natural pauses: after a comma, before "and", "but", "because", "so", "that", "which", or where the speaker takes a breath.
+- Never put two different speakers in the same block.
+- Never put the end of one sentence and the start of the next in the same block if it makes the block long.
+
 STRICT RULES:
 - Number the blocks 1, 2, 3 and so on, in order
-- Timestamps in HH:MM:SS,mmm format that precisely match when the words are spoken
+- Timestamps in HH:MM:SS,mmm format
 - The end time of each block must be after its start time
-- 1-2 sentences per block, 3-10 seconds each
 - Return ONLY the SRT content: no markdown, no code blocks, no explanations`
 
 async function uploadToGemini(file: Blob, mimeType: string, apiKey: string): Promise<string> {
@@ -160,7 +171,9 @@ export async function POST(req: NextRequest) {
     // Validar antes de devolver: sin fences, sin bloques con fin antes del inicio, y si se
     // cortó por el tope de tokens, sin el último bloque (puede estar incompleto).
     const truncated = candidate?.finishReason === 'MAX_TOKENS'
-    const { srt, phrases, dropped } = cleanSrt(raw, { dropLast: truncated })
+    // tidy (2026-11): corta los bloques que Gemini igual devuelva largos y recorta los que se
+    // pisan o se quedan en pantalla durante un silencio (tidyCues en lib/srt.ts).
+    const { srt, phrases, dropped } = cleanSrt(raw, { dropLast: truncated, tidy: true })
     console.log(`[transcribe] Done — ${phrases} phrases (${dropped} descartadas${truncated ? ', salida cortada por el tope de tokens' : ''})`)
 
     fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}`, {

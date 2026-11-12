@@ -57,6 +57,7 @@
 .stat { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
 .statWide { grid-column: 1 / -1; }
 .statLbl { font-size: 12px; color: var(--pizarra); }
+.lastName { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 700; }
 .cardCta { margin-top: auto; align-self: flex-start; color: var(--azul); font-weight: 700; font-size: 14px; }
 .card:hover .cardCta { text-decoration: underline; }
 

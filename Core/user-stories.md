@@ -1798,6 +1798,78 @@ base.
 - `sectionJump()` es no-op si `curIdxRef.current < 0` o no hay frase
   activa, y no-op si un \<input\> está enfocado.
 
+#### **US-057 — Contador de líneas en el player del profe** [2026-11]
+
+COMO profesor\
+QUIERO ver al costado de la barra de tiempo en qué línea estoy y cuántas hay\
+PARA ubicarme en el guion sin abrir la pestaña "Guion"
+
+**Casos de uso**
+
+UC-01 Al costado de la duración total, el dock muestra "161 / 1620" (la línea
+que suena y el total). Al pasar el mouse: "Línea 161 de 1620".\
+UC-02 Entre dos frases muestra "– / 1620". Sin frases no se muestra.
+
+**Reglas**
+
+- Va en el dock (`app/PlayerDock.tsx`), fuera de lo que se comparte en Zoom.
+
+#### **US-058 — Dónde dejó el video el alumno** [2026-11]
+
+COMO profesor\
+QUIERO saber en qué momento dejó cada video mi alumno\
+PARA retomar la clase desde ahí
+
+**Casos de uso**
+
+UC-01 El player del alumno guarda dónde va cada 10 s mientras reproduce, al
+pausar, al esconder la pestaña y al salir (`app/useSaveProgress.ts`,
+`PUT /api/student/material/[videoId]/progress`). Al alumno no se le muestra
+nada nuevo (decisión del dueño, 2026-11-12).\
+UC-02 En "Alumnos", la tarjeta de cada alumno dice el último video que abrió y
+dónde quedó: "Quedó en 12:34 de 20:10, hace 2 días" (o "Lo vio entero").\
+UC-03 En la ficha del alumno, cada video de su material muestra una barrita y
+dónde quedó, o "Todavía no lo abrió".\
+UC-04 Al abrir un video, la barra del player del profe tiene una marca cian por
+cada alumno suyo que lo abrió (`GET /api/videos/[id]/progress`); tocarla salta
+a ese momento.\
+UC-05 Si el video se abrió desde la ficha de un alumno, su marca se destaca y
+arriba de la barra se lee "Juan quedó en 12:34, hace 2 días" con "Ir ahí" (o
+"Juan todavía no abrió este video").
+
+**Reglas**
+
+- Se guarda en `assignments.last_position_sec` / `last_seen_at`
+  (`drizzle/0007_avance.sql`). Solo se actualiza una asignación que existe.
+- El profe ve solo a sus alumnos; el admin, a todos. Sin mails en la respuesta.
+- Las marcas son cian (`--bl`): el amarillo sigue siendo solo "acá y ahora".
+
+#### **US-059 — Subtítulos de Gemini cortos y en sincronía** [2026-11]
+
+COMO profesor\
+QUIERO que los subtítulos generados sean frases cortas que aparecen cuando se
+dicen\
+PARA que el alumno pueda leerlos mientras escucha
+
+**Casos de uso**
+
+UC-01 El prompt pide bloques de una frase corta (hasta 2 renglones, ~80
+letras, ~6 s), cortados en pausas naturales, que empiecen con la primera
+palabra, que no se queden durante silencios y que no se pisen.\
+UC-02 Igual, `/api/transcribe` pasa la salida por `tidyCues` (`lib/srt.ts`):
+recorta el fin de un bloque que se pisa con el siguiente o que se queda
+demasiado en pantalla, y corta en dos todo bloque de más de 84 letras o 7 s
+(primero en un punto, si no en una coma, si no antes de un conector), con el
+tiempo repartido según las letras. No inventa ni pierde texto.
+
+**Reglas**
+
+- Aplica solo a las transcripciones nuevas. Para lo que ya está cargado (un SRT
+  subido a mano o una transcripción vieja) está "Ordenar subtítulos" en el menú
+  "Más" del player: aplica el mismo corte (`tidyPhrases`), cada pedazo conserva
+  si su frase estaba elegida, avisa "17 frases pasaron a 24" con "Deshacer" y se
+  guarda solo como cualquier edición.
+
 ### **Enmiendas a reglas existentes**
 
 **US-016 (Ajuste de delay de subtítulos):** se define un límite al

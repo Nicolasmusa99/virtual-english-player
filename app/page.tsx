@@ -1,7 +1,7 @@
 'use client'
 import { useRef, useState, useEffect, useMemo } from 'react'
 import styles from './page.module.css'
-import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase, wordSplitOffset } from '@/lib/srt'
+import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase, wordSplitOffset, tidyPhrases } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
@@ -32,6 +32,7 @@ import { MODE_HELP, PRACTICE_NEEDS_SELECTION, shouldIgnoreShortcut } from '@/lib
 import Tooltip, { InfoMark } from './Tooltip'
 import ShortcutsHelp from './ShortcutsHelp'
 import type { SessionData } from '@/lib/session'
+import type { StudentMark } from '@/lib/progressView'
 import { useSession, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
 
@@ -76,6 +77,12 @@ export default function Player() {
   const [editingName, setEditingName] = useState(false)
   // A dónde vuelve la pantalla del alumno: a "Alumnos", a "Agenda" (G2) o a "Hoy" (rediseño).
   const [studentFrom, setStudentFrom] = useState<'users' | 'agenda' | 'load'>('users')
+  // Avance del alumno (2026-11): dónde dejó este video cada alumno (marcas en la barra) y,
+  // si se abrió desde la ficha de un alumno, cuál destacar.
+  const [studentMarks, setStudentMarks] = useState<StudentMark[]>([])
+  const [focusStudentId, setFocusStudentId] = useState<string | null>(null)
+  // "Ordenar subtítulos" (2026-11): el aviso con lo que pasó y las frases de antes (Deshacer).
+  const [tidyNote, setTidyNote] = useState<{ before: Phrase[]; from: number; to: number } | null>(null)
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -512,8 +519,36 @@ export default function Player() {
     backToLoad()
   }
 
+  // ─── Ordenar subtítulos (2026-11) ────────────────────────────────────────
+  // Aplica a las frases cargadas el mismo corte que a las transcripciones nuevas
+  // (tidyPhrases en lib/srt.ts): corta las largas y recorta las que se pisan o se quedan
+  // durante un silencio. Queda como una edición más (se guarda igual) y se puede deshacer.
+  function tidySubtitles() {
+    const before = phrasesRef.current
+    const after = tidyPhrases(before)
+    const same = after.length === before.length &&
+      after.every((p, i) => p.start === before[i].start && p.end === before[i].end && p.text === before[i].text)
+    setTidyNote({ before, from: before.length, to: same ? -1 : after.length })
+    capture('subtitles_tidied', { before: before.length, after: after.length, changed: !same })
+    if (same) return
+    setPhrases(after)
+    setCurIdx(-1)
+    setEditingIdx(null)
+    setIsDirty(true)
+  }
+
+  function undoTidy() {
+    if (!tidyNote) return
+    setPhrases(tidyNote.before)
+    setCurIdx(-1)
+    setEditingIdx(null)
+    setTidyNote(null)
+    capture('subtitles_tidy_undone', { phrase_count: tidyNote.before.length })
+  }
+
   // ─── US-034: recargar SRT sobre video abierto ────────────────────────────
   function applySrt(parsed: Phrase[], fileName: string) {
+    setTidyNote(null)
     setPhrases(parsed)
     setCurIdx(-1)
     setSrtSource(`SRT · ${parsed.length} frases`)
@@ -887,6 +922,7 @@ export default function Player() {
     videoFileRef.current = null
     setIsDirty(false); setRestorePrompt(null); setExitDialog(false)
     libraryVideoIdRef.current = null
+    setStudentMarks([]); setFocusStudentId(null); setTidyNote(null)
   }
 
   // ─── Biblioteca (Bloque 13) ───────────────────────────────────────────────
@@ -904,8 +940,9 @@ export default function Player() {
     }
   }
 
-  async function openFromLibrary(id: string) {
+  async function openFromLibrary(id: string, opts?: { studentId?: string }) {
     setLibraryError('')
+    setStudentMarks([]); setFocusStudentId(opts?.studentId ?? null)
     try {
       const res = await fetch(`/api/videos/${id}`)
       const data = await res.json()
@@ -930,6 +967,10 @@ export default function Player() {
       setIsDirty(false)
       setScreen('player')
       capture('library_video_opened', { video_id: id, phrase_count: savedPhrases.length })
+      // Dónde lo dejó cada alumno (solo los del profe; el server filtra). Si falla, sin marcas.
+      fetch(`/api/videos/${id}/progress`).then(r => (r.ok ? r.json() : null))
+        .then(d => { if (d && libraryVideoIdRef.current === id) setStudentMarks(d.progress ?? []) })
+        .catch(() => {})
     } catch {
       setLibraryError('No se pudo abrir el video.')
     }
@@ -1398,7 +1439,7 @@ export default function Player() {
                 </>}>
                 <div style={{ maxWidth: 1080 }}>
                   <StudentView key={selectedStudent.id} studentId={selectedStudent.id} studentName={selectedStudent.name}
-                    initialTab={studentFrom === 'users' ? 'material' : 'classes'} onOpenVideo={openFromLibrary} />
+                    initialTab={studentFrom === 'users' ? 'material' : 'classes'} onOpenVideo={id => openFromLibrary(id, { studentId: selectedStudent.id })} />
                 </div>
                 {editingName && (
                   <StudentNameDialog userId={selectedStudent.id} name={selectedStudent.name} onClose={() => setEditingName(false)}
@@ -1439,6 +1480,7 @@ export default function Player() {
                 <ActionMenu label="Más acciones del video" trigger="Más" items={[
                   { label: 'Descargar SRT', onSelect: downloadSRT },
                   { label: 'Cargar SRT', onSelect: () => srtReloadRef.current?.click() },
+                  { label: 'Ordenar subtítulos', onSelect: tidySubtitles, disabled: phrases.length === 0 },
                   ...(userRole === 'admin' && !libraryVideoIdRef.current && videoFileRef.current
                     ? [{ label: librarySaving ? 'Guardando…' : 'Guardar en biblioteca', onSelect: saveToLibrary, disabled: librarySaving }]
                     : []),
@@ -1455,6 +1497,18 @@ export default function Player() {
               </button>
             </div>
           </div>
+
+          {tidyNote && (
+            <div className={styles.restoreBanner} data-testid="tidy-note">
+              <span className={styles.restoreBannerText}>
+                {tidyNote.to < 0
+                  ? 'Los subtítulos ya estaban ordenados: no hubo nada que cortar.'
+                  : `Subtítulos ordenados: ${tidyNote.from} frases pasaron a ${tidyNote.to}.`}
+              </span>
+              {tidyNote.to >= 0 && <button className={styles.restoreBtn} onClick={undoTidy}>Deshacer</button>}
+              <button className={styles.discardBtn} onClick={() => setTidyNote(null)}>Listo</button>
+            </div>
+          )}
 
           {restorePrompt !== null && (
             <div className={styles.restoreBanner}>
@@ -1508,6 +1562,9 @@ export default function Player() {
               onTogglePlay={togglePlay} onSkip={skip} onPrev={prevPhrase} onNext={nextPhrase} onSpeed={setSpd}
               onVol={v => { setVol(v); if (vidRef.current) vidRef.current.volume = v / 100 }}
               onToggleCc={() => { setCcOn(p => !p); setIsDirty(true) }}
+              studentMarks={studentMarks} focusStudentId={focusStudentId}
+              focusStudentName={focusStudentId && selectedStudent?.id === focusStudentId ? (selectedStudent.name || selectedStudent.email) : null}
+              onMarkJump={m => { seekTo(m.positionSec); capture('student_mark_clicked', { focused: m.studentId === focusStudentId }) }}
             />
             </div>
 

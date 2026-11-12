@@ -83,6 +83,10 @@
 .vName { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .vName b { font-size: 15px; font-weight: 700; color: var(--tinta); overflow-wrap: anywhere; }
 .vMeta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--pizarra); }
+.vProg { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--tinta); }
+.vProgNone { color: var(--pizarra); }
+.vProgBar { flex: 0 0 72px; height: 6px; border-radius: 3px; background: var(--tiza); overflow: hidden; }
+.vProgBar > span { display: block; height: 100%; background: var(--azul); border-radius: 3px; }
 .tag { padding: 1px 8px; border-radius: 10px; background: var(--p3); color: var(--tinta); font-size: 12px; }
 .tagOff { padding: 1px 8px; border-radius: 10px; background: rgba(185, 58, 51, 0.08); color: var(--rojo); font-size: 12px; }
 .inFolder { display: inline-flex; align-items: center; gap: 4px; }

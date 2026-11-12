@@ -8,6 +8,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  real,
   smallint,
   text,
   timestamp,
@@ -179,6 +180,10 @@ export const assignments = pgTable(
     // Carpetas (2026-11): en qué carpeta DEL ALUMNO está este video. NULL = sin carpeta.
     // Borrar la carpeta no le saca el video al alumno: queda sin carpeta (set null).
     folderId: uuid('folder_id').references((): AnyPgColumn => folders.id, { onDelete: 'set null' }),
+    // Avance (2026-11, drizzle/0007_avance.sql): dónde dejó el video el alumno y cuándo.
+    // NULL = nunca lo abrió. Lo guarda el player del alumno; lo lee solo el staff.
+    lastPositionSec: real('last_position_sec'),
+    lastSeenAt: timestamp('last_seen_at', { mode: 'date' }),
   },
   (t) => [primaryKey({ columns: [t.studentId, t.videoId] })]
 )

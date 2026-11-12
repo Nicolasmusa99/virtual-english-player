@@ -33,6 +33,24 @@
 .timeRow .tl { flex: 1; min-width: 0; }
 .time { font-size: 15px; font-weight: 700; color: var(--tx); white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 38px; }
 .tot { color: var(--tx3); font-weight: 400; text-align: right; }
+/* 2026-11: "161 / 1620" al costado de la barra: la línea en la que se está y el total. */
+.lines { padding-left: 14px; border-left: 1px solid var(--ln2); font-size: 15px; color: var(--tx3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lines b { color: var(--tx); font-weight: 700; }
+
+/* 2026-11: dónde dejó el video cada alumno. Cian de info (--bl), nunca el amarillo de "ahora".
+   Cada marca es una etiqueta con el nombre y una rayita que baja hasta la barra. */
+.tlMarks { margin-top: 30px; }
+.mark { position: absolute; bottom: calc(50% + 9px); transform: translateX(-50%); max-width: 120px; white-space: nowrap;
+  padding: 2px 8px; border: 0; border-radius: 999px; background: var(--p4); color: var(--bl); font: 700 12px var(--font-sans); cursor: pointer; z-index: 4; box-shadow: inset 0 0 0 1.5px var(--bl); }
+.markName { display: block; overflow: hidden; text-overflow: ellipsis; }
+.mark::after { content: ''; position: absolute; left: 50%; top: 100%; width: 2px; height: 9px; margin-left: -1px; background: var(--bl); }
+.mark:hover, .mark:focus-visible { background: var(--bl); color: var(--tinta); outline: none; z-index: 6; }
+.markFocus { background: var(--bl); color: var(--tinta); font-size: 13px; padding: 3px 10px; z-index: 5; }
+.focusBar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 14px; color: var(--tx); }
+.focusNone { color: var(--tx3); }
+.focusDot { width: 10px; height: 10px; border-radius: 50%; background: var(--bl); flex-shrink: 0; }
+.focusGo { margin-left: auto; padding: 5px 14px; border-radius: 999px; border: 1.5px solid var(--bl); background: transparent; color: var(--bl); font: 700 13px var(--font-sans); cursor: pointer; }
+.focusGo:hover, .focusGo:focus-visible { background: var(--bl); color: var(--tinta); outline: none; }
 .ctrls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 18px; margin-top: 8px; }
 .grp { display: grid; grid-template-rows: 60px auto; justify-items: center; align-items: center; }
 .lbl { margin-top: 4px; font-size: 13px; color: var(--tx2); white-space: nowrap; }
