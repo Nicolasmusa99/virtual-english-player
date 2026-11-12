@@ -1864,8 +1864,11 @@ tiempo repartido según las letras. No inventa ni pierde texto.
 
 **Reglas**
 
-- Aplica a las transcripciones nuevas. Los subtítulos ya guardados y los SRT
-  subidos a mano no cambian.
+- Aplica solo a las transcripciones nuevas. Para lo que ya está cargado (un SRT
+  subido a mano o una transcripción vieja) está "Ordenar subtítulos" en el menú
+  "Más" del player: aplica el mismo corte (`tidyPhrases`), cada pedazo conserva
+  si su frase estaba elegida, avisa "17 frases pasaron a 24" con "Deshacer" y se
+  guarda solo como cualquier edición.
 
 ### **Enmiendas a reglas existentes**
 

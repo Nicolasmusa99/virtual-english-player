@@ -174,7 +174,18 @@ function splitCue(c: Cue): Cue[] {
 }
 
 export function tidyCues<T extends Cue>(cues: T[]): Cue[] {
-  const out: Cue[] = []
+  return tidyWithSource(cues).map(({ start, end, text }) => ({ start, end, text }))
+}
+
+// "Ordenar subtítulos" (2026-11, menú "Más" del player): lo mismo sobre las frases que ya
+// están cargadas (un SRT subido a mano o una transcripción vieja). Cada pedazo conserva
+// si su frase estaba elegida.
+export function tidyPhrases(phrases: Phrase[]): Phrase[] {
+  return tidyWithSource(phrases).map(({ start, end, text, src }) => ({ start, end, text, sel: phrases[src].sel }))
+}
+
+function tidyWithSource<T extends Cue>(cues: T[]): (Cue & { src: number })[] {
+  const out: (Cue & { src: number })[] = []
   cues.forEach((c, i) => {
     let end = c.end
     const next = cues[i + 1]
@@ -182,7 +193,7 @@ export function tidyCues<T extends Cue>(cues: T[]): Cue[] {
     const len = c.text.replace(/\s+/g, ' ').trim().length
     const maxStay = Math.max(CUE_LINGER_MIN_SEC, (len / CHARS_PER_SEC) * CUE_LINGER)
     if (end - c.start > maxStay) end = c.start + maxStay
-    out.push(...splitCue({ start: c.start, end: Math.round(end * 1000) / 1000, text: c.text }))
+    for (const piece of splitCue({ start: c.start, end: Math.round(end * 1000) / 1000, text: c.text })) out.push({ ...piece, src: i })
   })
   return out
 }

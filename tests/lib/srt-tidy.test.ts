@@ -40,3 +40,21 @@ describe('tidyCues (subtítulos de Gemini más prolijos)', () => {
     expect(cleanSrt(raw).phrases).toBe(1)
   })
 })
+
+describe('tidyPhrases ("Ordenar subtítulos" sobre lo ya cargado)', () => {
+  it('corta las largas y cada pedazo conserva si su frase estaba elegida', async () => {
+    const { tidyPhrases } = await import('@/lib/srt')
+    const out = tidyPhrases([
+      { start: 10, end: 19, text: LONG, sel: true },
+      { start: 19.5, end: 21, text: 'Yes.', sel: false },
+    ])
+    expect(out.length).toBe(4)
+    expect(out.slice(0, 3).every(p => p.sel)).toBe(true)
+    expect(out[3]).toEqual({ start: 19.5, end: 21, text: 'Yes.', sel: false })
+  })
+  it('si ya está todo bien, devuelve lo mismo', async () => {
+    const { tidyPhrases } = await import('@/lib/srt')
+    const ps = [{ start: 1, end: 3, text: 'Hello there.', sel: false }]
+    expect(tidyPhrases(ps)).toEqual(ps)
+  })
+})

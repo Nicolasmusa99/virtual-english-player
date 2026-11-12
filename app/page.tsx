@@ -1,7 +1,7 @@
 'use client'
 import { useRef, useState, useEffect, useMemo } from 'react'
 import styles from './page.module.css'
-import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase, wordSplitOffset } from '@/lib/srt'
+import { Phrase, parseSRT, fmtTime, timeToSec, secToTs, splitPhrase, mergePhrase, wordSplitOffset, tidyPhrases } from '@/lib/srt'
 import { hl } from '@/lib/hl'
 import { capture } from '@/lib/capture'
 import ExercisesPanel from './ExercisesPanel'
@@ -81,6 +81,8 @@ export default function Player() {
   // si se abrió desde la ficha de un alumno, cuál destacar.
   const [studentMarks, setStudentMarks] = useState<StudentMark[]>([])
   const [focusStudentId, setFocusStudentId] = useState<string | null>(null)
+  // "Ordenar subtítulos" (2026-11): el aviso con lo que pasó y las frases de antes (Deshacer).
+  const [tidyNote, setTidyNote] = useState<{ before: Phrase[]; from: number; to: number } | null>(null)
   const [step, setStep]                   = useState<Step>('idle')
   const [stepMsg, setStepMsg]             = useState('')
   const [progress, setProgress]           = useState(0)
@@ -517,8 +519,36 @@ export default function Player() {
     backToLoad()
   }
 
+  // ─── Ordenar subtítulos (2026-11) ────────────────────────────────────────
+  // Aplica a las frases cargadas el mismo corte que a las transcripciones nuevas
+  // (tidyPhrases en lib/srt.ts): corta las largas y recorta las que se pisan o se quedan
+  // durante un silencio. Queda como una edición más (se guarda igual) y se puede deshacer.
+  function tidySubtitles() {
+    const before = phrasesRef.current
+    const after = tidyPhrases(before)
+    const same = after.length === before.length &&
+      after.every((p, i) => p.start === before[i].start && p.end === before[i].end && p.text === before[i].text)
+    setTidyNote({ before, from: before.length, to: same ? -1 : after.length })
+    capture('subtitles_tidied', { before: before.length, after: after.length, changed: !same })
+    if (same) return
+    setPhrases(after)
+    setCurIdx(-1)
+    setEditingIdx(null)
+    setIsDirty(true)
+  }
+
+  function undoTidy() {
+    if (!tidyNote) return
+    setPhrases(tidyNote.before)
+    setCurIdx(-1)
+    setEditingIdx(null)
+    setTidyNote(null)
+    capture('subtitles_tidy_undone', { phrase_count: tidyNote.before.length })
+  }
+
   // ─── US-034: recargar SRT sobre video abierto ────────────────────────────
   function applySrt(parsed: Phrase[], fileName: string) {
+    setTidyNote(null)
     setPhrases(parsed)
     setCurIdx(-1)
     setSrtSource(`SRT · ${parsed.length} frases`)
@@ -892,7 +922,7 @@ export default function Player() {
     videoFileRef.current = null
     setIsDirty(false); setRestorePrompt(null); setExitDialog(false)
     libraryVideoIdRef.current = null
-    setStudentMarks([]); setFocusStudentId(null)
+    setStudentMarks([]); setFocusStudentId(null); setTidyNote(null)
   }
 
   // ─── Biblioteca (Bloque 13) ───────────────────────────────────────────────
@@ -1450,6 +1480,7 @@ export default function Player() {
                 <ActionMenu label="Más acciones del video" trigger="Más" items={[
                   { label: 'Descargar SRT', onSelect: downloadSRT },
                   { label: 'Cargar SRT', onSelect: () => srtReloadRef.current?.click() },
+                  { label: 'Ordenar subtítulos', onSelect: tidySubtitles, disabled: phrases.length === 0 },
                   ...(userRole === 'admin' && !libraryVideoIdRef.current && videoFileRef.current
                     ? [{ label: librarySaving ? 'Guardando…' : 'Guardar en biblioteca', onSelect: saveToLibrary, disabled: librarySaving }]
                     : []),
@@ -1466,6 +1497,18 @@ export default function Player() {
               </button>
             </div>
           </div>
+
+          {tidyNote && (
+            <div className={styles.restoreBanner} data-testid="tidy-note">
+              <span className={styles.restoreBannerText}>
+                {tidyNote.to < 0
+                  ? 'Los subtítulos ya estaban ordenados: no hubo nada que cortar.'
+                  : `Subtítulos ordenados: ${tidyNote.from} frases pasaron a ${tidyNote.to}.`}
+              </span>
+              {tidyNote.to >= 0 && <button className={styles.restoreBtn} onClick={undoTidy}>Deshacer</button>}
+              <button className={styles.discardBtn} onClick={() => setTidyNote(null)}>Listo</button>
+            </div>
+          )}
 
           {restorePrompt !== null && (
             <div className={styles.restoreBanner}>
