@@ -1844,6 +1844,39 @@ arriba de la barra se lee "Juan quedó en 12:34, hace 2 días" con "Ir ahí" (o
 - El profe ve solo a sus alumnos; el admin, a todos. Sin mails en la respuesta.
 - Las marcas son cian (`--bl`): el amarillo sigue siendo solo "acá y ahora".
 
+**Enmienda (2026-11-17):** el dato principal pasa a ser dónde quedó el video EN
+CLASE (el profe se lo muestra al alumno); lo que el alumno mira por su cuenta queda
+como dato secundario. Ver US-060.
+
+#### **US-060 — Dónde quedaron en clase** [2026-11-17]
+
+COMO profesor\
+QUIERO que el player recuerde dónde quedó cada video con cada alumno\
+PARA retomar la próxima clase desde ahí
+
+**Casos de uso**
+
+UC-01 Arriba de la barra del player: "Clase con: [alumno]". El alumno sale de la
+ficha si el video se abrió desde ahí; si no, de la clase en curso de la agenda
+(15 min antes del inicio hasta 15 min después del fin); si no, se elige a mano y
+se puede cambiar en cualquier momento.\
+UC-02 Mientras se reproduce se guarda dónde van (cada 10 s, al pausar, al cambiar
+de alumno o de video y al salir), también con la ventana para Zoom abierta.\
+UC-03 Si ya lo vieron: "Con Juan quedaron en 12:34, hace 2 días" y el botón
+"Seguir desde 12:34" (no salta solo). Debajo, más chico: "Por su cuenta lo vio
+hasta 5:10, ayer".\
+UC-04 En la barra, una etiqueta cian por alumno con dónde quedaron en clase y un
+puntito por lo que vio por su cuenta; tocarlas salta ahí.\
+UC-05 Tarjeta de Alumnos: "Última clase: video, quedaron en 12:34, hace 2 días"
+y debajo lo último que vio por su cuenta. Ficha: en cada video "En clase:
+quedaron en..." con barrita (o "Todavía no lo vieron en clase") y debajo lo suyo.
+
+**Reglas**
+
+- `class_progress` (`drizzle/0008_clase.sql`), una fila por alumno y video; no
+  hace falta que el video esté asignado.
+- El profe solo guarda y ve a sus alumnos actuales; el admin, a todos.
+
 #### **US-059 — Subtítulos de Gemini cortos y en sincronía** [2026-11]
 
 COMO profesor\

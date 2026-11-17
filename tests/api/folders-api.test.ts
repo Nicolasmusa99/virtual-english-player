@@ -12,6 +12,7 @@ const m = vi.hoisted(() => ({
   listSharedVideoIds: vi.fn(), videoExists: vi.fn(), getAccessibleVideo: vi.fn(),
   assignVideo: vi.fn(),
 }))
+vi.mock('@/lib/classProgress', () => ({ listClassProgressForStudent: vi.fn(async () => new Map()) }))
 vi.mock('@/lib/auth', () => ({ auth: m.auth }))
 vi.mock('@/lib/users', () => ({ getStudentById: m.getStudentById }))
 vi.mock('@/lib/folders', async () => ({

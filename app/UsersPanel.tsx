@@ -23,7 +23,7 @@ import { PASSWORD_MIN, makePassword, passwordProblem } from '@/lib/passwordRules
 import { byNextClass, isSameDayInTz } from '@/lib/materialView'
 import StudentNameDialog from './StudentNameDialog'
 import type { LastWatched } from '@/lib/people'
-import { lastSeenText, progressText } from '@/lib/progressView'
+import { classText, lastSeenText, ownText } from '@/lib/progressView'
 import { displayVideoName } from '@/lib/studentView'
 
 interface UserRow {
@@ -35,7 +35,7 @@ interface UserRow {
   image?: string | null
   hasPassword?: boolean
 }
-type Stats = { materialCount: number; folderCount: number; nextClassAt: string | null; lastWatched?: LastWatched | null }
+type Stats = { materialCount: number; folderCount: number; nextClassAt: string | null; lastClass?: LastWatched | null; lastWatched?: LastWatched | null }
 type Filter = 'all' | Role | 'noTeacher'
 
 const isValidEmail = (e: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e.trim())
@@ -69,7 +69,7 @@ export const PEOPLE_TEXTS = {
   sort: 'Ordenar', sortName: 'Nombre', sortNext: 'Próxima clase',
   colName: 'Nombre', colTeacher: 'Profe', colMaterial: 'Material', colNext: 'Próxima clase', colStudents: 'Alumnos',
   statMaterial: 'Material', statFolders: 'Carpetas', statNext: 'Próxima clase',
-  statLast: 'Lo último que vio', notWatched: 'Todavía no abrió ningún video',
+  statLast: 'Última clase', notWatched: 'Todavía no vieron ningún video en clase',
   noFolders: 'Ninguna', notScheduled: 'Sin agendar',
   noName: 'Sin nombre',
 } as const
@@ -161,15 +161,24 @@ export default function UsersPanel({ role, onOpenStudent }: { role: Role; onOpen
     const today = isSameDayInTz(s.nextClassAt, now, CLASS_TZ)
     return <span className={today ? styles.today : undefined}>{withLabel ? T.nextClass(text) : text}</span>
   }
-  // 2026-11: el último video que abrió el alumno y dónde lo dejó.
+  // 2026-11: el último video que le mostró en clase y dónde quedaron (principal); abajo,
+  // más chico, el último que el alumno abrió por su cuenta.
   const lastNode = (s: Stats | undefined) => {
     if (!s) return <span className={styles.soft}>…</span>
-    const w = s.lastWatched
-    if (!w) return <span className={styles.soft}>{T.notWatched}</span>
+    const c = s.lastClass, w = s.lastWatched
     return (
       <>
-        <span className={styles.lastName}>{displayVideoName(w.videoName)}</span>
-        <span className={styles.soft}>{progressText(w.positionSec, w.durationSec)}, {lastSeenText(w.seenAt, now)}</span>
+        {c ? (
+          <>
+            <span className={styles.lastName}>{displayVideoName(c.videoName)}</span>
+            <span>{classText(c.positionSec, c.durationSec)}, {lastSeenText(c.seenAt, now)}</span>
+          </>
+        ) : <span className={styles.soft}>{T.notWatched}</span>}
+        {w && (
+          <span className={styles.soft} data-testid="last-own">
+            {ownText(w.positionSec, w.durationSec)} {displayVideoName(w.videoName)}, {lastSeenText(w.seenAt, now)}
+          </span>
+        )}
       </>
     )
   }

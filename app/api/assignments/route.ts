@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
+import { listClassProgressForStudent } from '@/lib/classProgress'
 import type { Role } from '@/lib/db/schema'
 import { getStudentById } from '@/lib/users'
 import { getAccessibleVideo } from '@/lib/library'
@@ -128,7 +129,14 @@ export async function GET(req: NextRequest) {
   if (studentId) {
     const chk = await checkStudent(studentId, me)
     if (!chk.ok) return chk.res
-    return NextResponse.json({ assignments: await listAssignmentsForStudent(chk.student.id) })
+    // 2026-11: con dónde quedó cada video EN CLASE (el dato principal para el profe).
+    const [rows, inClass] = await Promise.all([listAssignmentsForStudent(chk.student.id), listClassProgressForStudent(chk.student.id)])
+    return NextResponse.json({
+      assignments: rows.map((r) => {
+        const c = inClass.get(r.videoId)
+        return { ...r, classPositionSec: c?.positionSec ?? null, classSeenAt: c?.seenAt ?? null }
+      }),
+    })
   }
 
   const assignments =

@@ -46,9 +46,18 @@
 .mark::after { content: ''; position: absolute; left: 50%; top: 100%; width: 2px; height: 9px; margin-left: -1px; background: var(--bl); }
 .mark:hover, .mark:focus-visible { background: var(--bl); color: var(--tinta); outline: none; z-index: 6; }
 .markFocus { background: var(--bl); color: var(--tinta); font-size: 13px; padding: 3px 10px; z-index: 5; }
-.focusBar { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; font-size: 14px; color: var(--tx); }
+.classBar { margin-bottom: 8px; }
+.focusBar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--tx); }
+.focusInfo { flex: 1 1 auto; min-width: 0; }
+.classPick { display: inline-flex; align-items: center; gap: 8px; color: var(--tx2); font-size: 13px; }
+.classPick select { padding: 5px 10px; border-radius: 999px; border: 1.5px solid var(--bl); background: var(--p3); color: var(--tx); font: 700 13px var(--font-sans); max-width: 220px; }
+.ownLine { margin-top: 4px; font-size: 12px; color: var(--tx3); }
+/* Por su cuenta: un puntito con borde cian, más chico que la etiqueta de la clase. */
+.ownMark { position: absolute; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; padding: 0; border-radius: 50%;
+  border: 2px solid var(--bl); background: var(--p1); cursor: pointer; z-index: 3; }
+.ownMark:hover, .ownMark:focus-visible { background: var(--bl); outline: none; }
+.ownMarkFocus { width: 14px; height: 14px; margin: -7px 0 0 -7px; }
 .focusNone { color: var(--tx3); }
-.focusDot { width: 10px; height: 10px; border-radius: 50%; background: var(--bl); flex-shrink: 0; }
 .focusGo { margin-left: auto; padding: 5px 14px; border-radius: 999px; border: 1.5px solid var(--bl); background: transparent; color: var(--bl); font: 700 13px var(--font-sans); cursor: pointer; }
 .focusGo:hover, .focusGo:focus-visible { background: var(--bl); color: var(--tinta); outline: none; }
 .ctrls { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 18px; margin-top: 8px; }

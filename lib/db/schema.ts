@@ -188,6 +188,22 @@ export const assignments = pgTable(
   (t) => [primaryKey({ columns: [t.studentId, t.videoId] })]
 )
 
+// Avance en CLASE (2026-11, drizzle/0008_clase.sql): dónde quedó un video cuando el profe
+// se lo mostró al alumno (es el dato principal; lo que el alumno mira solo está en
+// assignments.last_position_sec). Una fila por alumno y video; no hace falta que el video
+// esté asignado. Cascade por alumno y video; teacher_id = quién lo mostró (set null).
+export const classProgress = pgTable(
+  'class_progress',
+  {
+    studentId: uuid('student_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+    videoId: uuid('video_id').notNull().references(() => videos.id, { onDelete: 'cascade' }),
+    teacherId: uuid('teacher_id').references(() => users.id, { onDelete: 'set null' }),
+    positionSec: real('position_sec').notNull(),
+    seenAt: timestamp('seen_at', { mode: 'date' }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.studentId, t.videoId] }), index('class_progress_video_idx').on(t.videoId)]
+)
+
 // --- Calendario de clases (fase calendario, C1) ---
 // El profe agenda las clases de SUS alumnos. Dos tablas:
 //   · class_series: el HORARIO FIJO semanal ("martes 18:00, 60 min"). NO se guardan

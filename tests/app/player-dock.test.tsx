@@ -247,31 +247,59 @@ describe('PlayerDock — contador de líneas y marcas de alumnos', () => {
     expect(screen.queryByTestId('dock-line-counter')).toBeNull()
   })
 
-  it('dibuja una marca por alumno en su lugar y al tocarla salta ahí sin mover la barra', async () => {
+  const S1 = 'aaaaaaaa-0000-4000-8000-000000000001'
+  const S2 = 'aaaaaaaa-0000-4000-8000-000000000002'
+  const IN = [
+    { studentId: S1, name: 'Juan', positionSec: 25, seenAt: new Date().toISOString() },
+    { studentId: S2, name: 'Ana', positionSec: 75, seenAt: new Date().toISOString() },
+  ]
+  const OWN = [{ studentId: S1, name: 'Juan', positionSec: 50, seenAt: new Date().toISOString() }]
+  const STUDENTS = [{ id: S2, label: 'Ana Gómez' }, { id: S1, label: 'Juan Pérez' }]
+
+  it('marcas de clase (etiqueta) y por su cuenta (puntito) en su lugar; tocarlas salta sin mover la barra', async () => {
     const onMarkJump = vi.fn()
-    mount({ studentMarks: MARKS, onMarkJump })
+    mount({ studentMarks: { inClass: IN, own: OWN }, onMarkJump })
     await frame()
     const marks = screen.getAllByTestId('student-mark')
     expect(marks.map(m => m.textContent)).toEqual(['Juan', 'Ana'])
     expect(marks[0].style.left).toBe('25%')
+    const own = screen.getAllByTestId('own-mark')
+    expect(own[0].style.left).toBe('50%')
     fireEvent.pointerDown(marks[1], { clientX: 400, button: 0 })
     fireEvent.click(marks[1])
-    expect(onMarkJump).toHaveBeenCalledWith(MARKS[1])
+    expect(onMarkJump).toHaveBeenCalledWith(IN[1], 'class')
+    fireEvent.click(own[0])
+    expect(onMarkJump).toHaveBeenCalledWith(OWN[0], 'own')
     expect(h.onSeek).not.toHaveBeenCalled()
   })
 
-  it('abierto desde la ficha de un alumno: avisa dónde quedó y "Ir ahí" salta', async () => {
+  it('con alumno de la clase: dónde quedaron, "Seguir desde" y lo que vio solo', async () => {
     const onMarkJump = vi.fn()
-    mount({ studentMarks: MARKS, focusStudentId: 's1', focusStudentName: 'Juan Pérez', onMarkJump })
+    mount({ studentMarks: { inClass: IN, own: OWN }, classStudentId: S1, classStudents: STUDENTS, onMarkJump })
     await frame()
-    const bar = screen.getByTestId('dock-focus-mark')
-    expect(bar.textContent).toContain('Juan quedó en 0:25, hoy')
-    fireEvent.click(screen.getByRole('button', { name: DOCK_TEXTS.goThere }))
-    expect(onMarkJump).toHaveBeenCalledWith(MARKS[0])
+    expect(screen.getByTestId('dock-class-info').textContent).toBe('Con Juan quedaron en 0:25, hoy')
+    fireEvent.click(screen.getByRole('button', { name: DOCK_TEXTS.resumeFrom('0:25') }))
+    expect(onMarkJump).toHaveBeenCalledWith(IN[0], 'class')
+    expect(screen.getByTestId('dock-own-line').textContent).toBe(DOCK_TEXTS.ownLine('0:50', 'hoy'))
+    expect((screen.getByTestId('class-student') as HTMLSelectElement).value).toBe(S1)
   })
 
-  it('si ese alumno nunca lo abrió, lo dice', () => {
-    mount({ studentMarks: [], focusStudentId: 's9', focusStudentName: 'Pedro' })
-    expect(screen.getByTestId('dock-focus-mark').textContent).toBe(DOCK_TEXTS.notOpened('Pedro'))
+  it('el selector cambia de alumno; sin alumno pide elegirlo; alumno nuevo: primera vez', () => {
+    const onClassStudentChange = vi.fn()
+    const { unmount } = mount({ studentMarks: { inClass: [], own: [] }, classStudentId: null, classStudents: STUDENTS, onClassStudentChange })
+    expect(screen.getByTestId('dock-class-info').textContent).toBe(DOCK_TEXTS.pickHint)
+    fireEvent.change(screen.getByTestId('class-student'), { target: { value: S2 } })
+    expect(onClassStudentChange).toHaveBeenCalledWith(S2)
+    fireEvent.change(screen.getByTestId('class-student'), { target: { value: '' } })
+    expect(onClassStudentChange).toHaveBeenLastCalledWith(null)
+    unmount()
+    mount({ studentMarks: { inClass: [], own: [] }, classStudentId: S2, classStudents: STUDENTS })
+    expect(screen.getByTestId('dock-class-info').textContent).toBe(DOCK_TEXTS.firstTime)
+    expect(screen.queryByTestId('dock-own-line')).toBeNull()
+  })
+
+  it('sin selector (video que no está en la biblioteca) no hay barra de clase', () => {
+    mount({ classStudents: null })
+    expect(screen.queryByTestId('dock-class-bar')).toBeNull()
   })
 })

@@ -21,7 +21,7 @@ import { FOLDER_NAME_ERROR, FOLDER_NAME_MAX, normalizeFolderName, UNFILED_LABEL 
 import {
   ALL, NIVEL_LABEL, TIPO_LABEL, countLabel, destFor, itemsIn, sameSel, validSel, type FolderSel,
 } from '@/lib/materialView'
-import { lastSeenText, progressPctOf, progressText } from '@/lib/progressView'
+import { classText, lastSeenText, ownText, progressPctOf } from '@/lib/progressView'
 
 interface AssignedRow {
   videoId: string
@@ -31,8 +31,10 @@ interface AssignedRow {
   active: boolean // false = el admin despublicó el video → "no disponible"
   folderId: string | null
   durationSec?: number | null
-  lastPositionSec?: number | null // avance (2026-11): dónde lo dejó el alumno; null = nunca lo abrió
+  lastPositionSec?: number | null // avance (2026-11): hasta dónde lo vio el alumno por su cuenta
   lastSeenAt?: string | null
+  classPositionSec?: number | null // dónde quedó EN CLASE con el profe (el dato principal)
+  classSeenAt?: string | null
 }
 interface SharedRow {
   id: string
@@ -51,7 +53,7 @@ export const MATERIAL_TEXTS = {
   create: 'Crear', cancel: 'Cancelar', save: 'Guardar',
   assign: 'Asignar material',
   open: 'Abrir',
-  notOpened: 'Todavía no lo abrió',
+  notInClass: 'Todavía no lo vieron en clase',
   moveTo: 'Mover a',
   moveMany: 'Mover a…',
   removeOne: 'Quitar del alumno',
@@ -461,16 +463,21 @@ export default function StudentView({
                             <span className={styles.inFolder}><FolderGlyph className={styles.inFolderIco} />{nameOfFolder(a.folderId)}</span>
                           )}
                         </span>
-                        {/* 2026-11: dónde lo dejó el alumno. */}
-                        {a.lastPositionSec != null && a.lastSeenAt ? (
+                        {/* 2026-11: dónde quedaron en clase (principal) y, si lo abrió, hasta dónde lo vio solo. */}
+                        {a.classPositionSec != null && a.classSeenAt ? (
                           <span className={styles.vProg} data-testid="material-progress">
-                            {progressPctOf(a.lastPositionSec, a.durationSec) != null && (
-                              <span className={styles.vProgBar} aria-hidden="true"><span style={{ width: progressPctOf(a.lastPositionSec, a.durationSec) + '%' }} /></span>
+                            {progressPctOf(a.classPositionSec, a.durationSec) != null && (
+                              <span className={styles.vProgBar} aria-hidden="true"><span style={{ width: progressPctOf(a.classPositionSec, a.durationSec) + '%' }} /></span>
                             )}
-                            <span>{progressText(a.lastPositionSec, a.durationSec)}, {lastSeenText(a.lastSeenAt, now)}</span>
+                            <span>En clase: {classText(a.classPositionSec, a.durationSec).toLowerCase()}, {lastSeenText(a.classSeenAt, now)}</span>
                           </span>
                         ) : (
-                          <span className={`${styles.vProg} ${styles.vProgNone}`} data-testid="material-progress">{T.notOpened}</span>
+                          <span className={`${styles.vProg} ${styles.vProgNone}`} data-testid="material-progress">{T.notInClass}</span>
+                        )}
+                        {a.lastPositionSec != null && a.lastSeenAt && (
+                          <span className={`${styles.vProg} ${styles.vProgNone}`} data-testid="material-own">
+                            {ownText(a.lastPositionSec, a.durationSec)}, {lastSeenText(a.lastSeenAt, now)}
+                          </span>
                         )}
                       </span>
                       <button type="button" className={`${styles.btn} ${styles.btnSm}`} disabled={!a.active} onClick={() => onOpenVideo(a.videoId)}>{T.open}</button>

@@ -70,3 +70,72 @@ export function markLabel(name: string | null | undefined, email?: string | null
 export function markText(m: StudentMark, now: Date): string {
   return `${m.name} quedó en ${fmtTime(m.positionSec)}, ${lastSeenText(m.seenAt, now)}`
 }
+
+// ─── Avance en CLASE (2026-11) ───────────────────────────────────────────────
+// El dato principal es dónde quedó el video cuando el profe se lo mostró al alumno en
+// clase; lo que el alumno mira por su cuenta es secundario.
+
+/** Las dos clases de marcas que ve el profe en la barra del player. */
+export type ProgressMarks = { inClass: StudentMark[]; own: StudentMark[] }
+
+/** "Quedaron en 12:34 de 20:10" · "Lo terminaron" · "Quedaron en 12:34". */
+export function classText(position: number, duration: number | null | undefined): string {
+  if (progressDone(position, duration)) return 'Lo terminaron'
+  return duration && duration > 0 ? `Quedaron en ${fmtTime(position)} de ${fmtTime(duration)}` : `Quedaron en ${fmtTime(position)}`
+}
+
+/** "Por su cuenta lo vio hasta 5:10" · "Por su cuenta lo vio entero". */
+export function ownText(position: number, duration: number | null | undefined): string {
+  return progressDone(position, duration) ? 'Por su cuenta lo vio entero' : `Por su cuenta lo vio hasta ${fmtTime(position)}`
+}
+
+/** "Con Juan quedaron en 12:34, hace 2 días". */
+export function classMarkText(m: StudentMark, now: Date): string {
+  return `Con ${m.name} quedaron en ${fmtTime(m.positionSec)}, ${lastSeenText(m.seenAt, now)}`
+}
+
+/** "Juan lo vio por su cuenta hasta 5:10, ayer". */
+export function ownMarkText(m: StudentMark, now: Date): string {
+  return `${m.name} lo vio por su cuenta hasta ${fmtTime(m.positionSec)}, ${lastSeenText(m.seenAt, now)}`
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Cuerpo de PUT /api/videos/[id]/class-progress: `{ studentId, position }`. null = inválido. */
+export function parseClassProgressBody(body: unknown): { studentId: string; position: number } | null {
+  const position = parseProgressBody(body)
+  if (position == null) return null
+  const studentId = (body as Record<string, unknown>).studentId
+  if (typeof studentId !== 'string' || !UUID_RE.test(studentId)) return null
+  return { studentId, position }
+}
+
+/** Antes y después de una clase, cuánto margen se sigue considerando "la clase de ahora". */
+export const CLASS_NOW_MARGIN_MIN = 15
+
+type ClassLike = { studentId: string; startsAt: string; durationMin: number; status: string }
+
+/** ¿Con qué alumno está ahora el profe? El de la clase en curso (con margen), o null. Si
+ *  hay dos, la que empezó más cerca de ahora. Las canceladas no cuentan. */
+export function currentClassStudent(classes: ClassLike[], now: Date, marginMin: number = CLASS_NOW_MARGIN_MIN): string | null {
+  const t = now.getTime(), m = marginMin * 60_000
+  let best: { id: string; d: number } | null = null
+  for (const c of classes) {
+    if (c.status !== 'scheduled') continue
+    const start = Date.parse(c.startsAt)
+    if (!Number.isFinite(start)) continue
+    const end = start + c.durationMin * 60_000
+    if (t < start - m || t > end + m) continue
+    const d = Math.abs(t - start)
+    if (!best || d < best.d) best = { id: c.studentId, d }
+  }
+  return best?.id ?? null
+}
+
+/** Opciones del selector "Clase con:" del player: solo alumnos, por nombre. */
+export function studentOptions(users: { id: string; name: string | null; email: string | null; role: string | null }[]): { id: string; label: string }[] {
+  return users
+    .filter((u) => u.role === 'alumno')
+    .map((u) => ({ id: u.id, label: (u.name ?? '').trim() || u.email || 'Alumno' }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'es'))
+}
