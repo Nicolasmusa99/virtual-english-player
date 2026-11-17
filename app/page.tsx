@@ -32,7 +32,8 @@ import { MODE_HELP, PRACTICE_NEEDS_SELECTION, shouldIgnoreShortcut } from '@/lib
 import Tooltip, { InfoMark } from './Tooltip'
 import ShortcutsHelp from './ShortcutsHelp'
 import type { SessionData } from '@/lib/session'
-import type { StudentMark } from '@/lib/progressView'
+import { currentClassStudent, studentOptions, type ProgressMarks } from '@/lib/progressView'
+import { useClassProgress } from './useClassProgress'
 import { useSession, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
 
@@ -44,6 +45,8 @@ const DURATION_WARN_MIN = 15   // límite real: ~15 min por el maxDuration=300s 
 const PLAYABLE_VIDEO_RE = /\.(mp4|m4v|webm|ogg|ogv|mov)$/i
 const SECTION_SECONDS = 2   // duración (s) de cada sección dentro de una frase (programable)
 const NAV_HOLD_MS     = 450 // ms entre frase y frase al mantener ← / → presionada
+
+const NO_MARKS: ProgressMarks = { inClass: [], own: [] }
 
 export default function Player() {
   // ─── DOM refs ────────────────────────────────────────────────────────────
@@ -77,10 +80,13 @@ export default function Player() {
   const [editingName, setEditingName] = useState(false)
   // A dónde vuelve la pantalla del alumno: a "Alumnos", a "Agenda" (G2) o a "Hoy" (rediseño).
   const [studentFrom, setStudentFrom] = useState<'users' | 'agenda' | 'load'>('users')
-  // Avance del alumno (2026-11): dónde dejó este video cada alumno (marcas en la barra) y,
-  // si se abrió desde la ficha de un alumno, cuál destacar.
-  const [studentMarks, setStudentMarks] = useState<StudentMark[]>([])
-  const [focusStudentId, setFocusStudentId] = useState<string | null>(null)
+  // Avance (2026-11): dónde quedó este video con cada alumno (en clase y por su cuenta) y
+  // con qué alumno está la clase ahora (de la ficha, de la clase en curso o del selector
+  // "Clase con:"). Mientras se reproduce, se guarda dónde van (useClassProgress).
+  const [studentMarks, setStudentMarks] = useState<ProgressMarks>(NO_MARKS)
+  const [classStudentId, setClassStudentId] = useState<string | null>(null)
+  const [classVideoId, setClassVideoId] = useState<string | null>(null)
+  const [classStudents, setClassStudents] = useState<{ id: string; label: string }[] | null>(null)
   // "Ordenar subtítulos" (2026-11): el aviso con lo que pasó y las frases de antes (Deshacer).
   const [tidyNote, setTidyNote] = useState<{ before: Phrase[]; from: number; to: number } | null>(null)
   const [step, setStep]                   = useState<Step>('idle')
@@ -519,6 +525,26 @@ export default function Player() {
     backToLoad()
   }
 
+  // ─── Avance en clase (2026-11) ───────────────────────────────────────────
+  useClassProgress({
+    videoId: screen === 'player' ? classVideoId : null,
+    studentId: classStudentId,
+    playing: isPlaying,
+    getPosition: () => (stageOpenRef.current ? lastStageTimeRef.current : vidRef.current?.currentTime),
+  })
+  // Los alumnos del selector "Clase con:" (los del profe; el admin, todos). Una vez.
+  useEffect(() => {
+    if (screen !== 'player' || !classVideoId || classStudents !== null) return
+    if (userRole !== 'profesor' && userRole !== 'admin') return
+    fetch('/api/users').then(r => (r.ok ? r.json() : null))
+      .then(d => setClassStudents(studentOptions(d?.users ?? [])))
+      .catch(() => setClassStudents([]))
+  }, [screen, classVideoId, classStudents, userRole])
+  function changeClassStudent(id: string | null) {
+    setClassStudentId(id)
+    capture('class_student_changed', { has_student: !!id })
+  }
+
   // ─── Ordenar subtítulos (2026-11) ────────────────────────────────────────
   // Aplica a las frases cargadas el mismo corte que a las transcripciones nuevas
   // (tidyPhrases en lib/srt.ts): corta las largas y recorta las que se pisan o se quedan
@@ -863,6 +889,7 @@ export default function Player() {
       // el recién-transcrito sigue reproduciéndose desde el File en memoria (instantáneo, sin re-descarga).
       setStorageUrl(blob.url)
       libraryVideoIdRef.current = createdVideoId
+      setClassVideoId(createdVideoId)
       capture('video_saved_to_library', { video_id: createdVideoId, phrase_count: parsed.length })
 
       // US-024: restaurar sesión local si existe
@@ -922,7 +949,7 @@ export default function Player() {
     videoFileRef.current = null
     setIsDirty(false); setRestorePrompt(null); setExitDialog(false)
     libraryVideoIdRef.current = null
-    setStudentMarks([]); setFocusStudentId(null); setTidyNote(null)
+    setStudentMarks(NO_MARKS); setClassStudentId(null); setClassVideoId(null); setTidyNote(null)
   }
 
   // ─── Biblioteca (Bloque 13) ───────────────────────────────────────────────
@@ -942,7 +969,7 @@ export default function Player() {
 
   async function openFromLibrary(id: string, opts?: { studentId?: string }) {
     setLibraryError('')
-    setStudentMarks([]); setFocusStudentId(opts?.studentId ?? null)
+    setStudentMarks(NO_MARKS); setClassStudentId(opts?.studentId ?? null); setClassVideoId(null)
     try {
       const res = await fetch(`/api/videos/${id}`)
       const data = await res.json()
@@ -952,6 +979,7 @@ export default function Player() {
         return
       }
       libraryVideoIdRef.current = id
+      setClassVideoId(id)
       videoFileRef.current = null
       setVideoFileName(data.video.originalName)
       setStorageUrl(data.video.storageUrl); setVideoUrl('')
@@ -967,10 +995,21 @@ export default function Player() {
       setIsDirty(false)
       setScreen('player')
       capture('library_video_opened', { video_id: id, phrase_count: savedPhrases.length })
-      // Dónde lo dejó cada alumno (solo los del profe; el server filtra). Si falla, sin marcas.
+      // Dónde quedó con cada alumno (solo los del profe; el server filtra). Si falla, sin marcas.
       fetch(`/api/videos/${id}/progress`).then(r => (r.ok ? r.json() : null))
-        .then(d => { if (d && libraryVideoIdRef.current === id) setStudentMarks(d.progress ?? []) })
+        .then(d => { if (d && libraryVideoIdRef.current === id) setStudentMarks({ inClass: d.inClass ?? [], own: d.own ?? [] }) })
         .catch(() => {})
+      // Sin alumno elegido: si el profe tiene una clase ahora, es con ese alumno.
+      if (!opts?.studentId && userRole === 'profesor') {
+        const now = Date.now()
+        fetch(`/api/classes/agenda?from=${new Date(now - 3 * 3_600_000).toISOString()}&to=${new Date(now + 3_600_000).toISOString()}`)
+          .then(r => (r.ok ? r.json() : null))
+          .then(d => {
+            const sid = d ? currentClassStudent(d.classes ?? [], new Date()) : null
+            if (sid && libraryVideoIdRef.current === id) setClassStudentId(prev => prev ?? sid)
+          })
+          .catch(() => {})
+      }
     } catch {
       setLibraryError('No se pudo abrir el video.')
     }
@@ -1017,6 +1056,7 @@ export default function Player() {
       })
 
       libraryVideoIdRef.current = videoId
+      setClassVideoId(videoId)
       capture('video_saved_to_library', { video_id: videoId, phrase_count: phrases.length })
     } catch {
       setLibraryError('No se pudo guardar el video en la biblioteca.')
@@ -1562,9 +1602,11 @@ export default function Player() {
               onTogglePlay={togglePlay} onSkip={skip} onPrev={prevPhrase} onNext={nextPhrase} onSpeed={setSpd}
               onVol={v => { setVol(v); if (vidRef.current) vidRef.current.volume = v / 100 }}
               onToggleCc={() => { setCcOn(p => !p); setIsDirty(true) }}
-              studentMarks={studentMarks} focusStudentId={focusStudentId}
-              focusStudentName={focusStudentId && selectedStudent?.id === focusStudentId ? (selectedStudent.name || selectedStudent.email) : null}
-              onMarkJump={m => { seekTo(m.positionSec); capture('student_mark_clicked', { focused: m.studentId === focusStudentId }) }}
+              studentMarks={studentMarks}
+              classStudentId={classVideoId ? classStudentId : null}
+              classStudents={classVideoId ? (classStudents ?? (classStudentId && selectedStudent?.id === classStudentId ? [{ id: classStudentId, label: selectedStudent.name || selectedStudent.email || 'Alumno' }] : [])) : null}
+              onClassStudentChange={changeClassStudent}
+              onMarkJump={(m, kind) => { seekTo(m.positionSec); capture('student_mark_clicked', { kind, focused: m.studentId === classStudentId }) }}
             />
             </div>
 

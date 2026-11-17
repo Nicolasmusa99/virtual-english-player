@@ -27,6 +27,7 @@ const {
   listAllMock: vi.fn(),
 }))
 
+vi.mock('@/lib/classProgress', () => ({ listClassProgressForStudent: vi.fn(async () => new Map()) }))
 vi.mock('@/lib/auth', () => ({ auth: authMock }))
 vi.mock('@/lib/users', () => ({ getStudentById: getStudentByIdMock }))
 vi.mock('@/lib/library', () => ({ getAccessibleVideo: getAccessibleVideoMock }))

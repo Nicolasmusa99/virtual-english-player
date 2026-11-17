@@ -16,7 +16,7 @@ import styles from './PlayerDock.module.css'
 import { fmtTime, type Phrase } from '@/lib/srt'
 import { timeAtX } from '@/lib/studentView'
 import { phraseIndexAt, phraseSegments, selNumber, SEEK_THROTTLE_MS } from '@/lib/playerTimeline'
-import { markText, type StudentMark } from '@/lib/progressView'
+import { classMarkText, ownMarkText, lastSeenText, type ProgressMarks, type StudentMark } from '@/lib/progressView'
 
 export const DOCK_TEXTS = {
   timeline: 'Tiempo del video',
@@ -36,8 +36,12 @@ export const DOCK_TEXTS = {
   ccOn: 'Subtítulos: sí', ccOff: 'Subtítulos: no',
   sel: (n: number) => `elegida ${n}`,
   lineOf: (cur: number | string, tot: number) => `Línea ${cur} de ${tot}`,
-  goThere: 'Ir ahí',
-  notOpened: (n: string) => `${n} todavía no abrió este video.`,
+  classWith: 'Clase con',
+  noStudent: 'Sin alumno',
+  pickHint: 'Elegí el alumno para guardar dónde quedan.',
+  firstTime: 'Es la primera vez que ven este video juntos.',
+  resumeFrom: (t: string) => `Seguir desde ${t}`,
+  ownLine: (t: string, when: string) => `Por su cuenta lo vio hasta ${t}, ${when}.`,
   markHint: 'Tocá la marca para ir ahí',
 } as const
 
@@ -66,12 +70,14 @@ type Props = {
   onVol: (v: number) => void
   onToggleCc: () => void
   onRepeat?: () => void
-  /** Dónde dejó este video cada alumno (marcas arriba de la barra). */
-  studentMarks?: StudentMark[]
-  /** El alumno desde cuya ficha se abrió el video: su marca se destaca. */
-  focusStudentId?: string | null
-  focusStudentName?: string | null
-  onMarkJump?: (m: StudentMark) => void
+  /** Dónde quedó este video con cada alumno: en clase (principal) y por su cuenta. */
+  studentMarks?: ProgressMarks
+  /** Con qué alumno es la clase ahora (se guarda dónde quedan). null = sin alumno. */
+  classStudentId?: string | null
+  /** Opciones de "Clase con:". null = no hay selector (video sin guardar en la biblioteca). */
+  classStudents?: { id: string; label: string }[] | null
+  onClassStudentChange?: (id: string | null) => void
+  onMarkJump?: (m: StudentMark, kind: 'class' | 'own') => void
 }
 
 export default function PlayerDock(p: Props) {
@@ -174,25 +180,49 @@ export default function PlayerDock(p: Props) {
     <div className={`${styles.grp} ${extra}`}>{btn}<span className={styles.lbl} aria-hidden="true">{label}</span></div>
   )
 
-  const marks = p.studentMarks ?? []
-  const focusMark = p.focusStudentId ? marks.find(m => m.studentId === p.focusStudentId) ?? null : null
+  const inClass = p.studentMarks?.inClass ?? []
+  const own = p.studentMarks?.own ?? []
+  const sid = p.classStudentId ?? null
+  const classMark = sid ? inClass.find(m => m.studentId === sid) ?? null : null
+  const ownMark = sid ? own.find(m => m.studentId === sid) ?? null : null
+  const anyMarks = inClass.length > 0 || own.length > 0
   const lineCur = p.curIdx != null && p.curIdx >= 0 ? p.curIdx + 1 : '–'
 
   return (
     <div className={styles.dock}>
-      {focusMark ? (
-        <div className={styles.focusBar} data-testid="dock-focus-mark">
-          <span className={styles.focusDot} aria-hidden="true" />
-          <span>{markText(focusMark, now)}</span>
-          <button type="button" className={styles.focusGo} onClick={() => p.onMarkJump?.(focusMark)}>{DOCK_TEXTS.goThere}</button>
+      {p.classStudents && (
+        <div className={styles.classBar} data-testid="dock-class-bar">
+          <div className={styles.focusBar}>
+            <label className={styles.classPick}>
+              <span>{DOCK_TEXTS.classWith}</span>
+              <select value={sid ?? ''} data-testid="class-student"
+                onChange={e => p.onClassStudentChange?.(e.target.value || null)}>
+                <option value="">{DOCK_TEXTS.noStudent}</option>
+                {p.classStudents.map(o => <option key={o.id} value={o.id}>{o.label}</option>)}
+              </select>
+            </label>
+            {classMark ? (
+              <>
+                <span className={styles.focusInfo} data-testid="dock-class-info">{classMarkText(classMark, now)}</span>
+                <button type="button" className={styles.focusGo} onClick={() => p.onMarkJump?.(classMark, 'class')}>
+                  {DOCK_TEXTS.resumeFrom(fmtTime(classMark.positionSec))}
+                </button>
+              </>
+            ) : (
+              <span className={`${styles.focusInfo} ${styles.focusNone}`} data-testid="dock-class-info">{sid ? DOCK_TEXTS.firstTime : DOCK_TEXTS.pickHint}</span>
+            )}
+          </div>
+          {ownMark && (
+            <div className={styles.ownLine} data-testid="dock-own-line">
+              {DOCK_TEXTS.ownLine(fmtTime(ownMark.positionSec), lastSeenText(ownMark.seenAt, now))}
+            </div>
+          )}
         </div>
-      ) : p.focusStudentId && p.focusStudentName ? (
-        <div className={`${styles.focusBar} ${styles.focusNone}`} data-testid="dock-focus-mark">{DOCK_TEXTS.notOpened(p.focusStudentName)}</div>
-      ) : null}
+      )}
       <div className={styles.timeRow}>
       <span ref={curRef} className={styles.time}>0:00</span>
       <div ref={trackRef} data-testid="prog-track"
-        className={`${styles.tl} ${hover != null ? styles.tlHover : ''} ${dragging ? styles.tlDrag : ''} ${marks.length > 0 ? styles.tlMarks : ''}`}
+        className={`${styles.tl} ${hover != null ? styles.tlHover : ''} ${dragging ? styles.tlDrag : ''} ${anyMarks ? styles.tlMarks : ''}`}
         role="slider" aria-label={DOCK_TEXTS.timeline} aria-valuemin={0} aria-valuemax={Math.round(dur)}
         onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerCancel={onUp}
         onPointerLeave={() => { if (dragRef.current == null) setHover(null) }}>
@@ -212,17 +242,29 @@ export default function PlayerDock(p: Props) {
           {hover != null && !dragging && <div className={styles.ghost} style={{ left: hPct + '%' }} />}
           <div ref={thumbRef} className={styles.thumb} />
         </div>
-        {dur > 0 && marks.map(m => {
-          const isFocus = m.studentId === p.focusStudentId
-          const label = `${markText(m, now)}. ${DOCK_TEXTS.markHint}`
+        {/* Por su cuenta: puntitos (secundario). En clase: etiqueta con el nombre. */}
+        {dur > 0 && own.map(m => {
+          const label = `${ownMarkText(m, now)}. ${DOCK_TEXTS.markHint}`
           return (
-            <button type="button" key={m.studentId} data-testid="student-mark"
-              className={`${styles.mark} ${isFocus ? styles.markFocus : ''}`}
+            <button type="button" key={'own-' + m.studentId} data-testid="own-mark"
+              className={`${styles.ownMark} ${m.studentId === sid ? styles.ownMarkFocus : ''}`}
               style={{ left: Math.min(100, Math.max(0, (m.positionSec / dur) * 100)) + '%' }}
               aria-label={label} title={label}
               onPointerDown={e => e.stopPropagation()}
               onPointerMove={e => e.stopPropagation()}
-              onClick={e => { e.stopPropagation(); p.onMarkJump?.(m) }}>
+              onClick={e => { e.stopPropagation(); p.onMarkJump?.(m, 'own') }} />
+          )
+        })}
+        {dur > 0 && inClass.map(m => {
+          const label = `${classMarkText(m, now)}. ${DOCK_TEXTS.markHint}`
+          return (
+            <button type="button" key={'class-' + m.studentId} data-testid="student-mark"
+              className={`${styles.mark} ${m.studentId === sid ? styles.markFocus : ''}`}
+              style={{ left: Math.min(100, Math.max(0, (m.positionSec / dur) * 100)) + '%' }}
+              aria-label={label} title={label}
+              onPointerDown={e => e.stopPropagation()}
+              onPointerMove={e => e.stopPropagation()}
+              onClick={e => { e.stopPropagation(); p.onMarkJump?.(m, 'class') }}>
               <span className={styles.markName}>{m.name}</span>
             </button>
           )
