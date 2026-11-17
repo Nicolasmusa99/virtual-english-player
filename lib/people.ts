@@ -3,15 +3,16 @@
 // lib/peopleView.ts.
 import { and, desc, eq, inArray, isNotNull, sql } from 'drizzle-orm'
 import { db } from '@/lib/db'
-import { assignments, folders, videos } from '@/lib/db/schema'
+import { assignments, classProgress, folders, videos } from '@/lib/db/schema'
 import { getTeacherSchedule } from '@/lib/classes'
 import { nextClassByStudent } from '@/lib/peopleView'
 
 // ─── Base ───────────────────────────────────────────────────────────────────
 
-// lastWatched (2026-11): el último video que abrió el alumno y dónde lo dejó.
+// 2026-11: lastClass = el último video que el profe le mostró en clase y dónde quedaron
+// (el dato principal); lastWatched = el último que el alumno abrió por su cuenta (secundario).
 export type LastWatched = { videoName: string; positionSec: number; durationSec: number | null; seenAt: string }
-export type StudentStats = { materialCount: number; folderCount: number; nextClassAt: string | null; lastWatched: LastWatched | null }
+export type StudentStats = { materialCount: number; folderCount: number; nextClassAt: string | null; lastClass: LastWatched | null; lastWatched: LastWatched | null }
 
 const DAY = 86_400_000
 
@@ -21,10 +22,10 @@ export async function studentStats(
 ): Promise<Record<string, StudentStats>> {
   const ids = students.map((s) => s.id)
   const out: Record<string, StudentStats> = {}
-  for (const id of ids) out[id] = { materialCount: 0, folderCount: 0, nextClassAt: null, lastWatched: null }
+  for (const id of ids) out[id] = { materialCount: 0, folderCount: 0, nextClassAt: null, lastClass: null, lastWatched: null }
   if (ids.length === 0) return out
 
-  const [material, folderRows, watched] = await Promise.all([
+  const [material, folderRows, watched, inClass] = await Promise.all([
     db.select({ studentId: assignments.studentId, n: sql<number>`count(*)::int` })
       .from(assignments).where(inArray(assignments.studentId, ids)).groupBy(assignments.studentId),
     db.select({ studentId: folders.studentId, n: sql<number>`count(*)::int` })
@@ -36,6 +37,13 @@ export async function studentStats(
       .from(assignments).innerJoin(videos, eq(videos.id, assignments.videoId))
       .where(and(inArray(assignments.studentId, ids), isNotNull(assignments.lastSeenAt), isNotNull(assignments.lastPositionSec)))
       .orderBy(desc(assignments.lastSeenAt)),
+    db.select({
+      studentId: classProgress.studentId, videoName: videos.originalName, durationSec: videos.durationSec,
+      positionSec: classProgress.positionSec, seenAt: classProgress.seenAt,
+    })
+      .from(classProgress).innerJoin(videos, eq(videos.id, classProgress.videoId))
+      .where(inArray(classProgress.studentId, ids))
+      .orderBy(desc(classProgress.seenAt)),
   ])
   for (const r of material) out[r.studentId].materialCount = Number(r.n)
   for (const r of folderRows) if (r.studentId) out[r.studentId].folderCount = Number(r.n)
@@ -44,6 +52,11 @@ export async function studentStats(
     const o = out[r.studentId]
     if (!o || o.lastWatched || !r.seenAt) continue
     o.lastWatched = { videoName: r.videoName, positionSec: r.positionSec ?? 0, durationSec: r.durationSec, seenAt: r.seenAt.toISOString() }
+  }
+  for (const r of inClass) {
+    const o = out[r.studentId]
+    if (!o || o.lastClass) continue
+    o.lastClass = { videoName: r.videoName, positionSec: r.positionSec, durationSec: r.durationSec, seenAt: r.seenAt.toISOString() }
   }
 
   // Próxima clase: una lectura de la agenda por profe (las clases son del profe actual).
