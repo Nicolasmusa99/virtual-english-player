@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
-import { cleanSrt, TRANSCRIPT_EMPTY_ERROR } from '@/lib/srt'
+import { cleanSrt, parseSRT, TRANSCRIPT_EMPTY_ERROR } from '@/lib/srt'
 import { isVercelBlobUrl } from '@/lib/blobUrl'
 import { groqWords } from '@/lib/groq'
-import { cuesFromWords, cuesToSrt } from '@/lib/wordCues'
+import { cuesFromWords, cuesToSrt, fillGaps, type WordCue } from '@/lib/wordCues'
 
 // Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
@@ -108,6 +108,68 @@ async function waitForFile(name: string, apiKey: string): Promise<void> {
   throw new Error('Timeout: Gemini took too long to process the file')
 }
 
+// Gemini: baja el video de Blob, lo sube a Gemini y devuelve el SRT limpio (como siempre).
+async function geminiTranscript(blobUrl: string, mimeIn: string | undefined, apiKey: string): Promise<{ srt: string; phrases: number }> {
+  // El video vive en Vercel Blob (subido directo por el browser). Lo bajamos acá y se lo
+  // pasamos a Gemini igual que antes. Esto evita el límite de 4.5 MB de body de Vercel.
+  const dl = await fetch(blobUrl)
+  if (!dl.ok) throw new Error(`No se pudo descargar el video del storage: ${dl.status}`)
+  const file = await dl.blob()
+
+  const mimeType = mimeIn || file.type || 'video/mp4'
+  const sizeMB = (file.size / 1024 / 1024).toFixed(1)
+  console.log(`[transcribe] Blob: ${sizeMB} MB — ${mimeType}`)
+  console.log(`[transcribe] Uploading to Gemini...`)
+
+  const fileUri = await uploadToGemini(file, mimeType, apiKey)
+  const fileName = 'files/' + fileUri.split('/files/')[1]
+  console.log(`[transcribe] Uploaded: ${fileUri}`)
+
+  await waitForFile(fileName, apiKey)
+  console.log(`[transcribe] File ACTIVE, generating transcription...`)
+
+  const genRes = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
+    {
+      method: 'POST',
+      headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { file_data: { mime_type: mimeType, file_uri: fileUri } },
+            { text: TRANSCRIBE_PROMPT },
+          ]
+        }],
+        generationConfig: { temperature: 0.0, maxOutputTokens: MAX_OUTPUT_TOKENS }
+      })
+    }
+  )
+
+  if (!genRes.ok) {
+    const err = await genRes.text()
+    throw new Error(`Gemini error: ${genRes.status} — ${err.slice(0, 300)}`)
+  }
+
+  const genData = await genRes.json()
+  const candidate = genData.candidates?.[0]
+  const raw = candidate?.content?.parts?.[0]?.text
+  if (!raw) throw new Error('Gemini returned no transcription content')
+
+  // Validar antes de devolver: sin fences, sin bloques con fin antes del inicio, y si se
+  // cortó por el tope de tokens, sin el último bloque (puede estar incompleto).
+  const truncated = candidate?.finishReason === 'MAX_TOKENS'
+  // tidy (2026-11): corta los bloques que Gemini igual devuelva largos y recorta los que se
+  // pisan o se quedan en pantalla durante un silencio (tidyCues en lib/srt.ts).
+  const { srt, phrases, dropped } = cleanSrt(raw, { dropLast: truncated, tidy: true })
+  console.log(`[transcribe] Done — ${phrases} phrases (${dropped} descartadas${truncated ? ', salida cortada por el tope de tokens' : ''})`)
+
+  fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}`, {
+    method: 'DELETE',
+    headers: { 'x-goog-api-key': apiKey },
+  }).catch(() => {})
+  return { srt, phrases }
+}
+
 export async function POST(req: NextRequest) {
   const gate = await requireRole('admin')
   if (!gate.ok) return NextResponse.json({ error: gate.status === 401 ? 'No autenticado' : 'No autorizado' }, { status: gate.status })
@@ -125,82 +187,39 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'blobUrl inválido' }, { status: 400 })
     }
 
-    // (2026-11-23) Primero Groq + Whisper (gratis): da el tiempo exacto de CADA palabra, así
-    // cada bloque arranca justo cuando se escucha (Gemini adivinaba los tiempos y se le
-    // corrían). Groq baja el video solo desde la URL de Blob. Si no hay clave, falla o el
-    // video pasa el límite del free tier, sigue Gemini como siempre.
+    // (2026-11-23) Groq + Whisper (gratis) y Gemini EN PARALELO:
+    //   · Groq da el tiempo exacto de cada palabra, pero con música de fondo a veces se
+    //     saltea tramos enteros.
+    //   · Gemini escucha todo, con tiempos aproximados.
+    // Se usan los bloques de Groq y los huecos que dejó se completan con los de Gemini
+    // (fillGaps en lib/wordCues.ts). Sin clave de Groq o si falla, queda solo Gemini.
     const groqKey = process.env.GROQ_API_KEY
-    if (groqKey) {
-      try {
-        const words = await groqWords(blobUrl, groqKey)
-        const { srt, phrases } = cleanSrt(cuesToSrt(cuesFromWords(words)))
-        console.log(`[transcribe] Groq — ${words.length} palabras, ${phrases} frases`)
-        if (phrases > 0) return NextResponse.json({ srt })
-        console.warn('[transcribe] Groq no devolvió palabras, sigo con Gemini')
-      } catch (e) {
-        console.warn('[transcribe] Groq falló, sigo con Gemini:', e instanceof Error ? e.message : e)
-      }
+    const groqP: Promise<WordCue[] | null> = groqKey
+      ? groqWords(blobUrl, groqKey).then(
+          words => {
+            const cues = cuesFromWords(words)
+            console.log(`[transcribe] Groq — ${words.length} palabras, ${cues.length} frases`)
+            return cues.length ? cues : null
+          },
+          e => { console.warn('[transcribe] Groq falló, queda Gemini:', e instanceof Error ? e.message : e); return null },
+        )
+      : Promise.resolve(null)
+    const [groq, gemini] = await Promise.allSettled([groqP, geminiTranscript(blobUrl, mimeIn, apiKey)])
+    const groqCues = groq.status === 'fulfilled' ? groq.value : null
+
+    if (!groqCues) {
+      if (gemini.status === 'rejected') throw gemini.reason
+      if (gemini.value.phrases === 0) return NextResponse.json({ error: TRANSCRIPT_EMPTY_ERROR }, { status: 500 })
+      return NextResponse.json({ srt: gemini.value.srt })
     }
 
-    // El video vive en Vercel Blob (subido directo por el browser). Lo bajamos acá y se lo
-    // pasamos a Gemini igual que antes. Esto evita el límite de 4.5 MB de body de Vercel.
-    const dl = await fetch(blobUrl)
-    if (!dl.ok) throw new Error(`No se pudo descargar el video del storage: ${dl.status}`)
-    const file = await dl.blob()
-
-    const mimeType = mimeIn || file.type || 'video/mp4'
-    const sizeMB = (file.size / 1024 / 1024).toFixed(1)
-    console.log(`[transcribe] Blob: ${sizeMB} MB — ${mimeType}`)
-    console.log(`[transcribe] Uploading to Gemini...`)
-
-    const fileUri = await uploadToGemini(file, mimeType, apiKey)
-    const fileName = 'files/' + fileUri.split('/files/')[1]
-    console.log(`[transcribe] Uploaded: ${fileUri}`)
-
-    await waitForFile(fileName, apiKey)
-    console.log(`[transcribe] File ACTIVE, generating transcription...`)
-
-    const genRes = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'x-goog-api-key': apiKey, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { file_data: { mime_type: mimeType, file_uri: fileUri } },
-              { text: TRANSCRIBE_PROMPT },
-            ]
-          }],
-          generationConfig: { temperature: 0.0, maxOutputTokens: MAX_OUTPUT_TOKENS }
-        })
-      }
-    )
-
-    if (!genRes.ok) {
-      const err = await genRes.text()
-      throw new Error(`Gemini error: ${genRes.status} — ${err.slice(0, 300)}`)
+    if (gemini.status === 'rejected') {
+      console.warn('[transcribe] Gemini falló, quedan solo los bloques de Groq:', gemini.reason instanceof Error ? gemini.reason.message : gemini.reason)
     }
-
-    const genData = await genRes.json()
-    const candidate = genData.candidates?.[0]
-    const raw = candidate?.content?.parts?.[0]?.text
-    if (!raw) throw new Error('Gemini returned no transcription content')
-
-    // Validar antes de devolver: sin fences, sin bloques con fin antes del inicio, y si se
-    // cortó por el tope de tokens, sin el último bloque (puede estar incompleto).
-    const truncated = candidate?.finishReason === 'MAX_TOKENS'
-    // tidy (2026-11): corta los bloques que Gemini igual devuelva largos y recorta los que se
-    // pisan o se quedan en pantalla durante un silencio (tidyCues en lib/srt.ts).
-    const { srt, phrases, dropped } = cleanSrt(raw, { dropLast: truncated, tidy: true })
-    console.log(`[transcribe] Done — ${phrases} phrases (${dropped} descartadas${truncated ? ', salida cortada por el tope de tokens' : ''})`)
-
-    fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}`, {
-      method: 'DELETE',
-      headers: { 'x-goog-api-key': apiKey },
-    }).catch(() => {})
-
-    if (phrases === 0) return NextResponse.json({ error: TRANSCRIPT_EMPTY_ERROR }, { status: 500 })
+    const backup = gemini.status === 'fulfilled' ? parseSRT(gemini.value.srt).map(({ start, end, text }) => ({ start, end, text })) : []
+    const { cues, added } = fillGaps(groqCues, backup)
+    const { srt } = cleanSrt(cuesToSrt(cues))
+    console.log(`[transcribe] Groq + Gemini — ${cues.length} frases (${added} agregadas de Gemini en huecos de Groq)`)
     return NextResponse.json({ srt })
 
   } catch (err: unknown) {

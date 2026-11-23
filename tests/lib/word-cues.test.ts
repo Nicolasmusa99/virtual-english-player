@@ -1,7 +1,7 @@
 // Subtítulos desde palabras con tiempo (lib/wordCues.ts) y la llamada a Deepgram
 // (lib/groq.ts, con un fetch falso).
 import { describe, it, expect, vi } from 'vitest'
-import { cuesFromWords, cuesToSrt, END_PAD_SEC, WORD_CUE_MAX_SEC, type TimedWord } from '@/lib/wordCues'
+import { cuesFromWords, cuesToSrt, fillGaps, END_PAD_SEC, WORD_CUE_MAX_SEC, type TimedWord } from '@/lib/wordCues'
 import { groqWords, GROQ_URL, GROQ_MODEL } from '@/lib/groq'
 import { CUE_MAX_CHARS, parseSRT } from '@/lib/srt'
 
@@ -114,5 +114,37 @@ describe('groqWords', () => {
   it('si Groq contesta error, tira (la ruta sigue con Gemini)', async () => {
     const fetchImpl = vi.fn(async () => new Response('rate limit', { status: 429 }))
     await expect(groqWords('https://x', 'K', fetchImpl as unknown as typeof fetch)).rejects.toThrow(/429/)
+  })
+})
+
+describe('fillGaps (lo que Whisper no escuchó lo completa Gemini)', () => {
+  const W = [
+    { start: 50, end: 53, text: 'This is the only world' },
+    { start: 59, end: 62, text: 'that the prisoners have ever known.' },
+    { start: 95, end: 98, text: 'And it is like nothing he' },
+  ]
+  it('agrega los bloques de Gemini que caen en un hueco de Whisper, recortados al hueco', () => {
+    const G = [
+      { start: 58.5, end: 62.5, text: 'that the prisoners have ever known.' }, // lo mismo: no entra
+      { start: 64, end: 70, text: 'One day, a prisoner is set free.' },
+      { start: 92, end: 95.8, text: 'He turns toward the light.' },          // pisa poco: entra recortado
+    ]
+    const { cues, added } = fillGaps(W, G)
+    expect(added).toBe(2)
+    expect(cues.map(c => c.text)).toEqual([
+      'This is the only world', 'that the prisoners have ever known.',
+      'One day, a prisoner is set free.', 'He turns toward the light.', 'And it is like nothing he',
+    ])
+    const turn = cues.find(c => c.text.startsWith('He turns'))!
+    expect(turn.end).toBe(95)
+    for (let i = 1; i < cues.length; i++) expect(cues[i - 1].end).toBeLessThanOrEqual(cues[i].start)
+  })
+  it('no duplica lo que Whisper ya tiene aunque Gemini lo ponga corrido de tiempo', () => {
+    const { added } = fillGaps(W, [{ start: 63, end: 66, text: 'That the prisoners have ever known' }])
+    expect(added).toBe(0)
+  })
+  it('sin bloques de Whisper, quedan todos los de Gemini', () => {
+    const G = [{ start: 1, end: 2, text: 'Hi.' }, { start: 3, end: 4, text: 'Bye.' }]
+    expect(fillGaps([], G).cues).toEqual(G)
   })
 })
