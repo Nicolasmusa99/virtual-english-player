@@ -2,8 +2,8 @@
 // "Sonido" (P2 + P3) — ajustes rápidos (Original / Voces claras / Voces muy claras),
 // "Filtro de voz" (IA gratis, aparte: se combina con cualquier ajuste) y "Ajuste
 // manual" con 3 barras: Graves / Medios (voz) / Agudos. Todo en el navegador
-// (lib/voiceBoost.ts, con limitador para que nada sature) y se RECUERDA en este
-// navegador para el próximo video.
+// (lib/voiceBoost.ts, con limitador para que nada sature). (2026-11-23) Cada video
+// ARRANCA en Original: el ajuste no se recuerda y se vuelve a Original al cambiar de video.
 // Con el stage abierto el audio sale de ESA ventana: el ajuste se le manda al stage
 // (lib/voiceBoostStage.ts, que sigue vivo aunque esta sección se desmonte al pasar a
 // Ejercicios), y el stage contesta si pudo aplicarlo.
@@ -11,7 +11,7 @@ import { useEffect, useId, useRef, useState, type CSSProperties, type RefObject 
 import styles from './VoiceBoostControl.module.css'
 import { sharedVoiceBoostStageLink } from '@/lib/voiceBoostStage'
 import {
-  sharedVoiceBoost, saveEq, presetOf, clampEq, isOff,
+  sharedVoiceBoost, presetOf, clampEq, isOff, EQ_FLAT,
   EQ_PRESETS, EQ_PRESET_ORDER, EQ_MIN_DB, EQ_MAX_DB,
   type EqPreset, type EqSetting, type VoiceBoostStatus,
 } from '@/lib/voiceBoost'
@@ -62,6 +62,16 @@ export default function VoiceBoostControl({ videoRef, stageOpen }: Props) {
     return () => { alive = false; vb.attach(null) }
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Cada video arranca SIN ecualizador: cuando el <video> cambia de video ('emptied'
+  // salta al cambiarle el src), todo vuelve a Original, acá y en el stage.
+  useEffect(() => {
+    const v = videoRef.current
+    if (!v) return
+    const onNewVideo = () => { if (!isOff(vb.eq)) change(EQ_FLAT) }
+    v.addEventListener('emptied', onNewVideo)
+    return () => v.removeEventListener('emptied', onNewVideo)
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Ajuste recordado: el navegador no deja arrancar el audio sin un gesto, así que se
   // aplica con el primer clic o tecla (p. ej. el play) en cualquier parte de la página.
   useEffect(() => {
@@ -92,7 +102,6 @@ export default function VoiceBoostControl({ videoRef, stageOpen }: Props) {
     setEq(e)
     apply(e)
     sharedVoiceBoostStageLink().send(e)
-    saveEq(e)
   }
 
   // Los ajustes rápidos cambian las bandas; el filtro de voz queda como estaba.
@@ -162,7 +171,7 @@ export default function VoiceBoostControl({ videoRef, stageOpen }: Props) {
                   onChange={e => change({ ...eq, [b.key]: +e.target.value })} />
                 {i === SOUND_TEXTS.bands.length - 1 && (
                   <div className={styles.scale} aria-hidden="true">
-                    <span style={{ left: '0%' }}>−24</span><span style={{ left: pos(0) + '%' }}>0</span><span style={{ left: '100%' }}>+12</span>
+                    <span style={{ left: '0%' }}>{fmtDb(EQ_MIN_DB).replace(' dB', '')}</span><span style={{ left: pos(0) + '%' }}>0</span><span style={{ left: '100%' }}>{fmtDb(EQ_MAX_DB).replace(' dB', '')}</span>
                   </div>
                 )}
               </div>

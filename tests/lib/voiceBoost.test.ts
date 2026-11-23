@@ -24,9 +24,8 @@ import {
   createVoiceBoost,
   eqBands,
   isFlat,
-  loadEq,
+  forgetEq,
   presetOf,
-  saveEq,
   type EqBands,
   type EqSetting,
 } from '@/lib/voiceBoost'
@@ -190,51 +189,16 @@ describe('ajustes (clampEq / presetOf / eqBands)', () => {
 })
 
 // ─────────────────────────────────────────────────────────────────────────────
-describe('recordar el ajuste (loadEq / saveEq)', () => {
-  function mem(): Storage {
-    const m = new Map<string, string>()
-    return {
-      getItem: (k: string) => m.get(k) ?? null,
-      setItem: (k: string, v: string) => { m.set(k, v) },
-      removeItem: (k: string) => { m.delete(k) },
-      clear: () => m.clear(),
-      key: () => null,
-      get length() { return m.size },
-    } as Storage
-  }
-  it('guarda y vuelve a leer el mismo ajuste', () => {
-    const st = mem()
-    saveEq(A, st)
-    expect(loadEq(st)).toEqual(A)
-  })
-  it('solo el filtro de voz (bandas en 0) también se recuerda', () => {
-    const st = mem()
-    saveEq(FILTER_ONLY, st)
-    expect(loadEq(st)).toEqual(FILTER_ONLY)
-  })
-  it('Original sin filtro no se guarda (borra lo anterior)', () => {
-    const st = mem()
-    saveEq(A, st)
-    saveEq(EQ_FLAT, st)
-    expect(st.getItem(EQ_STORAGE_KEY)).toBeNull()
-    expect(loadEq(st)).toEqual(EQ_FLAT)
-  })
-  it('basura o valores fuera de rango → se acotan o vuelve Original', () => {
-    const st = mem()
-    st.setItem(EQ_STORAGE_KEY, '{no es json')
-    expect(loadEq(st)).toEqual(EQ_FLAT)
-    st.setItem(EQ_STORAGE_KEY, JSON.stringify({ low: -99, mid: 50, high: 'x' }))
-    expect(loadEq(st)).toEqual({ low: EQ_MIN_DB, mid: EQ_MAX_DB, high: 0, denoise: false })
+describe('ya no se recuerda el ajuste (forgetEq)', () => {
+  it('borra lo que quedó guardado de antes', () => {
+    localStorage.setItem(EQ_STORAGE_KEY, JSON.stringify(A))
+    forgetEq(localStorage)
+    expect(localStorage.getItem(EQ_STORAGE_KEY)).toBeNull()
   })
   it('sin almacenamiento o si tira (modo privado): no rompe', () => {
-    expect(loadEq(null)).toEqual(EQ_FLAT)
-    const broken = {
-      getItem() { throw new Error('bloqueado') },
-      setItem() { throw new Error('bloqueado') },
-      removeItem() { throw new Error('bloqueado') },
-    } as unknown as Storage
-    expect(loadEq(broken)).toEqual(EQ_FLAT)
-    expect(() => saveEq(A, broken)).not.toThrow()
+    expect(() => forgetEq(null)).not.toThrow()
+    const broken = { removeItem() { throw new Error('bloqueado') } } as unknown as Storage
+    expect(() => forgetEq(broken)).not.toThrow()
   })
 })
 
@@ -647,13 +611,17 @@ describe('filtro de voz (P3)', () => {
 })
 
 describe('sharedVoiceBoost', () => {
-  it('uno solo por ventana, arranca con el ajuste recordado y crearlo no toca el audio', async () => {
+  it('uno solo por ventana y arranca SIEMPRE apagado, aunque haya un ajuste viejo guardado (lo borra)', async () => {
     localStorage.setItem(EQ_STORAGE_KEY, JSON.stringify(A))
     vi.resetModules()
-    const { sharedVoiceBoost } = await import('@/lib/voiceBoost')
+    const { sharedVoiceBoost, EQ_FLAT: FLAT } = await import('@/lib/voiceBoost')
     const a = sharedVoiceBoost()
     expect(sharedVoiceBoost()).toBe(a)
-    expect(a.eq).toEqual(A)
-    localStorage.removeItem(EQ_STORAGE_KEY)
+    expect(a.eq).toEqual(FLAT)
+    expect(localStorage.getItem(EQ_STORAGE_KEY)).toBeNull()
+  })
+  it('graves y agudos suben hasta +18 dB', () => {
+    expect(EQ_MAX_DB).toBe(18)
+    expect(clampEq({ low: 18, mid: 0, high: 18 })).toEqual({ low: 18, mid: 0, high: 18, denoise: false })
   })
 })

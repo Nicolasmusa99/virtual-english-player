@@ -3,7 +3,8 @@
 // El audio real se prueba en tests/lib/voiceBoost.test.ts; acá el manejador de audio
 // es falso y se mira: ajustes rápidos, filtro de voz (aparte, se combina con todo),
 // ajuste manual de 3 bandas, "Personalizado", que cada cambio llegue al audio del
-// panel, al stage y se RECUERDE, que un ajuste recordado se aplique con el primer
+// panel y al stage SIN guardarse (2026-11-23: cada video arranca en Original), que al
+// cambiar de video vuelva a Original, que un ajuste ya puesto se aplique con el primer
 // gesto, y que el aviso aparezca SOLO si algo no se pudo activar.
 import React, { createRef } from 'react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
@@ -94,13 +95,13 @@ describe('estado inicial', () => {
 })
 
 describe('ajustes rápidos', () => {
-  it('elegir uno lo aplica en el panel, lo manda al stage y lo recuerda', async () => {
+  it('elegir uno lo aplica en el panel, lo manda al stage y NO lo guarda', async () => {
     mount()
     await choose('Voces claras')
     expect(fake.set).toHaveBeenLastCalledWith(S(EQ_PRESETS.clear))
     expect(state()).toBe('Voces claras')
     expect(presetBtn('Voces claras')).toHaveAttribute('aria-pressed', 'true')
-    expect(saved()).toEqual(S(EQ_PRESETS.clear))
+    expect(saved()).toBeNull()
     await tick()
     expect(atStage).toContainEqual({ type: 'voice_boost', eq: S(EQ_PRESETS.clear) })
   })
@@ -125,7 +126,7 @@ describe('ajustes rápidos', () => {
 })
 
 describe('filtro de voz (P3)', () => {
-  it('prenderlo: se aplica con el ajuste que haya, va al stage, se recuerda y se nombra', async () => {
+  it('prenderlo: se aplica con el ajuste que haya, va al stage y se nombra (sin guardarse)', async () => {
     mount()
     await choose('Voces muy claras')
     await toggleFilter()
@@ -133,7 +134,7 @@ describe('filtro de voz (P3)', () => {
     expect(fake.set).toHaveBeenLastCalledWith(e)
     expect(filter()).toHaveAttribute('aria-checked', 'true')
     expect(state()).toBe('Voces muy claras + filtro')
-    expect(saved()).toEqual(e)
+    expect(saved()).toBeNull()
     await tick()
     expect(atStage).toContainEqual({ type: 'voice_boost', eq: e })
   })
@@ -146,12 +147,12 @@ describe('filtro de voz (P3)', () => {
     expect(filter()).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('solo el filtro (Original + filtro) cuenta como prendido y se recuerda', async () => {
+  it('solo el filtro (Original + filtro) cuenta como prendido (sin guardarse)', async () => {
     mount()
     await toggleFilter()
     expect(fake.set).toHaveBeenLastCalledWith(S(EQ_PRESETS.original, true))
     expect(state()).toBe('Original + filtro')
-    expect(saved()).toEqual(S(EQ_PRESETS.original, true))
+    expect(saved()).toBeNull()
   })
 
   it('con el ajuste manual también: mover una barra conserva el filtro', async () => {
@@ -189,7 +190,7 @@ describe('filtro de voz (P3)', () => {
 })
 
 describe('ajuste manual', () => {
-  it('3 barras (Graves / Medios / Agudos) de −24 a +12 con el valor del ajuste', async () => {
+  it('3 barras (Graves / Medios / Agudos) de −24 a +18 con el valor del ajuste', async () => {
     fake.eq = S(EQ_PRESETS.clear)
     mount()
     await openManual()
@@ -197,14 +198,14 @@ describe('ajuste manual', () => {
     const box = document.getElementById(eq)!
     const sliders = within(box).getAllByRole('slider') as HTMLInputElement[]
     expect(sliders).toHaveLength(3)
-    for (const s of sliders) expect([s.min, s.max, s.step]).toEqual(['-24', '12', '1'])
+    for (const s of sliders) expect([s.min, s.max, s.step]).toEqual(['-24', '18', '1'])
     expect([band('Graves').value, band('Medios').value, band('Agudos').value]).toEqual(['-10', '3', '-7'])
     expect(band('Graves')).toHaveAttribute('aria-valuetext', '−10 dB')
     expect(box).toHaveTextContent('+3 dB')
     expect(box).toHaveTextContent(SOUND_TEXTS.limiter)
   })
 
-  it('mover una barra → Personalizado; se aplica, va al stage y se recuerda', async () => {
+  it('mover una barra → Personalizado; se aplica y va al stage (sin guardarse)', async () => {
     fake.eq = S(EQ_PRESETS.clear)
     mount()
     await openManual()
@@ -213,7 +214,7 @@ describe('ajuste manual', () => {
     expect(fake.set).toHaveBeenLastCalledWith(e)
     expect(state()).toBe(SOUND_TEXTS.custom)
     for (const n of ['Original', 'Voces claras', 'Voces muy claras']) expect(presetBtn(n)).toHaveAttribute('aria-pressed', 'false')
-    expect(saved()).toEqual(e)
+    expect(saved()).toBeNull()
     expect(band('Graves')).toHaveAttribute('aria-valuetext', '+4 dB')
     await tick()
     expect(atStage).toContainEqual({ type: 'voice_boost', eq: e })
@@ -311,5 +312,26 @@ describe('aviso: SOLO si algo no se pudo activar', () => {
     expect(screen.getByRole('status')).toBeInTheDocument()
     rerenderOpen(false)
     expect(screen.queryByRole('status')).toBeNull()
+  })
+})
+
+describe('cada video arranca sin ecualizador (2026-11-23)', () => {
+  it('al cambiar de video (emptied) vuelve a Original, en el panel y en el stage', async () => {
+    const { video } = mount()
+    await choose('Voces muy claras')
+    expect(state()).toBe('Voces muy claras')
+    atStage.length = 0
+    await act(async () => { video.dispatchEvent(new Event('emptied')) })
+    await tick()
+    expect(state()).toBe('Original')
+    expect(fake.set).toHaveBeenLastCalledWith(EQ_FLAT)
+    expect(atStage).toContainEqual({ type: 'voice_boost', eq: EQ_FLAT })
+  })
+  it('si ya estaba en Original, cambiar de video no toca el audio', async () => {
+    const { video } = mount()
+    await tick()
+    const calls = fake.set.mock.calls.length
+    await act(async () => { video.dispatchEvent(new Event('emptied')) })
+    expect(fake.set.mock.calls.length).toBe(calls)
   })
 })

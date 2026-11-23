@@ -1,7 +1,8 @@
 // "Sonido" (P2 + P3) — ecualizador de 3 bandas (Graves / Medios (voz) / Agudos) +
 // limitador, y un FILTRO DE VOZ opcional (RNNoise, inteligencia artificial gratis y
 // libre) que baja la música y los ruidos que no son voz. Todo en el navegador
-// (Web Audio), sin servidor. El ajuste se recuerda en este navegador (loadEq/saveEq).
+// (Web Audio), sin servidor. (2026-11-23) Cada video ARRANCA SIN ecualizador: el ajuste
+// ya no se recuerda entre videos ni entre visitas (decisión del dueño).
 //
 // Cadena:  <video> → [filtro de voz] → graves (lowshelf) → voz (peaking) → agudos (highshelf)
 //                  → compensación → limitador → parlantes
@@ -36,8 +37,10 @@ export const VOICE_BOOST_FREQS = {
 } as const
 
 // Rango de cada barra (dB). 0 = sin cambio.
+// (2026-11-23) El realce máximo pasó de +12 a +18 dB: el dueño pidió más volumen de
+// graves y agudos (y la compensación de abajo baja menos el resto).
 export const EQ_MIN_DB = -24
-export const EQ_MAX_DB = 12
+export const EQ_MAX_DB = 18
 
 export type EqBands = { low: number; mid: number; high: number }
 export type EqSetting = EqBands & { denoise: boolean }
@@ -66,8 +69,11 @@ export const EQ_PRESET_ORDER: EqPreset[] = ['original', 'clear', 'veryClear']
 //  El compresor del navegador suma algo de volumen propio (~+1 dB): no pasa de 0 dBFS.
 // ═══════════════════════════════════════════════════════════════════════════
 export const EQ_LIMITER = { thresholdDb: -4, kneeDb: 0, ratio: 20, attackS: 0, releaseS: 0.15 } as const
-// Compensación: se baja todo la MITAD del mayor realce (el resto lo ataja el limitador).
-export const EQ_TRIM_PER_BOOST = 0.5
+// Compensación: se baja todo una parte del mayor realce (el resto lo ataja el limitador).
+// (2026-11-23) Era la MITAD (0.5): subir los graves +12 dejaba todo lo demás 6 dB más
+// bajo y se sentía que "no subía". Con 0.3, +18 de graves suenan unos +12,6 dB por encima
+// del resto. Lo medido arriba fue con 0.5 y +12: volver a probar de oído que no sature.
+export const EQ_TRIM_PER_BOOST = 0.3
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  FILTRO DE VOZ — RNNoise (xiph, BSD-3) vía @sapphi-red/web-noise-suppressor (MIT).
@@ -333,30 +339,23 @@ export function createVoiceBoost(deps: VoiceBoostDeps = {}): VoiceBoost {
   }
 }
 
-// ─── Recordar el ajuste (localStorage de este navegador) ────────────────────
-// Si el almacenamiento no está (modo privado, bloqueado, servidor) o trae basura,
-// se arranca apagado. Nunca tira.
+// ─── Ya no se recuerda el ajuste (2026-11-23) ────────────────────────────────
+// Antes se guardaba en localStorage ('ve-eq-v1') y el próximo video arrancaba con el
+// ecualizador puesto. Ahora cada video arranca en Original: se borra lo que haya quedado
+// guardado de antes. Nunca tira (modo privado, almacenamiento bloqueado, servidor).
 export const EQ_STORAGE_KEY = 've-eq-v1'
+export function forgetEq(storage: Storage | null = localStore()): void {
+  try { storage?.removeItem(EQ_STORAGE_KEY) } catch { /* sin almacenamiento: nada que borrar */ }
+}
 function localStore(): Storage | null {
   try { return typeof window === 'undefined' ? null : window.localStorage } catch { return null }
 }
-export function loadEq(storage: Storage | null = localStore()): EqSetting {
-  try {
-    const raw = storage?.getItem(EQ_STORAGE_KEY)
-    return raw ? clampEq(JSON.parse(raw)) : EQ_FLAT
-  } catch { return EQ_FLAT }
-}
-export function saveEq(eq: EqSetting, storage: Storage | null = localStore()): void {
-  try {
-    if (isOff(eq)) storage?.removeItem(EQ_STORAGE_KEY)
-    else storage?.setItem(EQ_STORAGE_KEY, JSON.stringify(clampEq(eq)))
-  } catch { /* sin almacenamiento: no se recuerda, nada más */ }
-}
 
 // UNO por ventana (panel o stage): un solo AudioContext y un solo registro de videos
-// enganchados, aunque el componente se desmonte y se vuelva a montar. Arranca con el
-// ajuste recordado, sin tocar el audio hasta el primer gesto ('pending').
+// enganchados, aunque el componente se desmonte y se vuelva a montar. Arranca apagado
+// (camino nativo del navegador, sin tocar el audio).
 let shared: VoiceBoost | null = null
 export function sharedVoiceBoost(): VoiceBoost {
-  return (shared ??= createVoiceBoost({ initial: loadEq() }))
+  if (!shared) forgetEq()
+  return (shared ??= createVoiceBoost({ initial: EQ_FLAT }))
 }
