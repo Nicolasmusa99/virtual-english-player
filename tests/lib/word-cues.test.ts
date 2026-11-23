@@ -1,7 +1,7 @@
 // Subtítulos desde palabras con tiempo (lib/wordCues.ts) y la llamada a Deepgram
 // (lib/groq.ts, con un fetch falso).
 import { describe, it, expect, vi } from 'vitest'
-import { cuesFromWords, cuesToSrt, fillGaps, END_PAD_SEC, WORD_CUE_MAX_SEC, type TimedWord } from '@/lib/wordCues'
+import { cuesFromWords, cuesToSrt, fillGaps, END_PAD_SEC, LEAD_IN_SEC, WORD_CUE_MAX_SEC, type TimedWord } from '@/lib/wordCues'
 import { groqWords, GROQ_URL, GROQ_MODEL } from '@/lib/groq'
 import { CUE_MAX_CHARS, parseSRT } from '@/lib/srt'
 
@@ -12,10 +12,10 @@ function say(text: string, t0 = 0, dur = 0.3, gap = 0.02): TimedWord[] {
 }
 
 describe('cuesFromWords', () => {
-  it('el bloque empieza EXACTO en su primera palabra y termina poco después de la última', () => {
+  it('el bloque aparece apenas ANTES de su primera palabra y termina poco después de la última', () => {
     const ws = say('Hello there.', 1.234)
     const [c] = cuesFromWords(ws)
-    expect(c.start).toBe(1.234)
+    expect(c.start).toBeCloseTo(1.234 - LEAD_IN_SEC, 3)
     expect(c.end).toBeCloseTo(ws[1].end + END_PAD_SEC, 3)
     expect(c.text).toBe('Hello there.')
   })
@@ -25,7 +25,7 @@ describe('cuesFromWords', () => {
     const cues = cuesFromWords(ws)
     expect(cues.map(c => c.text)).toEqual(['I was walking home', 'when it started raining'])
     expect(cues[0].end).toBeLessThan(2)
-    expect(cues[1].start).toBe(5)
+    expect(cues[1].start).toBeCloseTo(5 - LEAD_IN_SEC, 3)
   })
 
   it('corta al terminar cada oración', () => {
@@ -48,6 +48,26 @@ describe('cuesFromWords', () => {
       expect(c.text).not.toMatch(/\b(the|a|to|of)$/i)
     }
     expect(cues.map(c => c.text).join(' ')).toBe(long) // no se pierde ni se inventa nada
+  })
+
+  it('una pausa corta en el medio de la oración NO la parte (caso del narrador)', () => {
+    const ws = [...say('This is the only world', 50), ...say('that the prisoners have ever known.', 52.4)]
+    expect(cuesFromWords(ws).map(c => c.text)).toEqual(['This is the only world that the prisoners have ever known.'])
+    const ws2 = [...say('And it is like nothing he', 95), ...say('could have ever imagined.', 97.9)]
+    expect(cuesFromWords(ws2).map(c => c.text)).toEqual(['And it is like nothing he could have ever imagined.'])
+  })
+
+  it('una pausa larga sí corta, aunque la oración siga', () => {
+    const ws = [...say('I was walking home', 0), ...say('when it started raining.', 4)]
+    expect(cuesFromWords(ws)).toHaveLength(2)
+  })
+
+  it('el adelanto nunca se mete en la voz del bloque anterior', () => {
+    const ws = [...say('First sentence here.', 0), ...say('Second one.', 1.36)]
+    const cues = cuesFromWords(ws)
+    expect(cues).toHaveLength(2)
+    expect(cues[1].start).toBeGreaterThanOrEqual(ws[2].end)
+    expect(cues[0].end).toBeLessThanOrEqual(cues[1].start)
   })
 
   it('cambio de persona que habla → bloque nuevo', () => {
@@ -73,7 +93,7 @@ describe('cuesToSrt', () => {
     expect(srt.startsWith('1\n00:00:00,000 --> ')).toBe(true)
     const back = parseSRT(srt)
     expect(back.map(p => p.text)).toEqual(['Hi.', 'How are you?'])
-    expect(back[1].start).toBe(3)
+    expect(back[1].start).toBeCloseTo(3 - LEAD_IN_SEC, 3)
     expect(cuesToSrt([])).toBe('')
   })
 })
