@@ -8,7 +8,12 @@
 //
 // Reglas de agrupado (mismas que se le pedían a Gemini):
 //   · Máximo CUE_MAX_CHARS letras (2 renglones) y WORD_CUE_MAX_SEC segundos por bloque.
-//   · Se corta en un silencio de PAUSE_SEC o más, y al terminar una oración.
+//   · Se corta al terminar una oración y en un silencio largo (LONG_PAUSE_SEC). Un silencio
+//     corto (PAUSE_SEC) corta SOLO si la frase ya terminó una cláusula (coma) o ya es larga:
+//     los narradores hacen pausas en el medio de la oración y cortar ahí la partía en dos.
+//   · (2026-11-23) Después se juntan los pedazos de una misma oración si entran juntos.
+//   · (2026-11-23) El bloque aparece LEAD_IN_SEC antes de la primera palabra: Whisper marca
+//     el inicio un poco tarde, y lo normal en subtítulos es que aparezcan apenas antes de la voz.
 //   · Si hay que cortar por largo, se busca un buen lugar hacia atrás (después de una
 //     coma, o antes de "and", "but", "because"...; nunca después de "the", "a"...).
 //   · El bloque queda en pantalla un poquito más (END_PAD_SEC) para poder leerlo, sin
@@ -19,7 +24,10 @@ export type TimedWord = { text: string; start: number; end: number; speaker?: nu
 export type WordCue = { start: number; end: number; text: string }
 
 export const WORD_CUE_MAX_SEC = 6
-export const PAUSE_SEC = 0.7       // silencio que corta el bloque
+export const PAUSE_SEC = 0.7       // silencio que corta si ya terminó una cláusula o es largo
+export const LONG_PAUSE_SEC = 1.5  // silencio que corta siempre
+export const LEAD_IN_SEC = 0.2     // el bloque aparece un poquito antes de la voz
+const PAUSE_CUT_CHARS = 42         // desde este largo, un silencio corto ya corta
 export const END_PAD_SEC = 0.25    // cuánto más queda en pantalla después de la última palabra
 export const MIN_CUE_SEC = 0.6     // ningún bloque dura menos (si hay lugar antes del siguiente)
 const SHORT_SENTENCE = 12          // "Yes." "Oh, okay." se juntan con lo que sigue si no hay pausa
@@ -59,7 +67,9 @@ export function cuesFromWords(input: TimedWord[]): WordCue[] {
     if (prev) {
       const gap = w.start - prev.end
       const speakerChange = w.speaker !== undefined && prev.speaker !== undefined && w.speaker !== prev.speaker
-      if (gap >= PAUSE_SEC || speakerChange) close()
+      const pauseCuts = gap >= LONG_PAUSE_SEC ||
+        (gap >= PAUSE_SEC && (endsClause(prev.text) || joined(cur).length >= PAUSE_CUT_CHARS))
+      if (pauseCuts || speakerChange) close()
       else {
         const tooLong = joined([...cur, w]).length > CUE_MAX_CHARS || w.end - cur[0].start > WORD_CUE_MAX_SEC
         if (tooLong) {
@@ -79,13 +89,30 @@ export function cuesFromWords(input: TimedWord[]): WordCue[] {
   })
   close()
 
+  // Juntar pedazos de una misma oración (el primero no la termina) si entran en un bloque
+  // y no hay un silencio largo ni cambio de persona entre ellos.
+  for (let i = 0; i < groups.length - 1; ) {
+    const a = groups[i], b = groups[i + 1]
+    const last = a[a.length - 1]
+    const fits = joined([...a, ...b]).length <= CUE_MAX_CHARS && b[b.length - 1].end - a[0].start <= WORD_CUE_MAX_SEC + 1
+    const sameSpeaker = last.speaker === b[0].speaker
+    if (!endsSentence(last.text) && fits && sameSpeaker && b[0].start - last.end < LONG_PAUSE_SEC) {
+      groups.splice(i, 2, [...a, ...b])
+    } else i++
+  }
+
+  const r = (n: number) => Math.round(n * 1000) / 1000
+  // Inicio: un poquito antes de la primera palabra, sin meterse en la voz del bloque anterior.
+  const starts = groups.map((g, i) => {
+    const prevWordEnd = i > 0 ? groups[i - 1][groups[i - 1].length - 1].end : 0
+    return Math.max(0, prevWordEnd, g[0].start - LEAD_IN_SEC)
+  })
   return groups.map((g, i) => {
-    const start = g[0].start
-    const nextStart = groups[i + 1]?.[0].start ?? Infinity
+    const start = starts[i]
+    const nextStart = starts[i + 1] ?? Infinity
     let end = Math.min(g[g.length - 1].end + END_PAD_SEC, nextStart)
     if (end - start < MIN_CUE_SEC) end = Math.min(start + MIN_CUE_SEC, nextStart)
     if (end <= start) end = start + 0.05
-    const r = (n: number) => Math.round(n * 1000) / 1000
     return { start: r(start), end: r(end), text: joined(g) }
   })
 }

@@ -265,7 +265,7 @@ describe('POST /api/transcribe con GROQ_API_KEY', () => {
     const res = await POST(makeRequest())
     expect(res.status).toBe(200)
     const { srt } = await res.json()
-    expect(srt).toContain('00:00:01,250 --> ')               // tiempo exacto de Groq
+    expect(srt).toContain('00:00:01,050 --> ')               // tiempo de Groq, 0,2 s antes de la voz
     expect(srt.match(/Hello there\./g)).toHaveLength(1)        // no se duplica
     expect(srt).toContain('00:00:10,000 --> 00:00:14,000\nGroq missed this part.') // hueco completado
     expect(srt).toContain('Bye.')
