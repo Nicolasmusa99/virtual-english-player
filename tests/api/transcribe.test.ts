@@ -248,27 +248,38 @@ describe('POST /api/transcribe con GROQ_API_KEY', () => {
   beforeEach(() => { process.env.GROQ_API_KEY = 'groq-test' })
   afterEach(() => { delete process.env.GROQ_API_KEY })
 
-  it('usa los tiempos por palabra de Groq y no toca Gemini', async () => {
-    let geminiCalled = false
+  it('usa los tiempos por palabra de Groq y completa con Gemini SOLO los huecos', async () => {
     let sentUrl: FormDataEntryValue | null = null
     server.use(
       http.post(GROQ, async ({ request }) => {
         sentUrl = (await request.formData()).get('url')
         return HttpResponse.json({ words: [
           { word: 'Hello', start: 1.25, end: 1.6 }, { word: 'there.', start: 1.65, end: 2 },
-          { word: 'Bye.', start: 5, end: 5.4 },
+          { word: 'Bye.', start: 30, end: 30.4 },
         ] })
       }),
-      http.post(GEN_RE, () => { geminiCalled = true; return HttpResponse.json({}) }),
+      http.post(GEN_RE, () => HttpResponse.json({ candidates: [{ content: { parts: [{ text:
+        '1\n00:00:01,000 --> 00:00:02,500\nHello there.\n\n2\n00:00:10,000 --> 00:00:14,000\nGroq missed this part.\n',
+      }] } }] })),
     )
     const res = await POST(makeRequest())
     expect(res.status).toBe(200)
     const { srt } = await res.json()
-    expect(srt).toContain('00:00:01,250 --> ')
-    expect(srt).toContain('Hello there.')
-    expect(srt).toContain('00:00:05,000 --> ')
+    expect(srt).toContain('00:00:01,250 --> ')               // tiempo exacto de Groq
+    expect(srt.match(/Hello there\./g)).toHaveLength(1)        // no se duplica
+    expect(srt).toContain('00:00:10,000 --> 00:00:14,000\nGroq missed this part.') // hueco completado
+    expect(srt).toContain('Bye.')
     expect(sentUrl).toBe(FAKE_BLOB_URL)
-    expect(geminiCalled).toBe(false)
+  })
+
+  it('si Gemini falla pero Groq anda, quedan los bloques de Groq', async () => {
+    server.use(
+      http.post(GROQ, () => HttpResponse.json({ words: [{ word: 'Hi.', start: 0.5, end: 0.9 }] })),
+      http.post(GEN_RE, () => HttpResponse.json({ error: 'boom' }, { status: 500 })),
+    )
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    expect((await res.json()).srt).toContain('Hi.')
   })
 
   it('si Groq falla (p. ej. video de más de 25 MB), sigue con Gemini', async () => {

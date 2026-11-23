@@ -95,3 +95,41 @@ export function cuesToSrt(cues: WordCue[]): string {
   if (!cues.length) return ''
   return cues.map((c, i) => `${i + 1}\n${srtTime(c.start)} --> ${srtTime(c.end)}\n${c.text}`).join('\n\n') + '\n'
 }
+
+// ─── Completar lo que Whisper no escuchó (2026-11-23) ───────────────────────
+// Whisper (Groq) da tiempos exactos pero a veces se saltea tramos enteros cuando hay
+// música de fondo (en un video de 2:34 dejó huecos de 35 y 45 segundos). Gemini escucha
+// todo pero con tiempos aproximados. fillGaps se queda con los bloques de Whisper y agrega
+// los de Gemini que caen donde Whisper no puso nada:
+//   · Un bloque de Gemini entra si menos del GAP_OVERLAP_MAX de su duración se pisa con
+//     bloques de Whisper (si se pisa más, es lo mismo que Whisper ya escuchó).
+//   · Tampoco entra si su texto ya está en los bloques de Whisper de al lado.
+//   · Se recorta para que no pise a los de Whisper que tiene antes y después.
+export const GAP_OVERLAP_MAX = 0.25
+const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim()
+
+export function fillGaps(primary: WordCue[], backup: WordCue[]): { cues: WordCue[]; added: number } {
+  const p = [...primary].sort((a, b) => a.start - b.start)
+  const out: WordCue[] = [...p]
+  let added = 0
+  for (const b of backup) {
+    const dur = b.end - b.start
+    if (!(dur > 0) || !b.text.trim()) continue
+    const overlap = p.reduce((s, c) => s + Math.max(0, Math.min(b.end, c.end) - Math.max(b.start, c.start)), 0)
+    if (overlap / dur >= GAP_OVERLAP_MAX) continue
+    const before = [...p].reverse().find(c => c.start <= b.start)
+    const after = p.find(c => c.start > b.start)
+    const near = norm([before?.text, after?.text].filter(Boolean).join(' '))
+    const bt = norm(b.text)
+    if (bt && near.includes(bt)) continue
+    const start = Math.max(b.start, before ? before.end : 0)
+    const end = Math.min(b.end, after ? after.start : Infinity)
+    if (end - start < 0.3) continue
+    out.push({ start, end, text: b.text.replace(/\s*\n\s*/g, ' ').trim() })
+    added++
+  }
+  out.sort((a, b) => a.start - b.start)
+  // Por las dudas: nada se pisa con el siguiente.
+  for (let i = 0; i < out.length - 1; i++) if (out[i].end > out[i + 1].start) out[i] = { ...out[i], end: out[i + 1].start }
+  return { cues: out.filter(c => c.end > c.start), added }
+}
