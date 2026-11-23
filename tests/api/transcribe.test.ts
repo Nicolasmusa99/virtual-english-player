@@ -241,3 +241,46 @@ describe('POST /api/transcribe', () => {
 
   it.todo('(j) browser-direct upload to Gemini bypasses Next.js multipart buffering — see CLAUDE.md "Memory budget"')
 })
+
+// ─── Groq + Whisper primero (2026-11-23) ─────────────────────────────────────
+describe('POST /api/transcribe con GROQ_API_KEY', () => {
+  const GROQ = 'https://api.groq.com/openai/v1/audio/transcriptions'
+  beforeEach(() => { process.env.GROQ_API_KEY = 'groq-test' })
+  afterEach(() => { delete process.env.GROQ_API_KEY })
+
+  it('usa los tiempos por palabra de Groq y no toca Gemini', async () => {
+    let geminiCalled = false
+    let sentUrl: FormDataEntryValue | null = null
+    server.use(
+      http.post(GROQ, async ({ request }) => {
+        sentUrl = (await request.formData()).get('url')
+        return HttpResponse.json({ words: [
+          { word: 'Hello', start: 1.25, end: 1.6 }, { word: 'there.', start: 1.65, end: 2 },
+          { word: 'Bye.', start: 5, end: 5.4 },
+        ] })
+      }),
+      http.post(GEN_RE, () => { geminiCalled = true; return HttpResponse.json({}) }),
+    )
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    const { srt } = await res.json()
+    expect(srt).toContain('00:00:01,250 --> ')
+    expect(srt).toContain('Hello there.')
+    expect(srt).toContain('00:00:05,000 --> ')
+    expect(sentUrl).toBe(FAKE_BLOB_URL)
+    expect(geminiCalled).toBe(false)
+  })
+
+  it('si Groq falla (p. ej. video de más de 25 MB), sigue con Gemini', async () => {
+    server.use(http.post(GROQ, () => HttpResponse.text('file too large', { status: 413 })))
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    expect((await res.json()).srt).toBe(FAKE_SRT)
+  })
+
+  it('si Groq no devuelve palabras, sigue con Gemini', async () => {
+    server.use(http.post(GROQ, () => HttpResponse.json({ words: [] })))
+    const res = await POST(makeRequest())
+    expect((await res.json()).srt).toBe(FAKE_SRT)
+  })
+})

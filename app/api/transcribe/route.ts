@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
 import { cleanSrt, TRANSCRIPT_EMPTY_ERROR } from '@/lib/srt'
 import { isVercelBlobUrl } from '@/lib/blobUrl'
+import { groqWords } from '@/lib/groq'
+import { cuesFromWords, cuesToSrt } from '@/lib/wordCues'
 
 // Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
@@ -121,6 +123,23 @@ export async function POST(req: NextRequest) {
     // Solo se baja de NUESTRO almacenamiento: el servidor no le pega a cualquier dirección.
     if (!isVercelBlobUrl(blobUrl)) {
       return NextResponse.json({ error: 'blobUrl inválido' }, { status: 400 })
+    }
+
+    // (2026-11-23) Primero Groq + Whisper (gratis): da el tiempo exacto de CADA palabra, así
+    // cada bloque arranca justo cuando se escucha (Gemini adivinaba los tiempos y se le
+    // corrían). Groq baja el video solo desde la URL de Blob. Si no hay clave, falla o el
+    // video pasa el límite del free tier, sigue Gemini como siempre.
+    const groqKey = process.env.GROQ_API_KEY
+    if (groqKey) {
+      try {
+        const words = await groqWords(blobUrl, groqKey)
+        const { srt, phrases } = cleanSrt(cuesToSrt(cuesFromWords(words)))
+        console.log(`[transcribe] Groq — ${words.length} palabras, ${phrases} frases`)
+        if (phrases > 0) return NextResponse.json({ srt })
+        console.warn('[transcribe] Groq no devolvió palabras, sigo con Gemini')
+      } catch (e) {
+        console.warn('[transcribe] Groq falló, sigo con Gemini:', e instanceof Error ? e.message : e)
+      }
     }
 
     // El video vive en Vercel Blob (subido directo por el browser). Lo bajamos acá y se lo
