@@ -176,3 +176,21 @@ describe('fillGaps (lo que Whisper no escuchó lo completa Gemini)', () => {
     expect(fillGaps([], G).cues).toEqual(G)
   })
 })
+
+describe('subtítulos sobre música (2026-11-24)', () => {
+  it('una primera palabra estirada hacia atrás por Whisper no adelanta el subtítulo', () => {
+    // "Now" marcado de 10 a 13 s (en el audio dura 0,3 s, lo de antes es música)
+    const ws = [{ text: 'Now,', start: 10, end: 13 }, ...say('imagine that a prisoner is released.', 13.05)]
+    const [c] = cuesFromWords(ws)
+    expect(c.start).toBeGreaterThan(12.2)
+  })
+  it('las palabras de largo normal no se tocan', () => {
+    const [c] = cuesFromWords(say('Hello there.', 5))
+    expect(c.start).toBeCloseTo(5 - LEAD_IN_SEC, 3)
+  })
+  it('Gemini no pone en un hueco de música una frase que Whisper ya escuchó cerca', () => {
+    const W = [{ start: 74, end: 77, text: 'Now, imagine that a prisoner is released.' }]
+    const { added } = fillGaps(W, [{ start: 66, end: 70, text: 'Now imagine that a prisoner is released' }])
+    expect(added).toBe(0)
+  })
+})

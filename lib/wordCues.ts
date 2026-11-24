@@ -54,11 +54,25 @@ function softCut(ws: TimedWord[]): number {
   return -1
 }
 
-// Limpia y ordena las palabras (sin vacías ni sin tiempo).
+// Lo más que puede durar una palabra según su largo (s). (2026-11-24) Whisper, después de
+// un tramo de música o silencio, estira el INICIO de la primera palabra hacia atrás (le
+// da 2 o 3 s a una palabra de 0,3 s) y el subtítulo aparecía con la música sola. Si una
+// palabra dura más que esto, se le corre el inicio para que termine donde termina.
+export function maxWordSec(text: string): number {
+  const letters = text.replace(/[^A-Za-z0-9]/g, '').length
+  return Math.min(1.2, Math.max(0.45, 0.25 + 0.08 * letters))
+}
+
+// Limpia y ordena las palabras (sin vacías ni sin tiempo) y recorta las estiradas.
 export function normalizeWords(input: TimedWord[]): TimedWord[] {
   return input
     .filter(w => w && typeof w.text === 'string' && w.text.trim() && Number.isFinite(w.start) && Number.isFinite(w.end))
-    .map(w => ({ ...w, text: w.text.trim(), end: Math.max(w.end, w.start) }))
+    .map(w => {
+      const text = w.text.trim()
+      const end = Math.max(w.end, w.start)
+      const start = Math.max(w.start, end - maxWordSec(text))
+      return { ...w, text, start, end }
+    })
     .sort((a, b) => a.start - b.start)
 }
 
@@ -152,6 +166,18 @@ export function cuesToSrt(cues: WordCue[]): string {
 export const GAP_OVERLAP_MAX = 0.25
 const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9' ]+/g, ' ').replace(/\s+/g, ' ').trim()
 
+const HEARD_WINDOW_SEC = 20
+function alreadyHeard(b: WordCue, primary: WordCue[]): boolean {
+  const all = norm(b.text).split(' ').filter(Boolean)
+  const long = all.filter(w => w.length > 2)
+  const ws = long.length ? long : all
+  if (!ws.length || !primary.length) return false
+  const near = new Set(primary
+    .filter(c => c.end >= b.start - HEARD_WINDOW_SEC && c.start <= b.end + HEARD_WINDOW_SEC)
+    .flatMap(c => norm(c.text).split(' ')))
+  return ws.filter(w => near.has(w)).length / ws.length >= 0.6
+}
+
 export function fillGaps(primary: WordCue[], backup: WordCue[]): { cues: WordCue[]; added: number } {
   const p = [...primary].sort((a, b) => a.start - b.start)
   const out: WordCue[] = [...p]
@@ -161,6 +187,9 @@ export function fillGaps(primary: WordCue[], backup: WordCue[]): { cues: WordCue
     if (!(dur > 0) || !b.text.trim()) continue
     const overlap = p.reduce((s, c) => s + Math.max(0, Math.min(b.end, c.end) - Math.max(b.start, c.start)), 0)
     if (overlap / dur >= GAP_OVERLAP_MAX) continue
+    // (2026-11-24) Si lo que dice Gemini ya lo escuchó Whisper en otro momento cercano, es
+    // la misma frase con el tiempo mal puesto (el hueco suele ser música sola): no entra.
+    if (alreadyHeard(b, p)) continue
     const before = [...p].reverse().find(c => c.start <= b.start)
     const after = p.find(c => c.start > b.start)
     const near = norm([before?.text, after?.text].filter(Boolean).join(' '))
