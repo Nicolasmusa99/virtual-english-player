@@ -32,6 +32,9 @@ export async function groqWords(
   media: string | Blob,
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
+  // (2026-11-23) Texto de pista para Whisper (el título del video): acierta mejor nombres
+  // propios y palabras poco comunes. Whisper solo mira las últimas ~224 palabras.
+  prompt?: string,
 ): Promise<TimedWord[]> {
   const form = new FormData()
   form.append('model', GROQ_MODEL)
@@ -42,6 +45,7 @@ export async function groqWords(
   form.append('timestamp_granularities[]', 'word')
   form.append('timestamp_granularities[]', 'segment')
   form.append('temperature', '0')
+  if (prompt) form.append('prompt', prompt)
   const res = await fetchImpl(GROQ_URL, { method: 'POST', headers: { Authorization: `Bearer ${apiKey}` }, body: form })
   if (!res.ok) {
     const err = await res.text().catch(() => '')
