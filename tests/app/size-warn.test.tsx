@@ -92,7 +92,13 @@ describe('US-036 — validación de duración antes de subir', () => {
 
     // Sin aviso
     expect(container.querySelector('[data-testid="size-warn"]')).toBeNull()
-    // El flujo avanzó: transcribe() puso step='uploading' → el drop zone se ocultó
+    // (2026-11-24) Antes de transcribir se buscan subtítulos humanos: aparece la ventana.
+    expect(container.querySelector('[role="dialog"][aria-label="Buscar subtítulos"]')).not.toBeNull()
+    // "Transcribir con IA" sigue el flujo de siempre: transcribe() → el drop zone se oculta.
+    await act(async () => {
+      fireEvent.click(Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Transcribir con IA')!)
+      await tick(50)
+    })
     expect(container.querySelector('input[type="file"]')).toBeNull()
   })
 

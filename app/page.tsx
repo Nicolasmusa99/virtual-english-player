@@ -36,6 +36,8 @@ import { currentClassStudent, studentOptions, type ProgressMarks } from '@/lib/p
 import { useClassProgress } from './useClassProgress'
 import { useSession, signOut } from 'next-auth/react'
 import { upload } from '@vercel/blob/client'
+import SubtitleSearch from './SubtitleSearch'
+import { queryFromFileName } from '@/lib/subtitleSearch'
 
 type Step = 'idle' | 'uploading' | 'transcribing' | 'parsing' | 'done'
 
@@ -131,6 +133,9 @@ export default function Player() {
   const [loopMode, setLoopMode]           = useState(false)
   const [hideTexts, setHideTexts]         = useState(false)
   const [sizeWarn, setSizeWarn]           = useState<{ file: File; durationMin: number } | null>(null)
+  // Buscar subtítulos humanos (2026-11-24): al subir un video (antes de transcribir) y desde "Más".
+  const [subPick, setSubPick]             = useState<{ file: File; durationSec?: number } | null>(null)
+  const [subSearchOpen, setSubSearchOpen] = useState(false)
   // Biblioteca (Bloque 13)
   const libraryVideoIdRef = useRef<string | null>(null)
   const { data: sessionData, status: authStatus, update: refreshSession } = useSession()
@@ -763,15 +768,19 @@ export default function Player() {
         if (isFinite(durationMin) && durationMin > DURATION_WARN_MIN) {
           setSizeWarn({ file: vf as File, durationMin })
         } else {
-          transcribe(vf as File)
+          // (2026-11-24) Antes de transcribir se buscan subtítulos hechos por personas; si no
+          // hay ninguno, SubtitleSearch sigue solo con la IA (autoAiWhenEmpty).
+          setSubPick({ file: vf as File, durationSec: probe.duration })
         }
       }
-      probe.onerror = () => transcribe(vf as File)  // si no se puede leer la duración, seguimos igual
+      probe.onerror = () => setSubPick({ file: vf as File })  // si no se puede leer la duración, seguimos igual
       probe.src = url
     }
   }
 
-  async function transcribe(videoFile: File) {
+  // `preset`: subtítulo elegido en "Buscar subtítulos". El video se sube igual a la
+  // biblioteca, pero no se transcribe: se guarda ese subtítulo.
+  async function transcribe(videoFile: File, preset?: { srt: string; label: string }) {
     setStep('uploading')
     setStepMsg('Subiendo video…')
     setProgress(2)
@@ -820,28 +829,35 @@ export default function Player() {
         signal: ac.signal,
       })
 
-      // 4) Transcribir desde la URL del Blob (la función baja el archivo y llama a Gemini)
-      setStep('transcribing')
-      setStepMsg('Transcribiendo con Gemini…')
-      setProgress(40)
-      let p = 40
-      interval = setInterval(() => {
-        p = Math.min(p + Math.random() * 2, 88)
-        setProgress(p)
-        if (p >= 88 && interval) clearInterval(interval)
-      }, 2000)
+      // 4) Transcribir desde la URL del Blob (la función baja el archivo y llama a Gemini),
+      //    salvo que se haya elegido un subtítulo en "Buscar subtítulos".
+      let srtText: string
+      if (preset) {
+        srtText = preset.srt
+      } else {
+        setStep('transcribing')
+        setStepMsg('Transcribiendo con Gemini…')
+        setProgress(40)
+        let p = 40
+        interval = setInterval(() => {
+          p = Math.min(p + Math.random() * 2, 88)
+          setProgress(p)
+          if (p >= 88 && interval) clearInterval(interval)
+        }, 2000)
 
-      const trRes = await fetch('/api/transcribe', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blobUrl: blob.url, mimeType: videoFile.type || 'video/mp4' }),
-        signal: ac.signal,
-      })
-      if (interval) { clearInterval(interval); interval = null }
-      const trData = await trRes.json()
-      if (!trRes.ok || trData.error) throw new Error(trData.error || `Error del servidor: ${trRes.status}`)
+        const trRes = await fetch('/api/transcribe', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blobUrl: blob.url, mimeType: videoFile.type || 'video/mp4' }),
+          signal: ac.signal,
+        })
+        if (interval) { clearInterval(interval); interval = null }
+        const trData = await trRes.json()
+        if (!trRes.ok || trData.error) throw new Error(trData.error || `Error del servidor: ${trRes.status}`)
+        srtText = trData.srt
+      }
 
-      const parsed = parseSRT(trData.srt)
+      const parsed = parseSRT(srtText)
       if (parsed.length === 0) {
         // Sin subtítulos = no sirve → que el finally borre el video (no dejar huérfano ni cuota).
         throw new Error('No se generaron subtítulos. El video puede no tener audio detectable.')
@@ -852,7 +868,7 @@ export default function Player() {
 
       // 5) Auto-descarga del SRT (idéntico a hoy)
       const a = document.createElement('a')
-      a.href = URL.createObjectURL(new Blob([trData.srt], { type: 'text/plain;charset=utf-8' }))
+      a.href = URL.createObjectURL(new Blob([srtText], { type: 'text/plain;charset=utf-8' }))
       a.download = videoFile.name.replace(/\.[^.]+$/, '') + '.srt'
       document.body.appendChild(a); a.click(); document.body.removeChild(a)
 
@@ -861,7 +877,7 @@ export default function Player() {
         const sessRes = await fetch(`/api/videos/${createdVideoId}/session`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ phrases: parsed, delay: 0, speedIdx: 2, ccOn: true, filter: 'all', srtSource: 'gemini' }),
+          body: JSON.stringify({ phrases: parsed, delay: 0, speedIdx: 2, ccOn: true, filter: 'all', srtSource: preset ? 'srt-upload' : 'gemini' }),
         })
         if (!sessRes.ok) throw new Error(`HTTP ${sessRes.status}`)
       } catch (e) {
@@ -901,7 +917,7 @@ export default function Player() {
       }
       setIsDirty(false)
       setPhrases(parsed)
-      setSrtSource(`Gemini AI · ${parsed.length} frases`)
+      setSrtSource(preset ? `${preset.label} · ${parsed.length} frases` : `Gemini AI · ${parsed.length} frases`)
       setProgress(100); setStep('done')
       setTimeout(() => setScreen('player'), 300)
     } catch (err) {
@@ -1338,6 +1354,16 @@ export default function Player() {
                 <div className={aula.upload}>
                   {!isTranscribing ? (
                     <>
+                    {subPick && (
+                      <SubtitleSearch
+                        initialQuery={queryFromFileName(subPick.file.name)}
+                        durationSec={subPick.durationSec}
+                        autoAiWhenEmpty
+                        onAi={() => { const f = subPick.file; setSubPick(null); transcribe(f) }}
+                        onPick={(srt, label) => { const f = subPick.file; setSubPick(null); transcribe(f, { srt, label }) }}
+                        onClose={() => { setSubPick(null); cancelTranscription() }}
+                      />
+                    )}
                     {sizeWarn && (
                       <div data-testid="size-warn" className={styles.restoreBanner}>
                         <span className={styles.restoreBannerText}>
@@ -1520,6 +1546,7 @@ export default function Player() {
                 <ActionMenu label="Más acciones del video" trigger="Más" items={[
                   { label: 'Descargar SRT', onSelect: downloadSRT },
                   { label: 'Cargar SRT', onSelect: () => srtReloadRef.current?.click() },
+                  { label: 'Buscar subtítulos', onSelect: () => setSubSearchOpen(true) },
                   { label: 'Ordenar subtítulos', onSelect: tidySubtitles, disabled: phrases.length === 0 },
                   ...(userRole === 'admin' && !libraryVideoIdRef.current && videoFileRef.current
                     ? [{ label: librarySaving ? 'Guardando…' : 'Guardar en biblioteca', onSelect: saveToLibrary, disabled: librarySaving }]
@@ -1784,6 +1811,24 @@ export default function Player() {
             </div>
           </div>
 
+          {subSearchOpen && (
+            <SubtitleSearch
+              initialQuery={queryFromFileName(videoFileName)}
+              durationSec={vidRef.current?.duration}
+              onClose={() => setSubSearchOpen(false)}
+              onPick={(srt, label) => {
+                setSubSearchOpen(false)
+                const parsed = parseSRT(srt)
+                if (parsed.length === 0) return
+                if (isDirty) {
+                  exitPendingRef.current = () => applySrt(parsed, label)
+                  setExitDialog(true)
+                  return
+                }
+                applySrt(parsed, label)
+              }}
+            />
+          )}
           <input
             ref={srtReloadRef}
             data-testid="srt-reload-input"
