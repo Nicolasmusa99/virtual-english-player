@@ -7,7 +7,7 @@
 // termina la última. Acá solo se agrupan esas palabras en bloques cortos y fáciles de leer.
 //
 // Reglas de agrupado (mismas que se le pedían a Gemini):
-//   · Máximo CUE_MAX_CHARS letras (2 renglones) y WORD_CUE_MAX_SEC segundos por bloque.
+//   · Máximo WORD_CUE_MAX_CHARS letras (renglón y medio) y WORD_CUE_MAX_SEC segundos por bloque.
 //   · Se corta al terminar una oración y en un silencio largo (LONG_PAUSE_SEC). Un silencio
 //     corto (PAUSE_SEC) corta SOLO si la frase ya terminó una cláusula (coma) o ya es larga:
 //     los narradores hacen pausas en el medio de la oración y cortar ahí la partía en dos.
@@ -18,16 +18,18 @@
 //     coma, o antes de "and", "but", "because"...; nunca después de "the", "a"...).
 //   · El bloque queda en pantalla un poquito más (END_PAD_SEC) para poder leerlo, sin
 //     pisar nunca al siguiente.
-import { CUE_MAX_CHARS, srtTime } from '@/lib/srt'
+import { srtTime } from '@/lib/srt'
 
 export type TimedWord = { text: string; start: number; end: number; speaker?: number }
 export type WordCue = { start: number; end: number; text: string }
 
-export const WORD_CUE_MAX_SEC = 6
+// (2026-11-23) Más cortos, a pedido del dueño: antes 84 letras (2 renglones llenos) y 6 s.
+export const WORD_CUE_MAX_CHARS = 60
+export const WORD_CUE_MAX_SEC = 4.5
 export const PAUSE_SEC = 0.7       // silencio que corta si ya terminó una cláusula o es largo
 export const LONG_PAUSE_SEC = 1.5  // silencio que corta siempre
 export const LEAD_IN_SEC = 0.2     // el bloque aparece un poquito antes de la voz
-const PAUSE_CUT_CHARS = 42         // desde este largo, un silencio corto ya corta
+const PAUSE_CUT_CHARS = 30         // desde este largo, un silencio corto ya corta
 export const END_PAD_SEC = 0.25    // cuánto más queda en pantalla después de la última palabra
 export const MIN_CUE_SEC = 0.6     // ningún bloque dura menos (si hay lugar antes del siguiente)
 const SHORT_SENTENCE = 12          // "Yes." "Oh, okay." se juntan con lo que sigue si no hay pausa
@@ -71,12 +73,12 @@ export function cuesFromWords(input: TimedWord[]): WordCue[] {
         (gap >= PAUSE_SEC && (endsClause(prev.text) || joined(cur).length >= PAUSE_CUT_CHARS))
       if (pauseCuts || speakerChange) close()
       else {
-        const tooLong = joined([...cur, w]).length > CUE_MAX_CHARS || w.end - cur[0].start > WORD_CUE_MAX_SEC
+        const tooLong = joined([...cur, w]).length > WORD_CUE_MAX_CHARS || w.end - cur[0].start > WORD_CUE_MAX_SEC
         if (tooLong) {
           const k = softCut(cur)
           if (k > 0) { groups.push(cur.slice(0, k)); cur = cur.slice(k) } else close()
           // lo que quedó todavía puede no entrar con la palabra nueva
-          if (cur.length && (joined([...cur, w]).length > CUE_MAX_CHARS || w.end - cur[0].start > WORD_CUE_MAX_SEC)) close()
+          if (cur.length && (joined([...cur, w]).length > WORD_CUE_MAX_CHARS || w.end - cur[0].start > WORD_CUE_MAX_SEC)) close()
         }
       }
     }
@@ -94,7 +96,7 @@ export function cuesFromWords(input: TimedWord[]): WordCue[] {
   for (let i = 0; i < groups.length - 1; ) {
     const a = groups[i], b = groups[i + 1]
     const last = a[a.length - 1]
-    const fits = joined([...a, ...b]).length <= CUE_MAX_CHARS && b[b.length - 1].end - a[0].start <= WORD_CUE_MAX_SEC + 1
+    const fits = joined([...a, ...b]).length <= WORD_CUE_MAX_CHARS && b[b.length - 1].end - a[0].start <= WORD_CUE_MAX_SEC
     const sameSpeaker = last.speaker === b[0].speaker
     if (!endsSentence(last.text) && fits && sameSpeaker && b[0].start - last.end < LONG_PAUSE_SEC) {
       groups.splice(i, 2, [...a, ...b])

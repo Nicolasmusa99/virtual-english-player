@@ -21,6 +21,11 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   poweredByHeader: false,
+  // (2026-11-23) /api/transcribe saca el audio del video con el ffmpeg de ffmpeg-static
+  // (lib/audio.ts) antes de mandarlo a Groq. El binario no se empaqueta y se incluye
+  // tal cual en la función de esa ruta.
+  serverExternalPackages: ['ffmpeg-static'],
+  outputFileTracingIncludes: { '/api/transcribe': ['./node_modules/ffmpeg-static/ffmpeg'] },
   async headers() {
     return [{ source: '/:path*', headers: securityHeaders }]
   },

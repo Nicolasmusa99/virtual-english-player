@@ -295,3 +295,24 @@ describe('POST /api/transcribe con GROQ_API_KEY', () => {
     expect((await res.json()).srt).toBe(FAKE_SRT)
   })
 })
+
+// ─── A Groq se le manda solo el audio (2026-11-23) ───────────────────────────
+describe('POST /api/transcribe: audio para Groq', () => {
+  const GROQ = 'https://api.groq.com/openai/v1/audio/transcriptions'
+  beforeEach(() => { process.env.GROQ_API_KEY = 'groq-test' })
+  afterEach(() => { delete process.env.GROQ_API_KEY; vi.restoreAllMocks() })
+
+  it('si se puede sacar el audio, Groq recibe el archivo y no la URL', async () => {
+    const audio = await import('@/lib/audio')
+    vi.spyOn(audio, 'extractAudioMp3').mockResolvedValue(new Blob(['mp3'], { type: 'audio/mpeg' }))
+    let form: FormData | null = null
+    server.use(http.post(GROQ, async ({ request }) => {
+      form = await request.formData()
+      return HttpResponse.json({ words: [{ word: 'Hi.', start: 0.5, end: 0.9 }] })
+    }))
+    const res = await POST(makeRequest())
+    expect(res.status).toBe(200)
+    expect(form!.get('url')).toBeNull()
+    expect((form!.get('file') as File).name).toBe('audio.mp3')
+  })
+})
