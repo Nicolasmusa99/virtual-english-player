@@ -54,12 +54,17 @@ function softCut(ws: TimedWord[]): number {
   return -1
 }
 
-export function cuesFromWords(input: TimedWord[]): WordCue[] {
-  const words = input
+// Limpia y ordena las palabras (sin vacías ni sin tiempo).
+export function normalizeWords(input: TimedWord[]): TimedWord[] {
+  return input
     .filter(w => w && typeof w.text === 'string' && w.text.trim() && Number.isFinite(w.start) && Number.isFinite(w.end))
     .map(w => ({ ...w, text: w.text.trim(), end: Math.max(w.end, w.start) }))
     .sort((a, b) => a.start - b.start)
+}
 
+// Agrupa las palabras en bloques con las reglas de arriba (sin tiempos todavía).
+export function groupWords(input: TimedWord[]): TimedWord[][] {
+  const words = normalizeWords(input)
   const groups: TimedWord[][] = []
   let cur: TimedWord[] = []
   const close = () => { if (cur.length) groups.push(cur); cur = [] }
@@ -102,7 +107,13 @@ export function cuesFromWords(input: TimedWord[]): WordCue[] {
       groups.splice(i, 2, [...a, ...b])
     } else i++
   }
+  return groups
+}
 
+// Tiempos de cada bloque: aparece LEAD_IN_SEC antes de su primera palabra (sin meterse en
+// la voz del anterior) y queda END_PAD_SEC después de la última, sin pisar al siguiente.
+export function timeGroups(groups: TimedWord[][]): WordCue[] {
+  groups = groups.filter(g => g.length)
   const r = (n: number) => Math.round(n * 1000) / 1000
   // Inicio: un poquito antes de la primera palabra, sin meterse en la voz del bloque anterior.
   const starts = groups.map((g, i) => {
@@ -117,6 +128,10 @@ export function cuesFromWords(input: TimedWord[]): WordCue[] {
     if (end <= start) end = start + 0.05
     return { start: r(start), end: r(end), text: joined(g) }
   })
+}
+
+export function cuesFromWords(input: TimedWord[]): WordCue[] {
+  return timeGroups(groupWords(input))
 }
 
 // Bloques → texto SRT (numerados desde 1). Vacío si no hay bloques.

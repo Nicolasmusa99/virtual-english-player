@@ -4,7 +4,8 @@ import { cleanSrt, parseSRT, TRANSCRIPT_EMPTY_ERROR } from '@/lib/srt'
 import { isVercelBlobUrl } from '@/lib/blobUrl'
 import { groqWords, GROQ_FREE_MAX_BYTES } from '@/lib/groq'
 import { extractAudioMp3 } from '@/lib/audio'
-import { cuesFromWords, cuesToSrt, fillGaps, type WordCue } from '@/lib/wordCues'
+import { aiCues, titleFromBlobUrl } from '@/lib/subtitleAi'
+import { cuesToSrt, fillGaps, type WordCue } from '@/lib/wordCues'
 
 // Node.js runtime — needed for large file handling and long timeouts
 export const maxDuration = 300
@@ -207,9 +208,11 @@ export async function POST(req: NextRequest) {
         console.warn('[transcribe] No se pudo sacar el audio:', e instanceof Error ? e.message : e)
         if (file.size > GROQ_FREE_MAX_BYTES) { console.warn('[transcribe] Video de más de 25 MB: queda Gemini'); return null }
       }
-      const words = await groqWords(media, groqKey)
-      const cues = cuesFromWords(words)
-      console.log(`[transcribe] Groq — ${words.length} palabras, ${cues.length} frases`)
+      // (2026-11-23) El título del video le da contexto a Whisper, y los cortes los elige
+      // Gemini sobre las palabras de Whisper (lib/subtitleAi.ts); si falla, cortes por reglas.
+      const words = await groqWords(media, groqKey, fetch, titleFromBlobUrl(blobUrl))
+      const { cues, byAi } = await aiCues(words, apiKey)
+      console.log(`[transcribe] Groq — ${words.length} palabras, ${cues.length} frases (cortes ${byAi ? 'de Gemini' : 'por reglas'})`)
       return cues.length ? cues : null
     })().catch(e => { console.warn('[transcribe] Groq falló, queda Gemini:', e instanceof Error ? e.message : e); return null })
     const [groq, gemini] = await Promise.allSettled([groqP, geminiTranscript(file, mimeIn, apiKey)])
