@@ -1,8 +1,9 @@
 // Transcripción con Groq + Whisper (2026-11-23): gratis (free tier sin tarjeta) y con el
-// tiempo exacto de CADA palabra. La usa /api/transcribe cuando está GROQ_API_KEY; si no
-// está, falla o el video pasa el límite del free tier (25 MB), sigue Gemini.
-// Groq baja el video él mismo desde la URL pública de Vercel Blob (parámetro `url`): el
-// servidor no lo descarga. Tests: tests/lib/word-cues.test.ts (con un fetch falso).
+// tiempo exacto de CADA palabra. La usa /api/transcribe cuando está GROQ_API_KEY.
+// Se le manda el AUDIO solo (lib/audio.ts), como archivo: el video entero solía pasar los
+// 25 MB del free tier y Groq lo rechazaba. Con una URL (string) Groq baja el archivo él
+// mismo; queda como respaldo si no se pudo sacar el audio.
+// Tests: tests/lib/word-cues.test.ts (con un fetch falso).
 import type { TimedWord } from '@/lib/wordCues'
 
 export const GROQ_URL = 'https://api.groq.com/openai/v1/audio/transcriptions'
@@ -28,13 +29,14 @@ function punctuate(words: TimedWord[], segments: GSegment[]): TimedWord[] {
 }
 
 export async function groqWords(
-  mediaUrl: string,
+  media: string | Blob,
   apiKey: string,
   fetchImpl: typeof fetch = fetch,
 ): Promise<TimedWord[]> {
   const form = new FormData()
   form.append('model', GROQ_MODEL)
-  form.append('url', mediaUrl)
+  if (typeof media === 'string') form.append('url', media)
+  else form.append('file', media, 'audio.mp3')
   form.append('language', 'en') // el audio es SIEMPRE en inglés
   form.append('response_format', 'verbose_json')
   form.append('timestamp_granularities[]', 'word')

@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireRole } from '@/lib/authz'
 import { cleanSrt, parseSRT, TRANSCRIPT_EMPTY_ERROR } from '@/lib/srt'
 import { isVercelBlobUrl } from '@/lib/blobUrl'
-import { groqWords } from '@/lib/groq'
+import { groqWords, GROQ_FREE_MAX_BYTES } from '@/lib/groq'
+import { extractAudioMp3 } from '@/lib/audio'
 import { cuesFromWords, cuesToSrt, fillGaps, type WordCue } from '@/lib/wordCues'
 
 // Node.js runtime — needed for large file handling and long timeouts
@@ -108,14 +109,8 @@ async function waitForFile(name: string, apiKey: string): Promise<void> {
   throw new Error('Timeout: Gemini took too long to process the file')
 }
 
-// Gemini: baja el video de Blob, lo sube a Gemini y devuelve el SRT limpio (como siempre).
-async function geminiTranscript(blobUrl: string, mimeIn: string | undefined, apiKey: string): Promise<{ srt: string; phrases: number }> {
-  // El video vive en Vercel Blob (subido directo por el browser). Lo bajamos acá y se lo
-  // pasamos a Gemini igual que antes. Esto evita el límite de 4.5 MB de body de Vercel.
-  const dl = await fetch(blobUrl)
-  if (!dl.ok) throw new Error(`No se pudo descargar el video del storage: ${dl.status}`)
-  const file = await dl.blob()
-
+// Gemini: sube el video (ya bajado de Blob) a Gemini y devuelve el SRT limpio.
+async function geminiTranscript(file: Blob, mimeIn: string | undefined, apiKey: string): Promise<{ srt: string; phrases: number }> {
   const mimeType = mimeIn || file.type || 'video/mp4'
   const sizeMB = (file.size / 1024 / 1024).toFixed(1)
   console.log(`[transcribe] Blob: ${sizeMB} MB — ${mimeType}`)
@@ -193,18 +188,31 @@ export async function POST(req: NextRequest) {
     //   · Gemini escucha todo, con tiempos aproximados.
     // Se usan los bloques de Groq y los huecos que dejó se completan con los de Gemini
     // (fillGaps en lib/wordCues.ts). Sin clave de Groq o si falla, queda solo Gemini.
+    // El video vive en Vercel Blob (subido directo por el browser). Se baja UNA vez acá
+    // y lo usan los dos. Esto evita el límite de 4.5 MB de body de Vercel.
+    const dl = await fetch(blobUrl)
+    if (!dl.ok) throw new Error(`No se pudo descargar el video del storage: ${dl.status}`)
+    const file = await dl.blob()
+
+    // (2026-11-23) A Groq se le manda SOLO EL AUDIO (lib/audio.ts): el video entero solía
+    // pasar los 25 MB del free tier y Groq lo rechazaba, así que todo salía de Gemini.
+    // Si no se puede sacar el audio, se le pasa la URL del video (sirve si pesa menos de 25 MB).
     const groqKey = process.env.GROQ_API_KEY
-    const groqP: Promise<WordCue[] | null> = groqKey
-      ? groqWords(blobUrl, groqKey).then(
-          words => {
-            const cues = cuesFromWords(words)
-            console.log(`[transcribe] Groq — ${words.length} palabras, ${cues.length} frases`)
-            return cues.length ? cues : null
-          },
-          e => { console.warn('[transcribe] Groq falló, queda Gemini:', e instanceof Error ? e.message : e); return null },
-        )
-      : Promise.resolve(null)
-    const [groq, gemini] = await Promise.allSettled([groqP, geminiTranscript(blobUrl, mimeIn, apiKey)])
+    const groqP: Promise<WordCue[] | null> = !groqKey ? Promise.resolve(null) : (async () => {
+      let media: string | Blob = blobUrl
+      try {
+        media = await extractAudioMp3(file)
+        console.log(`[transcribe] Audio para Groq: ${(media.size / 1024).toFixed(0)} KB (video ${(file.size / 1024 / 1024).toFixed(1)} MB)`)
+      } catch (e) {
+        console.warn('[transcribe] No se pudo sacar el audio:', e instanceof Error ? e.message : e)
+        if (file.size > GROQ_FREE_MAX_BYTES) { console.warn('[transcribe] Video de más de 25 MB: queda Gemini'); return null }
+      }
+      const words = await groqWords(media, groqKey)
+      const cues = cuesFromWords(words)
+      console.log(`[transcribe] Groq — ${words.length} palabras, ${cues.length} frases`)
+      return cues.length ? cues : null
+    })().catch(e => { console.warn('[transcribe] Groq falló, queda Gemini:', e instanceof Error ? e.message : e); return null })
+    const [groq, gemini] = await Promise.allSettled([groqP, geminiTranscript(file, mimeIn, apiKey)])
     const groqCues = groq.status === 'fulfilled' ? groq.value : null
 
     if (!groqCues) {

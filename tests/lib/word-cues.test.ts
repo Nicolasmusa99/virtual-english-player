@@ -1,9 +1,9 @@
 // Subtítulos desde palabras con tiempo (lib/wordCues.ts) y la llamada a Deepgram
 // (lib/groq.ts, con un fetch falso).
 import { describe, it, expect, vi } from 'vitest'
-import { cuesFromWords, cuesToSrt, fillGaps, END_PAD_SEC, LEAD_IN_SEC, WORD_CUE_MAX_SEC, type TimedWord } from '@/lib/wordCues'
+import { cuesFromWords, cuesToSrt, fillGaps, END_PAD_SEC, LEAD_IN_SEC, WORD_CUE_MAX_CHARS, WORD_CUE_MAX_SEC, type TimedWord } from '@/lib/wordCues'
 import { groqWords, GROQ_URL, GROQ_MODEL } from '@/lib/groq'
-import { CUE_MAX_CHARS, parseSRT } from '@/lib/srt'
+import { parseSRT } from '@/lib/srt'
 
 // Palabras seguidas, 0,3 s cada una sin silencios, desde `t0`.
 function say(text: string, t0 = 0, dur = 0.3, gap = 0.02): TimedWord[] {
@@ -38,12 +38,12 @@ describe('cuesFromWords', () => {
     expect(cues).toHaveLength(1)
   })
 
-  it('ningún bloque pasa de 2 renglones ni de 6 segundos, y corta en un buen lugar', () => {
+  it('ningún bloque pasa de 60 letras ni de 4,5 segundos, y corta en un buen lugar', () => {
     const long = 'So I told my brother that we should probably leave early because the traffic on the highway is always terrible on Friday afternoons, and he agreed with me'
     const cues = cuesFromWords(say(long))
     expect(cues.length).toBeGreaterThan(1)
     for (const c of cues) {
-      expect(c.text.length).toBeLessThanOrEqual(CUE_MAX_CHARS)
+      expect(c.text.length).toBeLessThanOrEqual(WORD_CUE_MAX_CHARS)
       expect(c.end - c.start).toBeLessThanOrEqual(WORD_CUE_MAX_SEC + END_PAD_SEC + 1e-9)
       expect(c.text).not.toMatch(/\b(the|a|to|of)$/i)
     }
@@ -129,6 +129,14 @@ describe('groqWords', () => {
     }), { status: 200 }))
     const ws = await groqWords('https://x', 'K', fetchImpl as unknown as typeof fetch)
     expect(ws.map(w => w.text)).toEqual(['Hi', 'there.', 'how', 'are', 'you?'])
+  })
+
+  it('con un archivo (el audio) lo manda como file, no como url', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({ words: [{ word: 'Hi.', start: 0, end: 0.4 }] }), { status: 200 }))
+    await groqWords(new Blob(['x'], { type: 'audio/mpeg' }), 'K', fetchImpl as unknown as typeof fetch)
+    const body = (fetchImpl.mock.calls[0] as unknown as [string, RequestInit])[1].body as FormData
+    expect(body.get('url')).toBeNull()
+    expect((body.get('file') as File).name).toBe('audio.mp3')
   })
 
   it('si Groq contesta error, tira (la ruta sigue con Gemini)', async () => {
